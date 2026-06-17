@@ -37,12 +37,14 @@ LEAGUES = {
                 "name": "כאן 11 🇮🇱",
                 "channel_id": "UCKqFqiCe1dCUxRe0_YNZ6gg",
                 "search_template": "תקציר {home} {away} מונדיאל",
+                "allow_embed": False,
             },
             {
                 "id": "fifa",
                 "name": "FIFA Official",
                 "channel_id": "UCpcTrCXblq78GZrTUTLWeBw",
                 "search_template": "{home} {away}",
+                "allow_embed": False,
             },
         ],
     },
@@ -552,6 +554,7 @@ def get_highlights(match_id: str):
 
         # Search YouTube
         template = source.get("search_template", "{home} {away}")
+        allow_embed = source.get("allow_embed", False)
         q = template.format(home=row["home_team"], away=row["away_team"])
         videos = search_youtube(
                     home=row["home_team"],
@@ -572,6 +575,8 @@ def get_highlights(match_id: str):
         conn.commit()
         conn.close()
 
+        for v in videos:
+            v["embeddable"] = allow_embed and v.get("embeddable", False)
         results.append({"source_id": source_id, "name": source["name"],
                         "videos": videos,
                         "status": "found" if videos else "not_found"})
