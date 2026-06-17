@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from datetime import datetime, timezone, timedelta
+from fastapi import Request, Response
 
 app = FastAPI()
 
@@ -18,11 +19,60 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpoilerFree</title>
+<style>
+body{background:#0a0a0f;color:#e8e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.box{background:#13131a;border:1px solid #2a2a3a;border-radius:16px;padding:2rem;max-width:320px;width:90%;text-align:center}
+h1{color:#00e5a0;font-size:1.3rem;margin-bottom:1rem}
+input{width:100%;padding:0.7rem;border-radius:8px;border:1px solid #2a2a3a;background:#1a1a24;color:#e8e8f0;font-size:1rem;margin-bottom:1rem;box-sizing:border-box}
+button{background:#00e5a0;color:#000;border:none;padding:0.7rem 2rem;border-radius:100px;font-size:1rem;font-weight:700;cursor:pointer;width:100%}
+.err{color:#ff4757;font-size:0.85rem;margin-top:0.5rem}
+</style></head>
+<body><div class="box"><h1>SpoilerFree</h1>
+<input type="password" id="pw" placeholder="סיסמה" autofocus>
+<button onclick="go()">כניסה</button><div class="err" id="err"></div>
+<script>
+function go(){
+  fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})})
+  .then(r=>{if(r.ok)location.reload();else document.getElementById('err').textContent='סיסמה שגויה'})
+}
+document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')go()})
+</script></div></body></html>
+"""
+
+@app.middleware("http")
+async def check_auth(request: Request, call_next):
+    if not APP_PASSWORD:
+        return await call_next(request)
+    path = request.url.path
+    if path in ("/", "/login"):
+        return await call_next(request)
+    token = request.cookies.get("sf_token", "")
+    if token == APP_PASSWORD:
+        return await call_next(request)
+    if path == "/app":
+        return Response(content=LOGIN_HTML, media_type="text/html")
+    return Response(status_code=401, content="Unauthorized")
+
+@app.post("/login")
+def login(data: dict):
+    if data.get("password") == APP_PASSWORD:
+        response = Response(content='{"ok":true}', media_type="application/json")
+        response.set_cookie("sf_token", APP_PASSWORD, httponly=True, samesite="strict", max_age=60*60*24*90)
+        return response
+    raise HTTPException(401, "סיסמה שגויה")
+
 DB_PATH = "database.db"
 ISRAEL_TZ = timezone(timedelta(hours=3))
 
 YOUTUBE_API_KEY   = os.environ.get("YOUTUBE_API_KEY", "")
 FOOTBALL_DATA_KEY = os.environ.get("FOOTBALL_DATA_KEY", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 
 # ── League config ──────────────────────────────────────
 LEAGUES = {
