@@ -661,6 +661,20 @@ def debug_sportsdb():
     except Exception as e:
         return {"error": str(e)}
 
+@app.post("/refresh/{league_key}")
+def client_refresh(league_key: str, payload: dict):
+    """Receive match data from client-side TheSportsDB fetch."""
+    if league_key not in LEAGUES:
+        raise HTTPException(404, "ליגה לא נמצאה")
+    events = payload.get("events", [])
+    if not events:
+        return {"ok": False, "reason": "no events"}
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    _store_sportsdb_events(conn, league_key, events, now)
+    conn.commit()
+    conn.close()
+    return {"ok": True, "stored": len(events)}
 
 # Serve frontend
 @app.get("/app")

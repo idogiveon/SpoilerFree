@@ -146,6 +146,10 @@
 
 <script>
   const API = window.location.origin;
+  const LEAGUES_CONFIG = {
+    worldcup: { sportsdb_id: "4429", sportsdb_season: "2026" },
+    premier: { sportsdb_id: null },
+  };
   let currentLeague   = 'worldcup';
   let hasMatchday     = false;
   let currentMatchday = 1;
@@ -461,9 +465,37 @@
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
-  document.getElementById('refresh-btn').addEventListener('click', () => {
-    if (hasMatchday) loadMatches(currentLeague, currentMatchday, true);
-    else loadMatches(currentLeague, null, true);
+  const league = LEAGUES_CONFIG[currentLeague];
+  document.getElementById('refresh-btn').addEventListener('click', async () => {
+    if (league && league.sportsdb_id) {
+      document.getElementById('match-count').textContent = 'מרענן...';
+      try {
+        // Fetch from TheSportsDB via the user's browser
+        const urls = [
+          `https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=${league.sportsdb_id}&s=${league.sportsdb_season}`,
+          `https://www.thesportsdb.com/api/v1/json/3/eventspastleague.php?id=${league.sportsdb_id}`,
+          `https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id=${league.sportsdb_id}`,
+        ];
+        let allEvents = [];
+        for (const url of urls) {
+          try {
+            const r = await fetch(url);
+            const data = await r.json();
+            if (data.events) allEvents = allEvents.concat(data.events);
+          } catch(e) {}
+        }
+        // Send to our server
+        await fetch(`${API}/refresh/${currentLeague}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({events: allEvents})
+        });
+      } catch(e) {
+        console.log('Client refresh failed:', e);
+      }
+    }
+    if (hasMatchday) loadMatches(currentLeague, currentMatchday);
+    else loadMatches(currentLeague, null);
   });
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
