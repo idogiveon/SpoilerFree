@@ -1,3 +1,5 @@
+cat > requirements.txt << 'EOF'
 fastapi
 uvicorn
 requests
+EOF
