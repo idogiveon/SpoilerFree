@@ -374,7 +374,7 @@
             const isExtended = v.extended;
             allBtns.push(
               `<button class="play-btn ${isExtended ? 'extended' : ''}"
-                       onclick="loadVideo('${v.video_id}', '${v.embeddable !== false}')">
+                       onclick="loadVideo('${v.video_id}', '${v.embeddable === true}')">
                 ▶ ${source.name}${source.videos.length > 1 ? ' — ' + v.label : ''}
               </button>`
             );
