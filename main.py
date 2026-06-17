@@ -644,6 +644,19 @@ def debug_db():
     }
 
 
+@app.get("/debug/sportsdb")
+def debug_sportsdb():
+    try:
+        r = requests.get(
+            "https://www.thesportsdb.com/api/v1/json/3/lookupevent.php",
+            params={"id": "2391728"},
+            timeout=15
+        )
+        return {"status_code": r.status_code, "body_preview": r.text[:500]}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # Serve frontend
 @app.get("/app")
 def serve_frontend():
