@@ -351,7 +351,7 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
 
 
 def search_youtube(home: str, away: str, match_date: str,
-                   channel_id: str) -> list:
+                   channel_id: str, query: str = None) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not YOUTUBE_API_KEY or not channel_id:
         return []
@@ -363,7 +363,7 @@ def search_youtube(home: str, away: str, match_date: str,
         "order":        "relevance",
         "maxResults":   15,
         "type":         "video",
-        "q":            f"{home} {away}",
+        "q":            query or f"{home} {away}",
         "publishedAfter": f"{match_date}T00:00:00Z",
     }
 
@@ -551,12 +551,15 @@ def get_highlights(match_id: str):
                 continue
 
         # Search YouTube
+        template = source.get("search_template", "{home} {away}")
+        q = template.format(home=row["home_team"], away=row["away_team"])
         videos = search_youtube(
-            home=row["home_team"],
-            away=row["away_team"],
-            match_date=row["date_utc"],
-            channel_id=channel_id,
-        )
+                    home=row["home_team"],
+                    away=row["away_team"],
+                    match_date=row["date_utc"],
+                    channel_id=channel_id,
+                    query=q,
+                )
 
         # Save cache
         conn = get_db()
