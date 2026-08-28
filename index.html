@@ -123,7 +123,6 @@
   <button class="tab" data-league="ligue1" data-has-matchday="false">🇫🇷 ליג 1</button>
   <button class="tab" data-league="ucl" data-has-matchday="false">⭐ צ'מפיונס ליג</button>
   <button class="tab" data-league="argentina" data-has-matchday="false">🇦🇷 ארגנטינה</button>
-  <button class="tab" data-league="worldcup" data-has-matchday="false">🏆 מונדיאל 2026</button>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
@@ -158,12 +157,11 @@
   // קונפיג לרענון client-side (TheSportsDB חסום מ-Render — הדפדפן שולף)
   // חייב להיות תואם ל-LEAGUES ב-main.py
   const SPORTSDB_LEAGUES = {
-    bundesliga: { ids: ['4331'],         season: '2026-2027' },
-    laliga:     { ids: ['4335'],         season: '2026-2027' },
-    ligue1:     { ids: ['4334'],         season: '2026-2027' },
-    ucl:        { ids: ['4480'],         season: '2026-2027' },
-    argentina:  { ids: ['4406', '5428'], season: '2026' },
-    worldcup:   { ids: ['4429'],         season: '2026' },
+    bundesliga: { ids: ['4331'], season: '2026-2027' },
+    laliga:     { ids: ['4335'], season: '2026-2027' },
+    ligue1:     { ids: ['4334'], season: '2026-2027' },
+    ucl:        { ids: ['4480'], season: '2026-2027' },
+    argentina:  { ids: ['4406'], season: '2026' },
   };
 
   let currentLeague   = 'premier';
@@ -394,7 +392,7 @@
         await apiFetch(`${API}/refresh/${league}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events }),
+          body: JSON.stringify({ events, purge: true }),
         });
       }
     } catch (e) { /* נציג מה שיש ב-DB */ }

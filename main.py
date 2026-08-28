@@ -84,27 +84,18 @@ LEAGUES = {
     "argentina": {
         "name": "ליגה ארגנטינאית",
         "source": "sportsdb",
-        "sportsdb_ids": ["4406", "5428"],   # Primera División + Copa de la Liga
+        # רק Primera División. Copa de la Liga (5428) הופסקה ב-2024 —
+        # eventspast שלה החזיר משחקים ישנים וזיהם את הלוח.
+        "sportsdb_ids": ["4406"],
         "sportsdb_season": "2026",
         "sources": [
-            {"id": "argentina_official", "name": "TyC Sports",
-             "channel_id": "", "search_template": "{home} {away} resumen",
+            {"id": "fanatiz", "name": "Fanatiz",
+             "channel_id": "UCvEJrtUk0C2wh3P-9DOdblA",
+             "search_template": "{home} {away} resumen",
              "allow_embed": False},
-        ],
-    },
-    "worldcup": {
-        "name": "מונדיאל 2026",
-        "source": "sportsdb",
-        "sportsdb_ids": ["4429"],
-        "sportsdb_season": "2026",
-        "sources": [
-            {"id": "kan11", "name": "כאן 11",
-             "channel_id": "UCKqFqiCe1dCUxRe0_YNZ6gg",
-             "search_template": "תקציר {home} {away} מונדיאל",
-             "allow_embed": False},
-            {"id": "fifa", "name": "FIFA Official",
-             "channel_id": "UCpcTrCXblq78GZrTUTLWeBw",
-             "search_template": "{home} {away}",
+            {"id": "lpf_official", "name": "Liga Profesional",
+             "channel_id": "UCJmCVoUfCBQb9lcfXIS8nXQ",
+             "search_template": "{home} {away} resumen",
              "allow_embed": False},
         ],
     },
@@ -294,7 +285,7 @@ def _store_sportsdb_events(conn, league_key: str, events: list, now: str) -> int
     return stored
 
 
-def fetch_football_data(league_key: str):
+def fetch_football_data(league_key: str, purge: bool = False):
     league = LEAGUES[league_key]
     r = requests.get(
         f"https://api.football-data.org/v4/competitions/{league['fd_code']}/matches",
@@ -305,6 +296,10 @@ def fetch_football_data(league_key: str):
     matches = r.json().get("matches", [])
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
+
+    # purge רק אחרי ששליפה הצליחה — לא מוחקים אם ה-API החזיר ריק
+    if purge and matches:
+        conn.execute("DELETE FROM matches WHERE league_key=?", (league_key,))
 
     for m in matches:
         utc_dt = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
@@ -325,13 +320,12 @@ def fetch_football_data(league_key: str):
     conn.close()
 
 
-def fetch_sportsdb(league_key: str):
+def fetch_sportsdb(league_key: str, purge: bool = False):
     """Server-side fetch from TheSportsDB.
     שים לב: חסום מ-Render (IP ענן). עובד רק בהרצה מקומית.
     בפרודקשן הרענון נעשה client-side דרך POST /refresh/{league_key}."""
     league = LEAGUES[league_key]
-    conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
+    all_events = []
 
     for sdb_id in league.get("sportsdb_ids", []):
         endpoints = [
@@ -347,22 +341,27 @@ def fetch_sportsdb(league_key: str):
                 )
                 events = r.json().get("events") or []
                 print(f"[sportsdb] {ep} ({sdb_id}): {len(events)} events")
-                _store_sportsdb_events(conn, league_key, events, now)
+                all_events.extend(events)
             except Exception as ex:
                 print(f"[sportsdb] {ep} ({sdb_id}) failed: {ex}")
 
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    if purge and all_events:
+        conn.execute("DELETE FROM matches WHERE league_key=?", (league_key,))
+    _store_sportsdb_events(conn, league_key, all_events, now)
     conn.commit()
     conn.close()
 
 
-def fetch_and_store(league_key: str):
+def fetch_and_store(league_key: str, purge: bool = False):
     league = LEAGUES.get(league_key)
     if not league:
         return
     if league["source"] == "football-data":
-        fetch_football_data(league_key)
+        fetch_football_data(league_key, purge)
     else:
-        fetch_sportsdb(league_key)
+        fetch_sportsdb(league_key, purge)
 
 # ── Utils ──────────────────────────────────────────────
 
@@ -536,7 +535,7 @@ def get_matches(request: Request, league_key: str,
         raise HTTPException(404, "ליגה לא נמצאה")
 
     if refresh:
-        fetch_and_store(league_key)
+        fetch_and_store(league_key, purge=True)
 
     conn = get_db()
     count = conn.execute(
@@ -597,6 +596,10 @@ def refresh_from_client(request: Request, league_key: str,
 
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
+    # purge: מנקה את הליגה לפני הכנסה — מסלק נתוני עונות ישנות.
+    # רק אם הגיעו אירועים, כדי לא למחוק לוח קיים על רענון כושל.
+    if payload.get("purge") and events:
+        conn.execute("DELETE FROM matches WHERE league_key=?", (league_key,))
     stored = _store_sportsdb_events(conn, league_key, events, now)
     conn.commit()
     conn.close()
