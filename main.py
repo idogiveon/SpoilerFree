@@ -514,9 +514,12 @@ def get_sources_for_match(row) -> list:
             clubs.append(club)
     clubs.sort(key=lambda c: c["tier"])
 
-    return [{"id": f"club_{c['id']}", "name": c["short_name"],
-             "channel_id": c["yt_channel_id"], "allow_embed": False}
-            for c in clubs]
+    club_sources = [{"id": f"club_{c['id']}", "name": c["short_name"],
+                     "channel_id": c["yt_channel_id"], "allow_embed": False}
+                    for c in clubs]
+
+    # מקורות גיבוי ברמת הליגה (למשל Sky Sports) — אחרי המועדונים
+    return club_sources + league.get("extra_sources", [])
 
 # ── Endpoints ──────────────────────────────────────────
 
@@ -795,6 +798,96 @@ def debug_fd(request: Request):
         }
     except Exception as ex:
         return {"exception": str(ex)}
+
+
+@app.get("/debug/pl_teams")
+def debug_pl_teams(request: Request):
+    """כל קבוצות הפרמייר מהלוח הנוכחי + סטטוס ערוץ יוטיוב לכל אחת."""
+    require_auth(request)
+    conn = get_db()
+    teams = {}
+    rows = conn.execute(
+        "SELECT home_team as name, home_team_id as tid FROM matches WHERE league_key='premier' "
+        "UNION SELECT away_team, away_team_id FROM matches WHERE league_key='premier'"
+    ).fetchall()
+    for r in rows:
+        if r["tid"]:
+            teams[r["tid"]] = {"fd_team_id": r["tid"], "team_name": r["name"],
+                               "yt_channel_id": ""}
+    for c in conn.execute("SELECT * FROM clubs WHERE league_key='premier'").fetchall():
+        if c["fd_team_id"] in teams:
+            teams[c["fd_team_id"]]["yt_channel_id"] = c["yt_channel_id"] or ""
+    conn.close()
+    result = sorted(teams.values(), key=lambda t: (t["yt_channel_id"] != "", t["team_name"]))
+    return {"teams": result,
+            "missing_channel": sum(1 for t in result if not t["yt_channel_id"]),
+            "howto": "לכל קבוצה חסרה: /admin/set_channel?fd_team_id=<ID>&url=<כתובת הערוץ ביוטיוב>"}
+
+
+@app.get("/admin/set_channel")
+def admin_set_channel(request: Request, fd_team_id: str, url: str, name: str = ""):
+    """מגדיר ערוץ יוטיוב למועדון, מהדפדפן.
+    url יכול להיות כל צורה: youtube.com/@Arsenal, @Arsenal,
+    או youtube.com/channel/UC... — handle נפתר אוטומטית דרך YouTube API."""
+    require_auth(request)
+    url = url.strip()
+
+    channel_id = ""
+    channel_title = ""
+    if "/channel/" in url:
+        channel_id = url.split("/channel/")[1].split("/")[0].split("?")[0]
+    else:
+        # חילוץ ה-handle ופתרון דרך ה-API (עולה 1 unit בלבד)
+        handle = url.split("/")[-1] if "/" in url else url
+        handle = handle.split("?")[0].lstrip("@")
+        if not handle:
+            raise HTTPException(400, "לא הצלחתי לחלץ handle מהכתובת")
+        try:
+            r = requests.get(
+                "https://www.googleapis.com/youtube/v3/channels",
+                params={"key": YOUTUBE_API_KEY, "forHandle": handle,
+                        "part": "id,snippet"},
+                timeout=10
+            ).json()
+            items = r.get("items", [])
+            if not items:
+                raise HTTPException(404, f"YouTube לא מצא ערוץ עבור @{handle}")
+            channel_id = items[0]["id"]
+            channel_title = items[0]["snippet"]["title"]
+        except HTTPException:
+            raise
+        except Exception as ex:
+            raise HTTPException(502, f"שגיאה מול YouTube API: {ex}")
+
+    # upsert לטבלת clubs
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT * FROM clubs WHERE fd_team_id=? AND league_key='premier'",
+        (fd_team_id,)
+    ).fetchone()
+    team_row = conn.execute(
+        "SELECT home_team as n FROM matches WHERE league_key='premier' AND home_team_id=? LIMIT 1",
+        (fd_team_id,)
+    ).fetchone()
+    team_name = name or (team_row["n"] if team_row else channel_title or fd_team_id)
+
+    if existing:
+        conn.execute("UPDATE clubs SET yt_channel_id=? WHERE id=?",
+                     (channel_id, existing["id"]))
+        club_id = existing["id"]
+    else:
+        club_id = f"PL-fd{fd_team_id}"
+        conn.execute("""
+            INSERT OR REPLACE INTO clubs
+            (id, name, short_name, league_key, tier, yt_channel_id, fd_team_id)
+            VALUES (?,?,?,?,2,?,?)
+        """, (club_id, team_name, team_name, "premier", channel_id, fd_team_id))
+    conn.commit()
+    conn.close()
+
+    return {"ok": True, "club_id": club_id, "team": team_name,
+            "channel_id": channel_id, "channel_title": channel_title,
+            "note": "זמני עד deploy הבא! בסיום — שלח את /debug/pl_teams לצ'אט כדי לקבע בקוד"}
 
 
 # Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)
