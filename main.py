@@ -336,7 +336,7 @@ def fetch_sportsdb(league_key: str, purge: bool = False):
         for ep, params in endpoints:
             try:
                 r = requests.get(
-                    f"https://www.thesportsdb.com/api/v1/json/3/{ep}",
+                    f"https://www.thesportsdb.com/api/v1/json/123/{ep}",
                     params=params, timeout=15
                 )
                 events = r.json().get("events") or []
@@ -756,6 +756,32 @@ def debug_db(request: Request):
         "leagues": [dict(r) for r in leagues],
         "cache_entries": cache_count,
     }
+
+
+@app.get("/debug/fd")
+def debug_fd(request: Request):
+    """אבחון football-data — מציג מה ה-API באמת מחזיר עבור הפרמייר ליג."""
+    require_auth(request)
+    league = LEAGUES["premier"]
+    try:
+        r = requests.get(
+            f"https://api.football-data.org/v4/competitions/{league['fd_code']}/matches",
+            headers={"X-Auth-Token": FOOTBALL_DATA_KEY},
+            params={"season": league["fd_season"]},
+            timeout=15
+        )
+        body = r.json()
+        matches = body.get("matches", [])
+        return {
+            "http_status":     r.status_code,
+            "season_param":    league["fd_season"],
+            "key_configured":  bool(FOOTBALL_DATA_KEY),
+            "matches_count":   len(matches),
+            "first_match_utc": matches[0]["utcDate"] if matches else None,
+            "api_message":     body.get("message") or body.get("error"),
+        }
+    except Exception as ex:
+        return {"exception": str(ex)}
 
 
 # Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)

@@ -371,28 +371,54 @@
     btn.textContent = '⏳ שולף נתונים...';
     document.getElementById('matches-container').innerHTML = '<div class="loading">שולף מ-TheSportsDB</div>';
 
+    // מפתח "123" מחזיר יותר נתונים מ-"3" (15 מול 5 ב-eventsseason)
+    const BASE = 'https://www.thesportsdb.com/api/v1/json/123/';
     const events = [];
+    const counts = { 'אחרונים': 0, 'הבאים': 0, 'מחזורים': 0 };
+
+    async function grab(ep, label) {
+      try {
+        const r = await fetch(BASE + ep);
+        const j = await r.json();
+        const ev = (j && j.events) || [];
+        events.push(...ev);
+        if (label) counts[label] += ev.length;
+        return ev;
+      } catch (e) { return []; }
+    }
+
+    let fresh = [];
     try {
       for (const id of cfg.ids) {
-        const endpoints = [
-          `eventsseason.php?id=${id}&s=${cfg.season}`,
-          `eventspastleague.php?id=${id}`,
-          `eventsnextleague.php?id=${id}`,
-        ];
-        for (const ep of endpoints) {
-          try {
-            const r = await fetch(`https://www.thesportsdb.com/api/v1/json/3/${ep}`);
-            const j = await r.json();
-            if (j && j.events) events.push(...j.events);
-          } catch (e) { /* endpoint בודד נכשל — ממשיכים */ }
+        // 1. אחרונים — גם נתונים וגם זיהוי המחזור הנוכחי
+        const past = await grab(`eventspastleague.php?id=${id}`, 'אחרונים');
+        // 2. הבאים (מחזיר מעט, אבל בחינם)
+        await grab(`eventsnextleague.php?id=${id}`, 'הבאים');
+        // 3. חלון מחזורים: eventsround עוקף את תקרת eventsseason —
+        //    מחזור שלם (~10 משחקים) נכנס מתחת לתקרה
+        let maxRound = 0;
+        for (const e of past) {
+          const r = parseInt(e.intRound || 0);
+          if (r > maxRound) maxRound = r;
+        }
+        const from = Math.max(1, maxRound - 1);
+        const to   = maxRound + 3;
+        for (let r = from; r <= to; r++) {
+          await grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'מחזורים');
         }
       }
 
-      if (events.length) {
+      // סינון משחקים ישנים מ-14 יום — מנקה שאריות מסבבים קודמים
+      // (בארגנטינה מחזור N קיים גם ב-Apertura מינואר וגם ב-Clausura הנוכחי)
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 14);
+      fresh = events.filter(e => e.dateEvent && new Date(e.dateEvent) >= cutoff);
+
+      if (fresh.length) {
         await apiFetch(`${API}/refresh/${league}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events, purge: true }),
+          body: JSON.stringify({ events: fresh, purge: true }),
         });
       }
     } catch (e) { /* נציג מה שיש ב-DB */ }
@@ -400,8 +426,12 @@
     btn.disabled = false;
     btn.textContent = '↻ רענן מ-API';
     await loadMatches(league, null);
-    if (!events.length) {
-      document.getElementById('match-count').textContent = 'הרענון לא החזיר נתונים — נסה שוב';
+    // דיאגנוסטיקה: כמה החזיר כל endpoint של TheSportsDB
+    const diag = Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join(' · ');
+    const countEl = document.getElementById('match-count');
+    countEl.textContent = (countEl.textContent || '') + `  |  רענון — ${diag}`;
+    if (!fresh.length) {
+      countEl.textContent = 'הרענון לא החזיר נתונים עדכניים — נסה שוב';
     }
   }
 
