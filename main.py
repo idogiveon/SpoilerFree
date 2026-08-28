@@ -89,9 +89,12 @@ LEAGUES = {
         "sportsdb_ids": ["4406"],
         "sportsdb_season": "2026",
         "sources": [
+            # title_exclude: מסנן את גרסת הקריינות באנגלית ("Game Highlights").
+            # נשארת רק הגרסה בספרדית ("Match Highlights" / Resumen).
             {"id": "fanatiz", "name": "Fanatiz",
              "channel_id": "UCvEJrtUk0C2wh3P-9DOdblA",
-             "search_template": "{home} {away} resumen",
+             "search_template": "{home} {away} match highlights",
+             "title_exclude": ["game highlights"],
              "allow_embed": False},
             {"id": "lpf_official", "name": "Liga Profesional",
              "channel_id": "UCJmCVoUfCBQb9lcfXIS8nXQ",
@@ -432,7 +435,9 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
 
 
 def search_youtube(home: str, away: str, match_date: str,
-                   channel_id: str, query: str = None) -> list:
+                   channel_id: str, query: str = None,
+                   title_exclude: list = None,
+                   title_include: list = None) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not YOUTUBE_API_KEY or not channel_id:
         return []
@@ -460,8 +465,14 @@ def search_youtube(home: str, away: str, match_date: str,
     results = []
     for item in items:
         title = item["snippet"]["title"]
+        tl = title.lower()
+        # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
+        if title_exclude and any(x.lower() in tl for x in title_exclude):
+            continue
+        if title_include and not any(x.lower() in tl for x in title_include):
+            continue
         if is_match_highlight(title, home, away):
-            is_extended = "extended" in title.lower()
+            is_extended = "extended" in tl
             results.append({
                 "video_id": item["id"]["videoId"],
                 "label":    "תקציר מורחב" if is_extended else "תקציר",
@@ -671,6 +682,8 @@ def get_highlights(request: Request, match_id: str):
             match_date=row["date_utc"],
             channel_id=channel_id,
             query=query,
+            title_exclude=source.get("title_exclude"),
+            title_include=source.get("title_include"),
         )
 
         # Save cache
