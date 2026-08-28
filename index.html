@@ -117,13 +117,13 @@
 </header>
 
 <div class="league-tabs">
-  <button class="tab active" data-league="premier" data-has-matchday="true">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
-  <button class="tab" data-league="israel" data-has-matchday="false">🇮🇱 ליגת העל</button>
-  <button class="tab" data-league="bundesliga" data-has-matchday="false">🇩🇪 בונדסליגה</button>
-  <button class="tab" data-league="laliga" data-has-matchday="false">🇪🇸 לה ליגה</button>
-  <button class="tab" data-league="ligue1" data-has-matchday="false">🇫🇷 ליג 1</button>
-  <button class="tab" data-league="ucl" data-has-matchday="false">⭐ צ'מפיונס ליג</button>
-  <button class="tab" data-league="argentina" data-has-matchday="false">🇦🇷 ארגנטינה</button>
+  <button class="tab active" data-league="premier">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
+  <button class="tab" data-league="israel">🇮🇱 ליגת העל</button>
+  <button class="tab" data-league="bundesliga">🇩🇪 בונדסליגה</button>
+  <button class="tab" data-league="laliga">🇪🇸 לה ליגה</button>
+  <button class="tab" data-league="ligue1">🇫🇷 ליג 1</button>
+  <button class="tab" data-league="ucl">⭐ צ'מפיונס ליג</button>
+  <button class="tab" data-league="argentina">🇦🇷 ארגנטינה</button>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
@@ -167,9 +167,8 @@
   };
 
   let currentLeague   = 'premier';
-  let hasMatchday     = true;
-  let currentMatchday = 1;
-  let maxMatchday     = 38;
+  let currentMatchday = null;
+  let matchdayList    = [];   // המחזורים שקיימים בפועל בנתונים, ממוינים
 
   // ── Utils ──────────────────────────────────────────
 
@@ -212,23 +211,24 @@
 
   // ── Matchday nav ───────────────────────────────────
 
-  function buildMatchdaySelect(max) {
+  function buildMatchdaySelect() {
     const sel = document.getElementById('md-select');
     sel.innerHTML = '';
-    for (let i = 1; i <= max; i++) {
+    for (const md of matchdayList) {
       const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `מחזור ${i}`;
+      opt.value = md;
+      opt.textContent = `מחזור ${md}`;
       sel.appendChild(opt);
     }
     sel.value = currentMatchday;
   }
 
   function updateMatchdayUI() {
+    const idx = matchdayList.indexOf(currentMatchday);
     document.getElementById('md-label').textContent = `מחזור ${currentMatchday}`;
     document.getElementById('md-select').value = currentMatchday;
-    document.getElementById('md-prev').disabled = currentMatchday <= 1;
-    document.getElementById('md-next').disabled = currentMatchday >= maxMatchday;
+    document.getElementById('md-prev').disabled = idx <= 0;
+    document.getElementById('md-next').disabled = idx < 0 || idx >= matchdayList.length - 1;
   }
 
   function showMatchdayNav(show) {
@@ -335,32 +335,39 @@
     document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
     try {
       const data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
-      const today = new Date();
+      const withMd = data.matches.filter(m => m.matchday);
 
-      const matchdayDates = {};
-      for (const m of data.matches) {
-        if (!m.matchday) continue;
-        if (!matchdayDates[m.matchday]) matchdayDates[m.matchday] = [];
-        matchdayDates[m.matchday].push(parseDateStr(m.date));
+      // אין נתוני מחזור לליגה הזו — תצוגת תאריכים רגילה
+      if (!withMd.length) {
+        showMatchdayNav(false);
+        renderMatches(data.matches);
+        return;
       }
 
-      let bestMatchday = 1;
-      let bestDiff = Infinity;
-      for (const [day, dates] of Object.entries(matchdayDates)) {
-        const avg  = dates.reduce((s, d) => s + d.getTime(), 0) / dates.length;
-        const diff = Math.abs(avg - today.getTime());
-        if (diff < bestDiff) { bestDiff = diff; bestMatchday = parseInt(day); }
+      showMatchdayNav(true);
+      matchdayList = [...new Set(withMd.map(m => parseInt(m.matchday)))]
+                       .sort((a, b) => a - b);
+
+      // "המחזור הרלוונטי": הראשון שיש בו משחק שטרם נגמר.
+      // אם הכל נגמר (סוף עונה / נתונים ישנים) — המחזור האחרון.
+      const byMd = {};
+      for (const m of withMd) {
+        if (!byMd[m.matchday]) byMd[m.matchday] = [];
+        byMd[m.matchday].push(m);
       }
+      let chosen = matchdayList[matchdayList.length - 1];
+      for (const md of matchdayList) {
+        if (byMd[md].some(m => !m.is_over)) { chosen = md; break; }
+      }
+      currentMatchday = chosen;
 
-      const days = data.matches.map(m => m.matchday).filter(Boolean);
-      maxMatchday     = days.length ? Math.max(...days) : 38;
-      currentMatchday = bestMatchday;
-
-      buildMatchdaySelect(maxMatchday);
+      buildMatchdaySelect();
       updateMatchdayUI();
       await loadMatches(league, currentMatchday);
     } catch (err) {
-      await loadMatches(league, 1);
+      if (err.message === 'auth') return;
+      showMatchdayNav(false);
+      await loadMatches(league, null);
     }
   }
 
@@ -427,7 +434,7 @@
 
     btn.disabled = false;
     btn.textContent = '↻ רענן מ-API';
-    await loadMatches(league, null);
+    await loadNearestMatchday(league);
     // דיאגנוסטיקה: כמה החזיר כל endpoint של TheSportsDB
     const diag = Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join(' · ');
     const countEl = document.getElementById('match-count');
@@ -442,9 +449,15 @@
       // sportsdb — הדפדפן שולף ושולח לשרת
       await clientRefreshSportsdb(currentLeague);
     } else {
-      // football-data — שליפה מצד השרת (לא חסום)
-      if (hasMatchday) await loadMatches(currentLeague, currentMatchday, true);
-      else await loadMatches(currentLeague, null, true);
+      // football-data — שליפה מצד השרת (לא חסום), ואז חזרה למחזור הרלוונטי
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ שולף נתונים...';
+      try { await apiFetch(`${API}/matches/${currentLeague}?refresh=true`); }
+      catch (e) { /* נציג מה שיש */ }
+      btn.disabled = false;
+      btn.textContent = '↻ רענן מ-API';
+      await loadNearestMatchday(currentLeague);
     }
   }
 
@@ -563,18 +576,17 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentLeague = tab.dataset.league;
-      hasMatchday   = tab.dataset.hasMatchday === 'true';
-      showMatchdayNav(hasMatchday);
-      if (hasMatchday) loadNearestMatchday(currentLeague);
-      else loadMatches(currentLeague, null);
+      loadNearestMatchday(currentLeague);
     });
   });
 
   document.getElementById('md-prev').addEventListener('click', () => {
-    if (currentMatchday > 1) { currentMatchday--; updateMatchdayUI(); loadMatches(currentLeague, currentMatchday); }
+    const idx = matchdayList.indexOf(currentMatchday);
+    if (idx > 0) { currentMatchday = matchdayList[idx-1]; updateMatchdayUI(); loadMatches(currentLeague, currentMatchday); }
   });
   document.getElementById('md-next').addEventListener('click', () => {
-    if (currentMatchday < maxMatchday) { currentMatchday++; updateMatchdayUI(); loadMatches(currentLeague, currentMatchday); }
+    const idx = matchdayList.indexOf(currentMatchday);
+    if (idx >= 0 && idx < matchdayList.length-1) { currentMatchday = matchdayList[idx+1]; updateMatchdayUI(); loadMatches(currentLeague, currentMatchday); }
   });
   document.getElementById('md-select').addEventListener('change', e => {
     currentMatchday = parseInt(e.target.value); updateMatchdayUI(); loadMatches(currentLeague, currentMatchday);
@@ -586,7 +598,6 @@
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
   // ── Init ───────────────────────────────────────────
-  showMatchdayNav(true);
   loadNearestMatchday(currentLeague);
 </script>
 </body>
