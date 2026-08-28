@@ -37,6 +37,28 @@ LEAGUES = {
         "fd_season": "2026",
         "default_yt_search": "{home} {away}",
     },
+    "israel": {
+        "name": "ליגת העל",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4644"],
+        "sportsdb_season": "2026-2027",
+        "sources": [
+            # לפי סדר מהירות ההעלאה: ספורט 1 (אותו יום) → ערוץ הספורט
+            # (אחרי חצות) → הערוץ הרשמי של הליגה (24-72 שעות, גיבוי)
+            {"id": "sport1", "name": "ספורט 1",
+             "channel_id": "",   # ממתין: /admin/resolve_channel?url=@sport1sport2
+             "search_template": "תקציר {home} {away}",
+             "allow_embed": False},
+            {"id": "sport5", "name": "ערוץ הספורט",
+             "channel_id": "UCyXf5cz6E9IIL40aivg7tOw",
+             "search_template": "תקציר {home} {away}",
+             "allow_embed": False},
+            {"id": "ipfl", "name": "ליגת העל",
+             "channel_id": "UCxjaVFauWASy0CuJfHKZeiw",
+             "search_template": "{home} {away}",
+             "allow_embed": False},
+        ],
+    },
     "bundesliga": {
         "name": "בונדסליגה",
         "source": "sportsdb",
@@ -421,7 +443,10 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
                    "training", "press conference", "interview", "#shorts",
                    "season review", "all goals season", "preview",
                    "prediction", "lineup", "tactical", "pre-match",
-                   "post-match press", "reaction"])
+                   "post-match press", "reaction",
+                   "bench cam", "player cam", "fan cam", "tunnel",
+                   "pitchside", "pitch side", "behind the scenes",
+                   "unseen", "warm up", "warm-up", "arrival", "access all"])
 
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
@@ -475,20 +500,27 @@ def search_youtube(home: str, away: str, match_date: str,
         if title_include and not any(x.lower() in tl for x in title_include):
             continue
         if is_match_highlight(title, home, away):
-            is_extended = "extended" in tl
             results.append({
                 "video_id": item["id"]["videoId"],
-                "label":    "תקציר מורחב" if is_extended else "תקציר",
-                "extended": is_extended,
+                "extended": "extended" in tl or "מורחב" in title,
+                "_title":   tl,
             })
 
-    # One of each type max
-    regular  = next((v for v in results if not v["extended"]), None)
-    extended = next((v for v in results if v["extended"]),     None)
+    # דירוג: כותרת עם מילת תקציר מפורשת גוברת על התאמה גנרית
+    # (מונע bench cam / סרטוני צבע כשקיים תקציר אמיתי)
+    EXPLICIT = ("highlights", "תקציר", "resumen", "zusammenfassung")
+    explicit_pool = [v for v in results if any(k in v["_title"] for k in EXPLICIT)]
+    pool = explicit_pool if explicit_pool else results
+
+    regular  = next((v for v in pool if not v["extended"]), None)
+    extended = next((v for v in pool if v["extended"]),     None)
 
     final = []
-    if regular:  final.append(regular)
-    if extended: final.append(extended)
+    for v in (regular, extended):
+        if v:
+            final.append({"video_id": v["video_id"],
+                          "label": "תקציר מורחב" if v["extended"] else "תקציר",
+                          "extended": v["extended"]})
     return final
 
 
@@ -891,6 +923,104 @@ def admin_set_channel(request: Request, fd_team_id: str, url: str, name: str = "
     return {"ok": True, "club_id": club_id, "team": team_name,
             "channel_id": channel_id, "channel_title": channel_title,
             "note": "זמני עד deploy הבא! בסיום — שלח את /debug/pl_teams לצ'אט כדי לקבע בקוד"}
+
+
+@app.get("/debug/highlights")
+def debug_highlights(request: Request, q: str):
+    """אבחון תקצירים: מציג את הכותרות הגולמיות מכל מקור ולמה כל אחת
+    עברה/נפסלה. שימוש: /debug/highlights?q=Chelsea (שם קבוצה, חלקי מספיק).
+    זהירות: כל מקור = חיפוש אמיתי = 100 יחידות quota."""
+    require_auth(request)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM matches WHERE (home_team LIKE ? OR away_team LIKE ?) "
+        "AND status IN ('FINISHED','FT','AET','PEN') "
+        "ORDER BY date_utc DESC LIMIT 1",
+        (f"%{q}%", f"%{q}%")
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, f"לא נמצא משחק שנגמר עבור '{q}'")
+
+    home, away = row["home_team"], row["away_team"]
+    report = {"match": f"{home} vs {away}", "date": row["date_utc"], "sources": []}
+
+    for source in get_sources_for_match(row):
+        channel_id = source.get("channel_id", "")
+        entry = {"source": source["name"], "channel_id": channel_id}
+        if not channel_id:
+            entry["verdict"] = "אין channel_id מוגדר"
+            report["sources"].append(entry)
+            continue
+
+        template = source.get("search_template", "{home} {away}")
+        query = template.format(home=home, away=away)
+        entry["query"] = query
+
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/search",
+                params={"key": YOUTUBE_API_KEY, "channelId": channel_id,
+                        "part": "snippet", "order": "relevance",
+                        "maxResults": 15, "type": "video", "q": query,
+                        "publishedAfter": f"{row['date_utc']}T00:00:00Z"},
+                timeout=10
+            ).json()
+        except Exception as ex:
+            entry["error"] = str(ex)
+            report["sources"].append(entry)
+            continue
+
+        if "error" in resp:
+            # כאן יתגלה quotaExceeded אם שרפנו את המכסה היומית
+            entry["youtube_error"] = resp["error"].get("message", str(resp["error"]))
+            report["sources"].append(entry)
+            continue
+
+        titles = []
+        excl = source.get("title_exclude") or []
+        for item in resp.get("items", []):
+            title = item["snippet"]["title"]
+            tl = title.lower()
+            if any(x.lower() in tl for x in excl):
+                verdict = "נפסל: סינון מקור"
+            elif not is_match_highlight(title, home, away):
+                verdict = "נפסל: לא זוהה כתקציר"
+            else:
+                verdict = "עבר ✓"
+            titles.append({"title": clean_title_for_display(title),
+                           "verdict": verdict})
+        entry["results"] = titles
+        entry["total"] = len(titles)
+        report["sources"].append(entry)
+
+    return report
+
+
+@app.get("/admin/resolve_channel")
+def admin_resolve_channel(request: Request, url: str):
+    """פותר handle של יוטיוב ל-channel ID, בלי לכתוב כלום.
+    שימוש: /admin/resolve_channel?url=@sport1sport2"""
+    require_auth(request)
+    url = url.strip()
+    if "/channel/" in url:
+        cid = url.split("/channel/")[1].split("/")[0].split("?")[0]
+        return {"channel_id": cid, "note": "חולץ ישירות מהכתובת"}
+    handle = url.split("/")[-1] if "/" in url else url
+    handle = handle.split("?")[0].lstrip("@")
+    if not handle:
+        raise HTTPException(400, "לא הצלחתי לחלץ handle מהכתובת")
+    r = requests.get(
+        "https://www.googleapis.com/youtube/v3/channels",
+        params={"key": YOUTUBE_API_KEY, "forHandle": handle,
+                "part": "id,snippet"},
+        timeout=10
+    ).json()
+    items = r.get("items", [])
+    if not items:
+        raise HTTPException(404, f"YouTube לא מצא ערוץ עבור @{handle}")
+    return {"channel_id": items[0]["id"],
+            "channel_title": items[0]["snippet"]["title"]}
 
 
 # Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)
