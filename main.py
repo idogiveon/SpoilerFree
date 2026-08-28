@@ -3,12 +3,11 @@ import requests
 import re
 import os
 import json
-from fastapi import FastAPI, HTTPException
+import hashlib
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from datetime import datetime, timezone, timedelta
-from fastapi import Request, Response
 
 app = FastAPI()
 
@@ -19,93 +18,144 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-LOGIN_HTML = """
-<!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpoilerFree</title>
-<style>
-body{background:#0a0a0f;color:#e8e8f0;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-.box{background:#13131a;border:1px solid #2a2a3a;border-radius:16px;padding:2rem;max-width:320px;width:90%;text-align:center}
-h1{color:#00e5a0;font-size:1.3rem;margin-bottom:1rem}
-input{width:100%;padding:0.7rem;border-radius:8px;border:1px solid #2a2a3a;background:#1a1a24;color:#e8e8f0;font-size:1rem;margin-bottom:1rem;box-sizing:border-box}
-button{background:#00e5a0;color:#000;border:none;padding:0.7rem 2rem;border-radius:100px;font-size:1rem;font-weight:700;cursor:pointer;width:100%}
-.err{color:#ff4757;font-size:0.85rem;margin-top:0.5rem}
-</style></head>
-<body><div class="box"><h1>SpoilerFree</h1>
-<input type="password" id="pw" placeholder="סיסמה" autofocus>
-<button onclick="go()">כניסה</button><div class="err" id="err"></div>
-<script>
-function go(){
-  fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})})
-  .then(r=>{if(r.ok)location.reload();else document.getElementById('err').textContent='סיסמה שגויה'})
-}
-document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')go()})
-</script></div></body></html>
-"""
-
-@app.middleware("http")
-async def check_auth(request: Request, call_next):
-    if not APP_PASSWORD:
-        return await call_next(request)
-    path = request.url.path
-    if path in ("/", "/login"):
-        return await call_next(request)
-    token = request.cookies.get("sf_token", "")
-    if token == APP_PASSWORD:
-        return await call_next(request)
-    if path == "/app":
-        return Response(content=LOGIN_HTML, media_type="text/html")
-    return Response(status_code=401, content="Unauthorized")
-
-@app.post("/login")
-def login(data: dict):
-    if data.get("password") == APP_PASSWORD:
-        response = Response(content='{"ok":true}', media_type="application/json")
-        response.set_cookie("sf_token", APP_PASSWORD, httponly=True, samesite="strict", max_age=60*60*24*90)
-        return response
-    raise HTTPException(401, "סיסמה שגויה")
-
 DB_PATH = "database.db"
 ISRAEL_TZ = timezone(timedelta(hours=3))
 
 YOUTUBE_API_KEY   = os.environ.get("YOUTUBE_API_KEY", "")
 FOOTBALL_DATA_KEY = os.environ.get("FOOTBALL_DATA_KEY", "")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+APP_PASSWORD      = os.environ.get("APP_PASSWORD", "")
 
 # ── League config ──────────────────────────────────────
+# season 2026-27 (התחילה אוגוסט 2026). ארגנטינה — עונה קלנדרית 2026.
+# allow_embed: False כברירת מחדל — רוב הערוצים חוסמים embed, פותחים בטאב חדש.
+# channel_id ריק = מקור מוגדר אך ממתין לאיתור הערוץ (שלב 3).
 LEAGUES = {
+    "premier": {
+        "name": "פרמייר ליג",
+        "source": "football-data",
+        "fd_code": "PL",
+        "fd_season": "2026",
+        "default_yt_search": "{home} {away}",
+    },
+    "bundesliga": {
+        "name": "בונדסליגה",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4331"],
+        "sportsdb_season": "2026-2027",
+        "sources": [
+            {"id": "bundesliga_official", "name": "Bundesliga",
+             "channel_id": "", "search_template": "{home} {away} highlights",
+             "allow_embed": False},
+        ],
+    },
+    "laliga": {
+        "name": "לה ליגה",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4335"],
+        "sportsdb_season": "2026-2027",
+        "sources": [
+            {"id": "laliga_official", "name": "LALIGA",
+             "channel_id": "", "search_template": "{home} {away} resumen",
+             "allow_embed": False},
+        ],
+    },
+    "ligue1": {
+        "name": "ליג 1",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4334"],
+        "sportsdb_season": "2026-2027",
+        "sources": [
+            {"id": "ligue1_official", "name": "Ligue 1",
+             "channel_id": "", "search_template": "{home} {away} highlights",
+             "allow_embed": False},
+        ],
+    },
+    "ucl": {
+        "name": "צ'מפיונס ליג",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4480"],
+        "sportsdb_season": "2026-2027",
+        "sources": [
+            {"id": "ucl_official", "name": "UEFA",
+             "channel_id": "", "search_template": "{home} {away} highlights",
+             "allow_embed": False},
+        ],
+    },
+    "argentina": {
+        "name": "ליגה ארגנטינאית",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4406", "5428"],   # Primera División + Copa de la Liga
+        "sportsdb_season": "2026",
+        "sources": [
+            {"id": "argentina_official", "name": "TyC Sports",
+             "channel_id": "", "search_template": "{home} {away} resumen",
+             "allow_embed": False},
+        ],
+    },
     "worldcup": {
         "name": "מונדיאל 2026",
         "source": "sportsdb",
-        "sportsdb_id": "4429",
+        "sportsdb_ids": ["4429"],
         "sportsdb_season": "2026",
         "sources": [
-            {
-                "id": "kan11",
-                "name": "כאן 11 🇮🇱",
-                "channel_id": "UCKqFqiCe1dCUxRe0_YNZ6gg",
-                "search_template": "תקציר {home} {away} מונדיאל",
-                "allow_embed": False,
-            },
-            {
-                "id": "fifa",
-                "name": "FIFA Official",
-                "channel_id": "UCpcTrCXblq78GZrTUTLWeBw",
-                "search_template": "{home} {away}",
-                "allow_embed": False,
-            },
+            {"id": "kan11", "name": "כאן 11",
+             "channel_id": "UCKqFqiCe1dCUxRe0_YNZ6gg",
+             "search_template": "תקציר {home} {away} מונדיאל",
+             "allow_embed": False},
+            {"id": "fifa", "name": "FIFA Official",
+             "channel_id": "UCpcTrCXblq78GZrTUTLWeBw",
+             "search_template": "{home} {away}",
+             "allow_embed": False},
         ],
     },
-    "premier": {
-        "name": "ליגת פרמייר",
-        "source": "football-data",
-        "fd_code": "PL",
-        "fd_season": "2025",
-        "default_yt_search": "{home} {away}",
-    },
 }
+
+# ── Auth ───────────────────────────────────────────────
+
+def _auth_token() -> str:
+    return hashlib.sha256(APP_PASSWORD.encode()).hexdigest() if APP_PASSWORD else ""
+
+def is_authed(request: Request) -> bool:
+    if not APP_PASSWORD:
+        return True  # אין סיסמה מוגדרת (פיתוח מקומי) — פתוח
+    return request.cookies.get("sf_auth", "") == _auth_token()
+
+def require_auth(request: Request):
+    if not is_authed(request):
+        raise HTTPException(401, "נדרשת התחברות")
+
+LOGIN_PAGE = """<!DOCTYPE html>
+<html lang="he" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpoilerFree — כניסה</title>
+<style>
+body{background:#0a0a0f;color:#e8e8f0;font-family:sans-serif;display:flex;
+align-items:center;justify-content:center;min-height:100vh;margin:0}
+.box{background:#13131a;border:1px solid #2a2a3a;border-radius:16px;
+padding:2.5rem;text-align:center;max-width:320px;width:90%}
+h1{color:#00e5a0;font-size:1.4rem;letter-spacing:2px;margin:0 0 1.5rem}
+input{width:100%;padding:0.7rem;border-radius:8px;border:1px solid #2a2a3a;
+background:#1a1a24;color:#e8e8f0;font-size:1rem;box-sizing:border-box;
+margin-bottom:1rem;text-align:center}
+button{width:100%;padding:0.7rem;border-radius:100px;border:none;
+background:#00e5a0;color:#000;font-weight:700;font-size:1rem;cursor:pointer}
+.err{color:#ff4757;font-size:0.85rem;margin-top:0.8rem;min-height:1.2em}
+</style></head><body>
+<div class="box"><h1>SPOILERFREE</h1>
+<input type="password" id="pw" placeholder="סיסמה" autofocus>
+<button onclick="go()">כניסה</button>
+<div class="err" id="err"></div></div>
+<script>
+async function go(){
+  const r = await fetch('/login', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({password: document.getElementById('pw').value})});
+  if (r.ok) location.reload();
+  else document.getElementById('err').textContent = 'סיסמה שגויה';
+}
+document.getElementById('pw').addEventListener('keydown',
+  e => { if (e.key === 'Enter') go(); });
+</script></body></html>"""
 
 # ── DB ─────────────────────────────────────────────────
 
@@ -159,6 +209,7 @@ def init_db():
 
     conn.commit()
 
+    # רשימת מועדוני פרמייר ליג — תעודכן לסגל 2026-27 בשלב 3
     premier_clubs = [
         ("PL-1",  "Arsenal",            "Arsenal",       "premier", 1, "UCpryVRk_VDudG8SHXgWcG0w", "57"),
         ("PL-2",  "Chelsea FC",         "Chelsea",       "premier", 1, "UCF5ZHdBHgQFvCDMxnLNEDsQ", "61"),
@@ -194,58 +245,53 @@ def init_db():
 # ── TheSportsDB status mapping ────────────────────────
 
 def map_sportsdb_status(event: dict) -> str:
-    """Map TheSportsDB event to our internal status.
-    
-    Uses strStatus field, falls back to checking intHomeScore.
-    TheSportsDB statuses include:
-      "Match Finished", "FT", "AET", "AP" — finished
-      "Not Started", "NS" — scheduled
-      "Postponed", "Cancelled", "Abandoned"
-      Various live statuses: "1H", "HT", "2H", "ET", etc.
-    """
+    """Map TheSportsDB event to our internal status."""
     raw = (event.get("strStatus") or "").strip()
 
-    # Finished variants
     if raw in ("Match Finished", "FT", "AET", "AP", "PEN"):
         return "FINISHED"
-    
-    # Live variants
     if raw in ("1H", "HT", "2H", "ET", "BT", "P", "LIVE"):
         return "LIVE"
-    
-    # Postponed / cancelled
     if raw in ("Postponed", "PPD"):
         return "POSTPONED"
     if raw in ("Cancelled", "CANC", "Abandoned", "ABD"):
         return "CANCELLED"
-    
+
     # Fallback: if we have scores, it's finished
     if event.get("intHomeScore") is not None and event.get("intAwayScore") is not None:
         return "FINISHED"
 
     return "SCHEDULED"
 
-# ── Fetch matches ──────────────────────────────────────
+# ── Store / fetch matches ──────────────────────────────
 
-def _store_sportsdb_events(conn, league_key: str, events: list, now: str):
+def _store_sportsdb_events(conn, league_key: str, events: list, now: str) -> int:
     """Store a list of TheSportsDB events into our matches table."""
+    stored = 0
     for e in events:
         event_id = e.get("idEvent")
         if not event_id:
             continue
         status = map_sportsdb_status(e)
+        matchday = None
+        try:
+            matchday = int(e.get("intRound") or 0) or None
+        except (ValueError, TypeError):
+            pass
         conn.execute("""
             INSERT OR REPLACE INTO matches
             (id, league_key, home_team, away_team,
-             date_utc, time_utc, venue, status, fetched_at)
-            VALUES (?,?,?,?,?,?,?,?,?)
+             date_utc, time_utc, venue, matchday, status, fetched_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
         """, (
             event_id, league_key,
             e.get("strHomeTeam"), e.get("strAwayTeam"),
-            e.get("dateEvent"), e.get("strTime", "00:00:00"),
-            e.get("strVenue", ""),
-            status, now
+            e.get("dateEvent"), e.get("strTime") or "00:00:00",
+            e.get("strVenue") or "",
+            matchday, status, now
         ))
+        stored += 1
+    return stored
 
 
 def fetch_football_data(league_key: str):
@@ -280,49 +326,30 @@ def fetch_football_data(league_key: str):
 
 
 def fetch_sportsdb(league_key: str):
-    """Fetch matches from TheSportsDB using multiple endpoints for completeness."""
+    """Server-side fetch from TheSportsDB.
+    שים לב: חסום מ-Render (IP ענן). עובד רק בהרצה מקומית.
+    בפרודקשן הרענון נעשה client-side דרך POST /refresh/{league_key}."""
     league = LEAGUES[league_key]
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
 
-    # 1. Season endpoint — gets the full schedule
-    try:
-        r = requests.get(
-            "https://www.thesportsdb.com/api/v1/json/3/eventsseason.php",
-            params={"id": league["sportsdb_id"], "s": league["sportsdb_season"]},
-            timeout=15
-        )
-        events = r.json().get("events") or []
-        print(f"[sportsdb] eventsseason: {len(events)} events")
-        _store_sportsdb_events(conn, league_key, events, now)
-    except Exception as ex:
-        print(f"[sportsdb] eventsseason failed: {ex}")
-
-    # 2. Past events — last 15 completed matches (has updated scores!)
-    try:
-        r = requests.get(
-            "https://www.thesportsdb.com/api/v1/json/3/eventspastleague.php",
-            params={"id": league["sportsdb_id"]},
-            timeout=15
-        )
-        events = r.json().get("events") or []
-        print(f"[sportsdb] eventspast: {len(events)} events")
-        _store_sportsdb_events(conn, league_key, events, now)
-    except Exception as ex:
-        print(f"[sportsdb] eventspast failed: {ex}")
-
-    # 3. Next events — next 15 upcoming matches
-    try:
-        r = requests.get(
-            "https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php",
-            params={"id": league["sportsdb_id"]},
-            timeout=15
-        )
-        events = r.json().get("events") or []
-        print(f"[sportsdb] eventsnext: {len(events)} events")
-        _store_sportsdb_events(conn, league_key, events, now)
-    except Exception as ex:
-        print(f"[sportsdb] eventsnext failed: {ex}")
+    for sdb_id in league.get("sportsdb_ids", []):
+        endpoints = [
+            ("eventsseason.php",     {"id": sdb_id, "s": league["sportsdb_season"]}),
+            ("eventspastleague.php", {"id": sdb_id}),
+            ("eventsnextleague.php", {"id": sdb_id}),
+        ]
+        for ep, params in endpoints:
+            try:
+                r = requests.get(
+                    f"https://www.thesportsdb.com/api/v1/json/3/{ep}",
+                    params=params, timeout=15
+                )
+                events = r.json().get("events") or []
+                print(f"[sportsdb] {ep} ({sdb_id}): {len(events)} events")
+                _store_sportsdb_events(conn, league_key, events, now)
+            except Exception as ex:
+                print(f"[sportsdb] {ep} ({sdb_id}) failed: {ex}")
 
     conn.commit()
     conn.close()
@@ -375,30 +402,33 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
     def team_in(team):
         c = clean(team)
         words = c.split()
-        # full name match, or last word (main identifier)
         if c in t:
             return True
         if len(words) >= 1 and words[-1] in t:
             return True
-        # Also check first word for multi-word names like "South Korea"
+        # multi-word names like "South Korea"
         if len(words) >= 2 and words[0] in t and words[-1] in t:
             return True
         return False
 
-    has_both  = team_in(home) and team_in(away)
-    highlight = any(w in t for w in
-                        ["highlight", "match", "goals", "extended",
-                        "תקציר", "שערים", "sign off", "vs", "v.",
-                        "full match", "resumen", "zusammenfassung",
-                        "\U0001f19a", "fifaworldcup", "#fifaworldcup"])
-    exclude   = any(w in t for w in
-                    ["compilation", "best of", "every goal", "parade", "bts",
-                     "training", "press conference", "interview", "#shorts",
-                     "season review", "all goals season", "preview",
-                     "prediction", "lineup", "tactical", "pre-match",
-                     "post-match press", "reaction"])
+    exclude = any(w in t for w in
+                  ["compilation", "best of", "every goal", "parade", "bts",
+                   "training", "press conference", "interview", "#shorts",
+                   "season review", "all goals season", "preview",
+                   "prediction", "lineup", "tactical", "pre-match",
+                   "post-match press", "reaction"])
+
+    # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
+    # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
     if "תקציר" in t and not exclude:
         return True
+
+    has_both  = team_in(home) and team_in(away)
+    highlight = any(w in t for w in
+                    ["highlight", "match", "goals", "extended",
+                     "שערים", "sign off", "vs", "v.", "\U0001f19a",
+                     "fifaworldcup", "full match", "resumen",
+                     "zusammenfassung"])
     return has_both and highlight and not exclude
 
 
@@ -446,26 +476,6 @@ def search_youtube(home: str, away: str, match_date: str,
     final = []
     if regular:  final.append(regular)
     if extended: final.append(extended)
-
-    # Check embeddable
-    if final:
-        ids = [v["video_id"] for v in final]
-        try:
-            check = requests.get(
-                "https://www.googleapis.com/youtube/v3/videos",
-                params={"key": YOUTUBE_API_KEY, "id": ",".join(ids), "part": "status"},
-                timeout=10
-            ).json()
-            embeddable_ids = {
-                item["id"] for item in check.get("items", [])
-                if item["status"].get("embeddable")
-            }
-            for v in final:
-                v["embeddable"] = v["video_id"] in embeddable_ids
-        except:
-            for v in final:
-                v["embeddable"] = True  # assume yes on error
-
     return final
 
 
@@ -495,7 +505,8 @@ def get_sources_for_match(row) -> list:
     clubs.sort(key=lambda c: c["tier"])
 
     return [{"id": f"club_{c['id']}", "name": c["short_name"],
-             "channel_id": c["yt_channel_id"]} for c in clubs]
+             "channel_id": c["yt_channel_id"], "allow_embed": False}
+            for c in clubs]
 
 # ── Endpoints ──────────────────────────────────────────
 
@@ -503,8 +514,24 @@ def get_sources_for_match(row) -> list:
 def root():
     return {"status": "SpoilerFree API ✓"}
 
+
+@app.post("/login")
+def login(payload: dict = Body(...)):
+    if not APP_PASSWORD:
+        return {"ok": True}
+    if payload.get("password", "") != APP_PASSWORD:
+        raise HTTPException(401, "סיסמה שגויה")
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("sf_auth", _auth_token(),
+                    max_age=90 * 24 * 3600,  # 90 יום
+                    httponly=True, samesite="lax")
+    return resp
+
+
 @app.get("/matches/{league_key}")
-def get_matches(league_key: str, refresh: bool = False, matchday: int = None):
+def get_matches(request: Request, league_key: str,
+                refresh: bool = False, matchday: int = None):
+    require_auth(request)
     if league_key not in LEAGUES:
         raise HTTPException(404, "ליגה לא נמצאה")
 
@@ -552,8 +579,34 @@ def get_matches(league_key: str, refresh: bool = False, matchday: int = None):
     return {"matches": matches, "count": len(matches)}
 
 
+@app.post("/refresh/{league_key}")
+def refresh_from_client(request: Request, league_key: str,
+                        payload: dict = Body(...)):
+    """Client-side refresh: הדפדפן שולף מ-TheSportsDB (שחסום מ-Render)
+    ושולח את האירועים לכאן. Body: {"events": [...]}"""
+    require_auth(request)
+    league = LEAGUES.get(league_key)
+    if not league:
+        raise HTTPException(404, "ליגה לא נמצאה")
+    if league["source"] != "sportsdb":
+        raise HTTPException(400, "רענון client-side נתמך רק לליגות sportsdb")
+
+    events = payload.get("events", [])
+    if not isinstance(events, list):
+        raise HTTPException(400, "פורמט לא תקין — צריך {\"events\": [...]}")
+
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    stored = _store_sportsdb_events(conn, league_key, events, now)
+    conn.commit()
+    conn.close()
+
+    return {"ok": True, "received": len(events), "stored": stored}
+
+
 @app.get("/highlights/{match_id}")
-def get_highlights(match_id: str):
+def get_highlights(request: Request, match_id: str):
+    require_auth(request)
     conn = get_db()
     row  = conn.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
     conn.close()
@@ -568,12 +621,14 @@ def get_highlights(match_id: str):
     results = []
 
     for source in sources:
-        source_id  = source["id"]
-        channel_id = source.get("channel_id", "")
+        source_id   = source["id"]
+        channel_id  = source.get("channel_id", "")
+        allow_embed = source.get("allow_embed", False)
 
         if not channel_id:
             results.append({"source_id": source_id, "name": source["name"],
-                            "videos": [], "status": "no_channel"})
+                            "videos": [], "status": "no_channel",
+                            "allow_embed": allow_embed})
             continue
 
         # Check cache
@@ -599,20 +654,21 @@ def get_highlights(match_id: str):
 
             if cache_age_ok:
                 results.append({"source_id": source_id, "name": source["name"],
-                                "videos": videos, "status": "cached"})
+                                "videos": videos, "status": "cached",
+                                "allow_embed": allow_embed})
                 continue
 
-        # Search YouTube
+        # Build query from source's search template
         template = source.get("search_template", "{home} {away}")
-        allow_embed = source.get("allow_embed", False)
-        q = template.format(home=row["home_team"], away=row["away_team"])
+        query = template.format(home=row["home_team"], away=row["away_team"])
+
         videos = search_youtube(
-                    home=row["home_team"],
-                    away=row["away_team"],
-                    match_date=row["date_utc"],
-                    channel_id=channel_id,
-                    query=q,
-                )
+            home=row["home_team"],
+            away=row["away_team"],
+            match_date=row["date_utc"],
+            channel_id=channel_id,
+            query=query,
+        )
 
         # Save cache
         conn = get_db()
@@ -625,11 +681,10 @@ def get_highlights(match_id: str):
         conn.commit()
         conn.close()
 
-        for v in videos:
-            v["embeddable"] = allow_embed and v.get("embeddable", False)
         results.append({"source_id": source_id, "name": source["name"],
                         "videos": videos,
-                        "status": "found" if videos else "not_found"})
+                        "status": "found" if videos else "not_found",
+                        "allow_embed": allow_embed})
 
     return {
         "available": True,
@@ -639,8 +694,9 @@ def get_highlights(match_id: str):
 
 
 @app.delete("/cache/{match_id}")
-def clear_cache(match_id: str):
+def clear_cache(request: Request, match_id: str):
     """Clear highlight cache for a match — forces re-search on next request."""
+    require_auth(request)
     conn = get_db()
     conn.execute("DELETE FROM highlight_cache WHERE match_id=?", (match_id,))
     conn.commit()
@@ -649,8 +705,9 @@ def clear_cache(match_id: str):
 
 
 @app.delete("/cache")
-def clear_all_cache():
+def clear_all_cache(request: Request):
     """Clear ALL highlight cache — useful when debugging."""
+    require_auth(request)
     conn = get_db()
     conn.execute("DELETE FROM highlight_cache")
     conn.commit()
@@ -659,7 +716,8 @@ def clear_all_cache():
 
 
 @app.get("/clubs/{league_key}")
-def get_clubs(league_key: str):
+def get_clubs(request: Request, league_key: str):
+    require_auth(request)
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM clubs WHERE league_key=? ORDER BY tier, name", (league_key,)
@@ -669,7 +727,8 @@ def get_clubs(league_key: str):
 
 
 @app.put("/clubs/{club_id}/channel")
-def update_club_channel(club_id: str, channel_id: str):
+def update_club_channel(request: Request, club_id: str, channel_id: str):
+    require_auth(request)
     conn = get_db()
     conn.execute("UPDATE clubs SET yt_channel_id=? WHERE id=?", (channel_id, club_id))
     conn.commit()
@@ -678,57 +737,29 @@ def update_club_channel(club_id: str, channel_id: str):
 
 
 @app.get("/debug/db")
-def debug_db():
-    """Quick debug endpoint — shows counts and recent matches."""
+def debug_db(request: Request):
+    """Quick debug endpoint — shows counts per league."""
+    require_auth(request)
     conn = get_db()
     leagues = conn.execute(
         "SELECT league_key, COUNT(*) as c, "
-        "SUM(CASE WHEN status='FINISHED' THEN 1 ELSE 0 END) as finished "
+        "SUM(CASE WHEN status='FINISHED' THEN 1 ELSE 0 END) as finished, "
+        "MAX(fetched_at) as last_fetch "
         "FROM matches GROUP BY league_key"
     ).fetchall()
     cache_count = conn.execute("SELECT COUNT(*) as c FROM highlight_cache").fetchone()["c"]
-    recent = conn.execute(
-        "SELECT id, league_key, home_team, away_team, date_utc, status "
-        "FROM matches WHERE league_key='worldcup' ORDER BY date_utc, time_utc"
-    ).fetchall()
     conn.close()
     return {
         "leagues": [dict(r) for r in leagues],
         "cache_entries": cache_count,
-        "worldcup_matches": [dict(r) for r in recent],
     }
 
 
-@app.get("/debug/sportsdb")
-def debug_sportsdb():
-    try:
-        r = requests.get(
-            "https://www.thesportsdb.com/api/v1/json/3/lookupevent.php",
-            params={"id": "2391728"},
-            timeout=15
-        )
-        return {"status_code": r.status_code, "body_preview": r.text[:500]}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.post("/refresh/{league_key}")
-def client_refresh(league_key: str, payload: dict):
-    """Receive match data from client-side TheSportsDB fetch."""
-    if league_key not in LEAGUES:
-        raise HTTPException(404, "ליגה לא נמצאה")
-    events = payload.get("events", [])
-    if not events:
-        return {"ok": False, "reason": "no events"}
-    conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-    _store_sportsdb_events(conn, league_key, events, now)
-    conn.commit()
-    conn.close()
-    return {"ok": True, "stored": len(events)}
-
-# Serve frontend
+# Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)
 @app.get("/app")
-def serve_frontend():
+def serve_frontend(request: Request):
+    if not is_authed(request):
+        return HTMLResponse(LOGIN_PAGE)
     return FileResponse("index.html")
 
 

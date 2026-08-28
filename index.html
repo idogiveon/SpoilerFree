@@ -39,6 +39,7 @@
     .match-count { font-size:0.8rem; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
     .refresh-btn { background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.8rem; padding:0.3rem 0.8rem; border-radius:6px; cursor:pointer; transition:all 0.2s; }
     .refresh-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .refresh-btn:disabled { opacity:0.4; cursor:default; }
 
     .date-group { margin-bottom:1.75rem; }
     .date-label { font-size:0.75rem; color:var(--muted); letter-spacing:3px; text-transform:uppercase; padding:0.4rem 0; margin-bottom:0.6rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:0.75rem; }
@@ -82,6 +83,7 @@
     .spoiler-shield { position:absolute; inset:0; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; z-index:10; padding:2rem; }
     .shield-icon { font-size:3rem; }
     .shield-text { font-size:1rem; color:var(--muted); text-align:center; }
+    .shield-note { font-size:0.75rem; color:var(--muted); opacity:0.7; }
     .sources-row { display:flex; gap:0.75rem; flex-wrap:wrap; justify-content:center; margin-top:0.5rem; }
 
     .play-btn { background:var(--accent); color:#000; border:none; padding:0.7rem 1.5rem; border-radius:100px; font-family:'Heebo',sans-serif; font-size:0.9rem; font-weight:700; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
@@ -115,8 +117,13 @@
 </header>
 
 <div class="league-tabs">
-  <button class="tab active" data-league="worldcup" data-has-matchday="false">🏆 מונדיאל 2026</button>
-  <button class="tab" data-league="premier" data-has-matchday="true">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
+  <button class="tab active" data-league="premier" data-has-matchday="true">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
+  <button class="tab" data-league="bundesliga" data-has-matchday="false">🇩🇪 בונדסליגה</button>
+  <button class="tab" data-league="laliga" data-has-matchday="false">🇪🇸 לה ליגה</button>
+  <button class="tab" data-league="ligue1" data-has-matchday="false">🇫🇷 ליג 1</button>
+  <button class="tab" data-league="ucl" data-has-matchday="false">⭐ צ'מפיונס ליג</button>
+  <button class="tab" data-league="argentina" data-has-matchday="false">🇦🇷 ארגנטינה</button>
+  <button class="tab" data-league="worldcup" data-has-matchday="false">🏆 מונדיאל 2026</button>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
@@ -145,13 +152,22 @@
 </div>
 
 <script>
-  const API = window.location.origin;
-  const LEAGUES_CONFIG = {
-    worldcup: { sportsdb_id: "4429", sportsdb_season: "2026" },
-    premier: { sportsdb_id: null },
+  // אותו origin — עובד גם מקומית (localhost:8000/app) וגם ב-Render
+  const API = '';
+
+  // קונפיג לרענון client-side (TheSportsDB חסום מ-Render — הדפדפן שולף)
+  // חייב להיות תואם ל-LEAGUES ב-main.py
+  const SPORTSDB_LEAGUES = {
+    bundesliga: { ids: ['4331'],         season: '2026-2027' },
+    laliga:     { ids: ['4335'],         season: '2026-2027' },
+    ligue1:     { ids: ['4334'],         season: '2026-2027' },
+    ucl:        { ids: ['4480'],         season: '2026-2027' },
+    argentina:  { ids: ['4406', '5428'], season: '2026' },
+    worldcup:   { ids: ['4429'],         season: '2026' },
   };
-  let currentLeague   = 'worldcup';
-  let hasMatchday     = false;
+
+  let currentLeague   = 'premier';
+  let hasMatchday     = true;
   let currentMatchday = 1;
   let maxMatchday     = 38;
 
@@ -188,6 +204,12 @@
     return groups;
   }
 
+  async function apiFetch(url, opts) {
+    const r = await fetch(url, opts);
+    if (r.status === 401) { location.reload(); throw new Error('auth'); }
+    return r;
+  }
+
   // ── Matchday nav ───────────────────────────────────
 
   function buildMatchdaySelect(max) {
@@ -220,7 +242,7 @@
     const countEl   = document.getElementById('match-count');
 
     if (!matches.length) {
-      container.innerHTML = '<div class="empty">אין משחקים להצגה</div>';
+      container.innerHTML = '<div class="empty">אין משחקים להצגה<br><small style="opacity:0.6">לחץ "רענן מ-API" כדי לטעון</small></div>';
       countEl.textContent = '';
       return;
     }
@@ -273,7 +295,7 @@
 
     container.innerHTML = html;
 
-    // Scroll to today (or nearest past date)
+    // Scroll to today
     if (todayGroupId) {
       setTimeout(() => {
         const el = document.getElementById(todayGroupId);
@@ -300,18 +322,19 @@
       if (refresh)  params.push('refresh=true');
       if (params.length) url += '?' + params.join('&');
 
-      const data = await fetch(url).then(r => r.json());
+      const data = await apiFetch(url).then(r => r.json());
       renderMatches(data.matches);
     } catch (err) {
+      if (err.message === 'auth') return;
       document.getElementById('matches-container').innerHTML =
-        `<div class="error">שגיאה: ${err.message}<br><small>וודא שהבקנד רץ על localhost:8000</small></div>`;
+        `<div class="error">שגיאה: ${err.message}<br><small>אם אתה מריץ מקומית — וודא שהבקנד רץ (localhost:8000/app)</small></div>`;
     }
   }
 
   async function loadNearestMatchday(league) {
     document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
     try {
-      const data = await fetch(`${API}/matches/${league}`).then(r => r.json());
+      const data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
       const today = new Date();
 
       const matchdayDates = {};
@@ -330,7 +353,7 @@
       }
 
       const days = data.matches.map(m => m.matchday).filter(Boolean);
-      maxMatchday     = Math.max(...days);
+      maxMatchday     = days.length ? Math.max(...days) : 38;
       currentMatchday = bestMatchday;
 
       buildMatchdaySelect(maxMatchday);
@@ -341,15 +364,66 @@
     }
   }
 
-  // ── Modal ──────────────────────────────────────────
+  // ── Client-side refresh (TheSportsDB חסום מ-Render) ─
 
-  let currentModalMatchId = null;
+  async function clientRefreshSportsdb(league) {
+    const cfg = SPORTSDB_LEAGUES[league];
+    const btn = document.getElementById('refresh-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ שולף נתונים...';
+    document.getElementById('matches-container').innerHTML = '<div class="loading">שולף מ-TheSportsDB</div>';
+
+    const events = [];
+    try {
+      for (const id of cfg.ids) {
+        const endpoints = [
+          `eventsseason.php?id=${id}&s=${cfg.season}`,
+          `eventspastleague.php?id=${id}`,
+          `eventsnextleague.php?id=${id}`,
+        ];
+        for (const ep of endpoints) {
+          try {
+            const r = await fetch(`https://www.thesportsdb.com/api/v1/json/3/${ep}`);
+            const j = await r.json();
+            if (j && j.events) events.push(...j.events);
+          } catch (e) { /* endpoint בודד נכשל — ממשיכים */ }
+        }
+      }
+
+      if (events.length) {
+        await apiFetch(`${API}/refresh/${league}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events }),
+        });
+      }
+    } catch (e) { /* נציג מה שיש ב-DB */ }
+
+    btn.disabled = false;
+    btn.textContent = '↻ רענן מ-API';
+    await loadMatches(league, null);
+    if (!events.length) {
+      document.getElementById('match-count').textContent = 'הרענון לא החזיר נתונים — נסה שוב';
+    }
+  }
+
+  async function doRefresh() {
+    if (SPORTSDB_LEAGUES[currentLeague]) {
+      // sportsdb — הדפדפן שולף ושולח לשרת
+      await clientRefreshSportsdb(currentLeague);
+    } else {
+      // football-data — שליפה מצד השרת (לא חסום)
+      if (hasMatchday) await loadMatches(currentLeague, currentMatchday, true);
+      else await loadMatches(currentLeague, null, true);
+    }
+  }
+
+  // ── Modal ──────────────────────────────────────────
 
   function openMatchModal(matchId, home, away, isOver) {
     const modal = document.getElementById('modal');
     const title = document.getElementById('modal-title');
     const body  = document.getElementById('modal-body');
-    currentModalMatchId = matchId;
 
     title.textContent = `${home} נגד ${away}`;
 
@@ -362,7 +436,7 @@
     body.innerHTML = '<div class="loading">מחפש תקצירים</div>';
     modal.classList.add('open');
 
-    fetch(`${API}/highlights/${matchId}`)
+    apiFetch(`${API}/highlights/${matchId}`)
       .then(r => r.json())
       .then(data => {
         if (!data.available) {
@@ -370,19 +444,33 @@
           return;
         }
 
-        // Collect all play buttons from all sources
         const allBtns = [];
+        let hasChannel = false;
         for (const source of data.sources) {
+          if (source.status !== 'no_channel') hasChannel = true;
           if (!source.videos || !source.videos.length) continue;
           for (const v of source.videos) {
-            const isExtended = v.extended;
-            allBtns.push(
-              `<button class="play-btn ${isExtended ? 'extended' : ''}"
-                       onclick="loadVideo('${v.video_id}', '${v.embeddable === true}')">
-                ▶ ${source.name}${source.videos.length > 1 ? ' — ' + v.label : ''}
-              </button>`
-            );
+            const label = `${source.name}${source.videos.length > 1 ? ' — ' + v.label : ''}`;
+            if (source.allow_embed) {
+              allBtns.push(
+                `<button class="play-btn ${v.extended ? 'extended' : ''}"
+                         onclick="loadVideo('${v.video_id}')">▶ ${label}</button>`);
+            } else {
+              // embed חסום — פותחים ביוטיוב בטאב חדש
+              allBtns.push(
+                `<button class="play-btn ${v.extended ? 'extended' : ''}"
+                         onclick="openOnYoutube('${v.video_id}')">▶ ${label} ↗</button>`);
+            }
           }
+        }
+
+        if (!hasChannel) {
+          body.innerHTML = `
+            <div class="no-highlight-msg">
+              🎬 מקור תקצירים לליגה זו עדיין לא הוגדר
+              <br><small style="opacity:0.5">בקרוב — צריך למצוא את הערוץ הרשמי ביוטיוב</small>
+            </div>`;
+          return;
         }
 
         if (!allBtns.length) {
@@ -401,42 +489,41 @@
               <div class="shield-icon">🛡️</div>
               <div class="shield-text">בחר גרסה לצפייה</div>
               <div class="sources-row">${allBtns.join('')}</div>
+              <div class="shield-note">↗ = נפתח ביוטיוב בטאב חדש</div>
             </div>
             <div id="video-frame"></div>
           </div>`;
       })
-      .catch(() => {
+      .catch(err => {
+        if (err.message === 'auth') return;
         body.innerHTML = `<div class="no-highlight-msg">שגיאה בחיפוש תקציר</div>`;
       });
   }
 
   async function retryHighlights(matchId, home, away) {
-    // Clear cache for this match, then re-open
     try {
-      await fetch(`${API}/cache/${matchId}`, { method: 'DELETE' });
+      await apiFetch(`${API}/cache/${matchId}`, { method: 'DELETE' });
     } catch(e) {}
     openMatchModal(matchId, home, away, true);
   }
 
-    function loadVideo(videoId, embeddable) {
-        if (embeddable === 'true') {
-            document.getElementById('shield').style.display = 'none';
-            document.getElementById('video-frame').innerHTML = `
-            <iframe
-                src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                allowfullscreen></iframe>`;
-        } else {
-            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
-            closeModal();
-        }
-    }
+  function openOnYoutube(videoId) {
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+  }
+
+  function loadVideo(videoId) {
+    document.getElementById('shield').style.display = 'none';
+    document.getElementById('video-frame').innerHTML = `
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+        allowfullscreen></iframe>`;
+  }
 
   function closeModal() {
     document.getElementById('modal').classList.remove('open');
     const f = document.getElementById('video-frame');
     if (f) f.innerHTML = '';
-    currentModalMatchId = null;
   }
 
   // ── Events ─────────────────────────────────────────
@@ -465,42 +552,12 @@
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
-  const league = LEAGUES_CONFIG[currentLeague];
-  document.getElementById('refresh-btn').addEventListener('click', async () => {
-    if (league && league.sportsdb_id) {
-      document.getElementById('match-count').textContent = 'מרענן...';
-      try {
-        // Fetch from TheSportsDB via the user's browser
-        const urls = [
-          `https://www.thesportsdb.com/api/v1/json/3/eventsseason.php?id=${league.sportsdb_id}&s=${league.sportsdb_season}`,
-          `https://www.thesportsdb.com/api/v1/json/3/eventspastleague.php?id=${league.sportsdb_id}`,
-          `https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id=${league.sportsdb_id}`,
-        ];
-        let allEvents = [];
-        for (const url of urls) {
-          try {
-            const r = await fetch(url);
-            const data = await r.json();
-            if (data.events) allEvents = allEvents.concat(data.events);
-          } catch(e) {}
-        }
-        // Send to our server
-        await fetch(`${API}/refresh/${currentLeague}`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({events: allEvents})
-        });
-      } catch(e) {
-        console.log('Client refresh failed:', e);
-      }
-    }
-    if (hasMatchday) loadMatches(currentLeague, currentMatchday);
-    else loadMatches(currentLeague, null);
-  });
+  document.getElementById('refresh-btn').addEventListener('click', doRefresh);
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
   // ── Init ───────────────────────────────────────────
-  loadMatches(currentLeague, null);
+  showMatchdayNav(true);
+  loadNearestMatchday(currentLeague);
 </script>
 </body>
 </html>
