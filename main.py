@@ -1263,6 +1263,36 @@ def admin_resolve_channel(request: Request, url: str):
             "channel_title": items[0]["snippet"]["title"]}
 
 
+@app.get("/debug/weblink")
+def debug_weblink(request: Request, q: str, domain: str):
+    """אבחון קישורי אתר: מציג מה Google CSE באמת מחזיר.
+    שימוש: /debug/weblink?q=תקציר מכבי חיפה&domain=sport1.maariv.co.il"""
+    require_auth(request)
+    report = {
+        "google_key_configured": bool(GOOGLE_SEARCH_KEY),
+        "cse_id_configured":     bool(GOOGLE_CSE_ID),
+        "cse_id_looks_valid":    ":" in GOOGLE_CSE_ID or len(GOOGLE_CSE_ID) >= 10,
+    }
+    if GOOGLE_SEARCH_KEY and GOOGLE_CSE_ID:
+        try:
+            r = requests.get(
+                "https://www.googleapis.com/customsearch/v1",
+                params={"key": GOOGLE_SEARCH_KEY, "cx": GOOGLE_CSE_ID,
+                        "q": q, "siteSearch": domain,
+                        "siteSearchFilter": "i", "num": 3},
+                timeout=8,
+            )
+            body = r.json()
+            report["cse_http_status"] = r.status_code
+            report["cse_error"] = (body.get("error") or {}).get("message")
+            items = body.get("items", [])
+            report["cse_items_count"] = len(items)
+            report["cse_first_links"] = [i.get("link") for i in items[:3]]
+        except Exception as ex:
+            report["cse_exception"] = str(ex)
+    return report
+
+
 # Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)
 @app.get("/app")
 def serve_frontend(request: Request):
