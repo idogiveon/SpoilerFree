@@ -48,10 +48,12 @@ LEAGUES = {
             {"id": "sport1", "name": "ספורט 1",
              "channel_id": "UC_wkUEeEC4HlcfI5xanWjBQ",
              "search_template": "תקציר {home} {away}",
+             "hebrew_names": True,
              "allow_embed": False},
             {"id": "sport5", "name": "ערוץ הספורט",
              "channel_id": "UCyXf5cz6E9IIL40aivg7tOw",
              "search_template": "תקציר {home} {away}",
+             "hebrew_names": True,
              "allow_embed": False},
             {"id": "ipfl", "name": "ליגת העל",
              "channel_id": "UCxjaVFauWASy0CuJfHKZeiw",
@@ -76,8 +78,28 @@ LEAGUES = {
         "sportsdb_ids": ["4335"],
         "sportsdb_season": "2026-2027",
         "sources": [
+            {"id": "one_laliga", "name": "ONE",
+             "channel_id": "",   # ממתין: /admin/resolve_channel?url=@one-1004
+             "search_template": "תקציר {home} {away}",
+             "allow_embed": False},
             {"id": "laliga_official", "name": "LALIGA",
              "channel_id": "", "search_template": "{home} {away} resumen",
+             "allow_embed": False},
+        ],
+    },
+    "seriea": {
+        "name": "סריה A",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4332"],
+        "sportsdb_season": "2026-2027",
+        "sources": [
+            {"id": "one_seriea", "name": "ONE",
+             "channel_id": "",   # ממתין: /admin/resolve_channel?url=@one-1004
+             "search_template": "תקציר {home} {away}",
+             "allow_embed": False},
+            {"id": "seriea_official", "name": "Serie A",
+             "channel_id": "",   # ממתין: handle מ-youtube.com/seriea
+             "search_template": "{home} {away} highlights",
              "allow_embed": False},
         ],
     },
@@ -408,6 +430,42 @@ def to_israel_time(date_str: str, time_str: str) -> dict:
 def is_over(status: str) -> bool:
     return status in ("FINISHED", "FT", "AET", "PEN", "AP", "Match Finished")
 
+# ── Hebrew team names for YouTube search ──────────────
+# ערוצים ישראליים מתייגים בעברית — חיפוש בשמות אנגליים מחזיר ריק.
+# התאמה לפי הכלה (case-insensitive), הארוך/ספציפי קודם.
+HEB_TEAMS = [
+    ("maccabi tel aviv",  "מכבי תל אביב"),
+    ("maccabi haifa",     "מכבי חיפה"),
+    ("maccabi netanya",   "מכבי נתניה"),
+    ("bnei raina",        "מכבי בני ריינה"),
+    ("hapoel tel aviv",   "הפועל תל אביב"),
+    ("hapoel jerusalem",  "הפועל ירושלים"),
+    ("hapoel haifa",      "הפועל חיפה"),
+    ("hapoel ramat gan",  "הפועל רמת גן"),
+    ("hapoel petah tikva","הפועל פתח תקווה"),
+    ("hapoel kfar saba",  "הפועל כפר סבא"),
+    ("beer sheva",        "הפועל באר שבע"),
+    ("be'er sheva",       "הפועל באר שבע"),
+    ("beitar jerusalem",  'בית"ר ירושלים'),
+    ("bnei sakhnin",      "בני סכנין"),
+    ("kiryat shmona",     "עירוני קריית שמונה"),
+    ("tiberias",          "עירוני טבריה"),
+    ("ashdod",            "אשדוד"),
+]
+
+def to_hebrew_team(name: str) -> str:
+    tl = (name or "").lower()
+    for key, heb in HEB_TEAMS:
+        if key in tl:
+            return heb
+    return name
+
+def build_source_query(source: dict, home: str, away: str) -> str:
+    if source.get("hebrew_names"):
+        home, away = to_hebrew_team(home), to_hebrew_team(away)
+    template = source.get("search_template", "{home} {away}")
+    return template.format(home=home, away=away)
+
 # ── YouTube ────────────────────────────────────────────
 
 # Regex to detect scores in titles like "2-0", "3:1", "(2-1)"
@@ -710,9 +768,8 @@ def get_highlights(request: Request, match_id: str):
                                 "allow_embed": allow_embed})
                 continue
 
-        # Build query from source's search template
-        template = source.get("search_template", "{home} {away}")
-        query = template.format(home=row["home_team"], away=row["away_team"])
+        # Build query from source's search template (+ עברית אם צריך)
+        query = build_source_query(source, row["home_team"], row["away_team"])
 
         videos = search_youtube(
             home=row["home_team"],
@@ -953,8 +1010,7 @@ def debug_highlights(request: Request, q: str):
             report["sources"].append(entry)
             continue
 
-        template = source.get("search_template", "{home} {away}")
-        query = template.format(home=home, away=away)
+        query = build_source_query(source, home, away)
         entry["query"] = query
 
         try:
