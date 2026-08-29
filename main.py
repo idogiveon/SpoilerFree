@@ -1,5 +1,5 @@
 import sqlite3
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 import requests
 import re
 import os
@@ -64,9 +64,12 @@ LEAGUES = {
         ],
         # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
         "web_sources": [
-            {"name": "ספורט 1",  "query": "תקציר {home} {away} sport1.maariv.co.il"},
-            {"name": "וואלה",    "query": "תקציר {home} {away} sports.walla.co.il"},
-            {"name": "ספורט 5",  "query": "תקציר {home} {away} vod.sport5.co.il"},
+            {"name": "ספורט 1", "domain": "sport1.maariv.co.il",
+             "query": "תקציר {home} {away}"},
+            {"name": "וואלה",   "domain": "sports.walla.co.il",
+             "query": "תקציר {home} {away}"},
+            {"name": "ספורט 5", "domain": "sport5.co.il",
+             "query": "תקציר {home} {away}"},
         ],
     },
     "bundesliga": {
@@ -522,6 +525,25 @@ def to_hebrew_team(name: str) -> str:
             return heb
     return name
 
+def resolve_web_link(query: str, domain: str):
+    """שולף מ-DuckDuckGo (גרסת HTML) את התוצאה הראשונה מהדומיין המבוקש.
+    מחזיר URL ישיר לכתבה, או None אם נכשל (ואז ניפול לעמוד חיפוש)."""
+    try:
+        r = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": f"{query} {domain}"},
+            headers={"User-Agent": "Mozilla/5.0 (SpoilerFree)"},
+            timeout=6,
+        )
+        for m in re.finditer(r'uddg=([^&"\']+)', r.text):
+            url = unquote(m.group(1))
+            if domain in url:
+                return url
+    except Exception as ex:
+        print(f"[weblink] {domain}: {ex}")
+    return None
+
+
 def build_source_query(source: dict, home: str, away: str) -> str:
     if source.get("hebrew_names"):
         home, away = to_hebrew_team(home), to_hebrew_team(away)
@@ -563,10 +585,18 @@ def is_match_highlight(title: str, home: str, away: str,
             return True
         return False
 
+    # נרמול גרשיים: ׳/’ → ' וכן ״ → " (אלצ׳ה, ג׳נואה, בית״ר...)
+    title_norm = (title.replace("\u05f3", "'").replace("\u2019", "'")
+                       .replace("\u05f4", '"'))
+
     def team_in_ex(team, alt):
         if team_in(team):
             return True
-        return bool(alt) and alt != team and alt in title
+        if not alt or alt == team:
+            return False
+        alt_norm = (alt.replace("\u05f3", "'").replace("\u2019", "'")
+                       .replace("\u05f4", '"'))
+        return alt_norm in title_norm
 
     exclude = any(w in t for w in
                   ["compilation", "best of", "every goal", "parade", "bts",
@@ -878,14 +908,39 @@ def get_highlights(request: Request, match_id: str):
                         "status": "found" if videos else "not_found",
                         "allow_embed": allow_embed})
 
-    # קישורי אתר (same-day): DuckDuckGo עם \ קופץ ישר לתוצאה הראשונה
+    # קישורי אתר (same-day): השרת מחלץ את הכתבה הישירה ושומר בקאש
     league = LEAGUES.get(row["league_key"], {})
     web_links = []
     for w in league.get("web_sources", []):
         wq = w["query"].format(home=to_hebrew_team(row["home_team"]),
                                away=to_hebrew_team(row["away_team"]))
-        web_links.append({"name": w["name"],
-                          "url": "https://duckduckgo.com/?q=" + quote("\\" + wq)})
+        cache_key = f"web_{w['name']}"
+
+        conn = get_db()
+        cached = conn.execute(
+            "SELECT videos_json FROM highlight_cache WHERE match_id=? AND source_id=?",
+            (match_id, cache_key)
+        ).fetchone()
+        conn.close()
+
+        if cached:
+            url = json.loads(cached["videos_json"])["url"]
+        else:
+            url = resolve_web_link(wq, w["domain"])
+            if url:
+                # קאש רק לקישור ישיר — כישלון ינוסה שוב בפתיחה הבאה
+                conn = get_db()
+                conn.execute("""
+                    INSERT OR REPLACE INTO highlight_cache
+                    (match_id, source_id, videos_json, found_at)
+                    VALUES (?,?,?,?)
+                """, (match_id, cache_key, json.dumps({"url": url}),
+                      datetime.now(timezone.utc).isoformat()))
+                conn.commit()
+                conn.close()
+            else:
+                url = "https://duckduckgo.com/?q=" + quote(f"{wq} {w['domain']}")
+        web_links.append({"name": w["name"], "url": url})
 
     return {
         "available": True,
