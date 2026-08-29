@@ -329,6 +329,14 @@ def _store_sportsdb_events(conn, league_key: str, events: list, now: str) -> int
         if not event_id:
             continue
         status = map_sportsdb_status(e)
+        # מגן: endpoint אחד (eventsround) לפעמים מחזיר סטטוס ריק
+        # למשחק שכבר ידוע כ-FINISHED — לא מורידים סטטוס אחורה
+        if status == "SCHEDULED":
+            existing = conn.execute(
+                "SELECT status FROM matches WHERE id=?", (event_id,)
+            ).fetchone()
+            if existing and existing["status"] in ("FINISHED", "LIVE"):
+                status = existing["status"]
         matchday = None
         try:
             matchday = int(e.get("intRound") or 0) or None
@@ -525,22 +533,49 @@ def to_hebrew_team(name: str) -> str:
             return heb
     return name
 
+GOOGLE_SEARCH_KEY = os.environ.get("GOOGLE_SEARCH_KEY", "")
+GOOGLE_CSE_ID     = os.environ.get("GOOGLE_CSE_ID", "")
+_ddg_fail_until   = [0.0]   # מפסק זרם: אחרי כישלון, לא מנסים 15 דקות
+
 def resolve_web_link(query: str, domain: str):
-    """שולף מ-DuckDuckGo (גרסת HTML) את התוצאה הראשונה מהדומיין המבוקש.
-    מחזיר URL ישיר לכתבה, או None אם נכשל (ואז ניפול לעמוד חיפוש)."""
+    """מחלץ URL ישיר לכתבה הראשונה מהדומיין המבוקש.
+    מסלול ראשי: Google Custom Search API (אמין, 100/יום חינם).
+    גיבוי: DuckDuckGo HTML — עם מפסק זרם כי Render לעיתים חסום שם."""
+    # מסלול 1: Google CSE
+    if GOOGLE_SEARCH_KEY and GOOGLE_CSE_ID:
+        try:
+            r = requests.get(
+                "https://www.googleapis.com/customsearch/v1",
+                params={"key": GOOGLE_SEARCH_KEY, "cx": GOOGLE_CSE_ID,
+                        "q": query, "siteSearch": domain,
+                        "siteSearchFilter": "i", "num": 3},
+                timeout=6,
+            ).json()
+            for item in r.get("items", []):
+                if domain in item.get("link", ""):
+                    return item["link"]
+        except Exception as ex:
+            print(f"[weblink/cse] {domain}: {ex}")
+
+    # מסלול 2: DuckDuckGo, רק אם לא נכשל לאחרונה
+    import time as _time
+    if _time.time() < _ddg_fail_until[0]:
+        return None
     try:
         r = requests.get(
             "https://html.duckduckgo.com/html/",
             params={"q": f"{query} {domain}"},
             headers={"User-Agent": "Mozilla/5.0 (SpoilerFree)"},
-            timeout=6,
+            timeout=4,
         )
         for m in re.finditer(r'uddg=([^&"\']+)', r.text):
             url = unquote(m.group(1))
             if domain in url:
                 return url
+        _ddg_fail_until[0] = _time.time() + 900
     except Exception as ex:
-        print(f"[weblink] {domain}: {ex}")
+        print(f"[weblink/ddg] {domain}: {ex}")
+        _ddg_fail_until[0] = _time.time() + 900
     return None
 
 
@@ -580,8 +615,9 @@ def is_match_highlight(title: str, home: str, away: str,
             return True
         if len(words) >= 1 and words[-1] in t:
             return True
-        # multi-word names like "South Korea"
-        if len(words) >= 2 and words[0] in t and words[-1] in t:
+        # מילה ראשונה משמעותית: "Inter Milan" בכותרת "INTER-MONZA",
+        # "Manchester City" בכותרת "MAN CITY". מינימום 4 תווים נגד רעש.
+        if len(words) >= 2 and len(words[0]) >= 4 and words[0] in t:
             return True
         return False
 
@@ -1206,7 +1242,7 @@ def admin_resolve_channel(request: Request, url: str):
     """פותר handle של יוטיוב ל-channel ID, בלי לכתוב כלום.
     שימוש: /admin/resolve_channel?url=@sport1sport2"""
     require_auth(request)
-    url = url.strip()
+    url = url.strip().rstrip("/")   # סלאש בסוף שבר את חילוץ ה-handle
     if "/channel/" in url:
         cid = url.split("/channel/")[1].split("/")[0].split("?")[0]
         return {"channel_id": cid, "note": "חולץ ישירות מהכתובת"}
