@@ -580,7 +580,7 @@ def scrape_sport1_vod(home_he: str, away_he: str):
         home_v = he_team_variants(home_he)
         away_v = he_team_variants(away_he)
         for m in re.finditer(
-                r'<a[^>]+href="([^"]*?/video/\d+[^"]*)"[^>]*>(.*?)</a>',
+                r"<a[^>]+href=['\"]([^'\"]*?/video/\d+[^'\"]*)['\"][^>]*>(.*?)</a>",
                 html, re.S):
             href = m.group(1)
             text = re.sub(r"<[^>]+>", " ", m.group(2))
@@ -1388,7 +1388,7 @@ def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str
         html = r.text
         report["html_length"] = len(html)
         anchors = []
-        for m in re.finditer(r'<a[^>]+href="([^"]*?/video/\d+[^"]*)"[^>]*>(.*?)</a>',
+        for m in re.finditer(r"<a[^>]+href=['\"]([^'\"]*?/video/\d+[^'\"]*)['\"][^>]*>(.*?)</a>",
                              html, re.S):
             text = re.sub(r"<[^>]+>", " ", m.group(2)).strip()
             anchors.append({"href": m.group(1)[:100], "text": text[:80]})
