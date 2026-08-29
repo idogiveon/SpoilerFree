@@ -46,7 +46,7 @@ LEAGUES = {
             # לפי סדר מהירות ההעלאה: ספורט 1 (אותו יום) → ערוץ הספורט
             # (אחרי חצות) → הערוץ הרשמי של הליגה (24-72 שעות, גיבוי)
             {"id": "sport1", "name": "ספורט 1",
-             "channel_id": "",   # ממתין: /admin/resolve_channel?url=@sport1sport2
+             "channel_id": "UC_wkUEeEC4HlcfI5xanWjBQ",
              "search_template": "תקציר {home} {away}",
              "allow_embed": False},
             {"id": "sport5", "name": "ערוץ הספורט",
@@ -225,29 +225,29 @@ def init_db():
 
     conn.commit()
 
-    # מועדוני פרמייר ליג 2026-27 — ערוצים מופו ואומתו ידנית (28/8/26).
+    # מועדוני פרמייר ליג 2026-27 — ערוצים מופו ואומתו ידנית (29/8/26).
     # הקוד הוא מקור האמת: בכל עלייה הטבלה נבנית מחדש מהרשימה הזו.
     premier_clubs = [
-        ("PL-fd57",   "Arsenal FC",                 "Arsenal",        "premier", 1, "UCpryVRk_VDudG8SHXgWcG0w", "57"),
-        ("PL-fd61",   "Chelsea FC",                 "Chelsea",        "premier", 1, "UCF5ZHdBHgQFvCDMxnLNEDsQ", "61"),
-        ("PL-fd64",   "Liverpool FC",               "Liverpool",      "premier", 1, "UCNCHLOFZu2hEBbGVDzUBiTQ", "64"),
-        ("PL-fd65",   "Manchester City FC",         "Man City",       "premier", 1, "UCmIBDP4OFjJcQZ1pNWMArFg", "65"),
-        ("PL-fd66",   "Manchester United FC",       "Man United",     "premier", 1, "UCSmqU7bLAEFMsq9hHgqlILg", "66"),
-        ("PL-fd73",   "Tottenham Hotspur FC",       "Spurs",          "premier", 1, "UCEm2zHMGFxaFDRMHEbxZ5dw", "73"),
-        ("PL-fd1044", "AFC Bournemouth",            "Bournemouth",    "premier", 2, "UCeOCuVSSweaEj6oVtJZEKQw", "1044"),
-        ("PL-fd58",   "Aston Villa FC",             "Aston Villa",    "premier", 2, "UCnGMrEJdFn8aXzWjIiXpEaA", "58"),
-        ("PL-fd402",  "Brentford FC",               "Brentford",      "premier", 2, "UCAalMUm3LIf504ItA3rqfug", "402"),
-        ("PL-fd397",  "Brighton & Hove Albion FC",  "Brighton",       "premier", 2, "UCf-cpC9WAdOsas19JHipukA", "397"),
-        ("PL-fd328",  "Burnley FC",                 "Burnley",        "premier", 2, "UChvUXuSDeEFSQZS8GcPMtkg", "328"),
-        ("PL-fd354",  "Crystal Palace FC",          "Crystal Palace", "premier", 2, "UCWB9N0012fG6bGyj486Qxmg", "354"),
-        ("PL-fd62",   "Everton FC",                 "Everton",        "premier", 2, "UCtK4QAczAN2mt2ow_jlGinQ", "62"),
-        ("PL-fd63",   "Fulham FC",                  "Fulham",         "premier", 2, "UC2VLfz92cTT8jHIFOecC-LA", "63"),
-        ("PL-fd341",  "Leeds United FC",            "Leeds",          "premier", 2, "UCyQcJHDN4uYfPa1DHzKVSnw", "341"),
-        ("PL-fd67",   "Newcastle United FC",        "Newcastle",      "premier", 2, "UCf6RkTMfvn2LFnbX5CqNkBw", "67"),
-        ("PL-fd351",  "Nottingham Forest FC",       "Forest",         "premier", 2, "UCyAxjuAr8f_BFDGCO3Htbxw", "351"),
-        ("PL-fd71",   "Sunderland AFC",             "Sunderland",     "premier", 2, "UCrw-7k6yJc0EMJdf-0BAkoQ", "71"),
-        ("PL-fd563",  "West Ham United FC",         "West Ham",       "premier", 2, "UCCNOsmurvpEit9paBOzWtUg", "563"),
-        ("PL-fd76",   "Wolverhampton Wanderers FC", "Wolves",         "premier", 2, "UCQ7Lqg5Czh5djGK6iOG53KQ", "76"),
+        ("PL-fd57",   "Arsenal FC",                "Arsenal",        "premier", 1, "UCpryVRk_VDudG8SHXgWcG0w", "57"),
+        ("PL-fd61",   "Chelsea FC",                "Chelsea",        "premier", 1, "UCF5ZHdBHgQFvCDMxnLNEDsQ", "61"),
+        ("PL-fd64",   "Liverpool FC",              "Liverpool",      "premier", 1, "UCNCHLOFZu2hEBbGVDzUBiTQ", "64"),
+        ("PL-fd65",   "Manchester City FC",        "Man City",       "premier", 1, "UCmIBDP4OFjJcQZ1pNWMArFg", "65"),
+        ("PL-fd66",   "Manchester United FC",      "Man United",     "premier", 1, "UCSmqU7bLAEFMsq9hHgqlILg", "66"),
+        ("PL-fd73",   "Tottenham Hotspur FC",      "Spurs",          "premier", 1, "UCEm2zHMGFxaFDRMHEbxZ5dw", "73"),
+        ("PL-fd1044", "AFC Bournemouth",           "Bournemouth",    "premier", 2, "UCeOCuVSSweaEj6oVtJZEKQw", "1044"),
+        ("PL-fd58",   "Aston Villa FC",            "Aston Villa",    "premier", 2, "UCnGMrEJdFn8aXzWjIiXpEaA", "58"),
+        ("PL-fd402",  "Brentford FC",              "Brentford",      "premier", 2, "UCAalMUm3LIf504ItA3rqfug", "402"),
+        ("PL-fd397",  "Brighton & Hove Albion FC", "Brighton",       "premier", 2, "UCf-cpC9WAdOsas19JHipukA", "397"),
+        ("PL-fd1076", "Coventry City FC",          "Coventry",       "premier", 2, "UCch_NWdo3JWKngAyO9XlycA", "1076"),
+        ("PL-fd354",  "Crystal Palace FC",         "Crystal Palace", "premier", 2, "UCWB9N0012fG6bGyj486Qxmg", "354"),
+        ("PL-fd62",   "Everton FC",                "Everton",        "premier", 2, "UCtK4QAczAN2mt2ow_jlGinQ", "62"),
+        ("PL-fd63",   "Fulham FC",                 "Fulham",         "premier", 2, "UC2VLfz92cTT8jHIFOecC-LA", "63"),
+        ("PL-fd322",  "Hull City AFC",             "Hull",           "premier", 2, "UC8MRV5E-Bi5qWomGjOF0ZQg", "322"),
+        ("PL-fd349",  "Ipswich Town FC",           "Ipswich",        "premier", 2, "UCjNwxJec96lMWgCXjEDhXgQ", "349"),
+        ("PL-fd341",  "Leeds United FC",           "Leeds",          "premier", 2, "UCyQcJHDN4uYfPa1DHzKVSnw", "341"),
+        ("PL-fd67",   "Newcastle United FC",       "Newcastle",      "premier", 2, "UCf6RkTMfvn2LFnbX5CqNkBw", "67"),
+        ("PL-fd351",  "Nottingham Forest FC",      "Forest",         "premier", 2, "UCyAxjuAr8f_BFDGCO3Htbxw", "351"),
+        ("PL-fd71",   "Sunderland AFC",            "Sunderland",     "premier", 2, "UCrw-7k6yJc0EMJdf-0BAkoQ", "71"),
     ]
 
     # ניקוי שורות ישנות (סגלים קודמים) והכנסה מחדש — דטרמיניסטי
