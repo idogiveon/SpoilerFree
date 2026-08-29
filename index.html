@@ -495,7 +495,8 @@
           if (source.status !== 'no_channel') hasChannel = true;
           if (!source.videos || !source.videos.length) continue;
           for (const v of source.videos) {
-            const label = `${source.name}${source.videos.length > 1 ? ' — ' + v.label : ''}`;
+            // תמיד מציגים את סוג התקציר — שקיפות מלאה על מה לוחצים
+            const label = `${source.name} — ${v.label}`;
             if (source.allow_embed) {
               allBtns.push(
                 `<button class="play-btn ${v.extended ? 'extended' : ''}"

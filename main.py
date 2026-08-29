@@ -50,6 +50,11 @@ LEAGUES = {
              "search_template": "תקציר {home} {away}",
              "hebrew_names": True,
              "allow_embed": False},
+            {"id": "one_israel", "name": "ONE",
+             "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
+             "search_template": "תקציר {home} {away}",
+             "hebrew_names": True,
+             "allow_embed": False},
             {"id": "sport5", "name": "ערוץ הספורט",
              "channel_id": "UCyXf5cz6E9IIL40aivg7tOw",
              "search_template": "תקציר {home} {away}",
@@ -79,7 +84,7 @@ LEAGUES = {
         "sportsdb_season": "2026-2027",
         "sources": [
             {"id": "one_laliga", "name": "ONE",
-             "channel_id": "",   # ממתין: /admin/resolve_channel?url=@one-1004
+             "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "תקציר {home} {away}",
              "allow_embed": False},
             {"id": "laliga_official", "name": "LALIGA",
@@ -94,11 +99,11 @@ LEAGUES = {
         "sportsdb_season": "2026-2027",
         "sources": [
             {"id": "one_seriea", "name": "ONE",
-             "channel_id": "",   # ממתין: /admin/resolve_channel?url=@one-1004
+             "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "תקציר {home} {away}",
              "allow_embed": False},
             {"id": "seriea_official", "name": "Serie A",
-             "channel_id": "",   # ממתין: handle מ-youtube.com/seriea
+             "channel_id": "UCBJeMCIeLQos7wacox4hmLQ",
              "search_template": "{home} {away} highlights",
              "allow_embed": False},
         ],
