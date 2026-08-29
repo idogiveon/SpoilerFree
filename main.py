@@ -1,4 +1,5 @@
 import sqlite3
+from urllib.parse import quote
 import requests
 import re
 import os
@@ -50,11 +51,6 @@ LEAGUES = {
              "search_template": "תקציר {home} {away}",
              "hebrew_names": True,
              "allow_embed": False},
-            {"id": "one_israel", "name": "ONE",
-             "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
-             "search_template": "תקציר {home} {away}",
-             "hebrew_names": True,
-             "allow_embed": False},
             {"id": "sport5", "name": "ערוץ הספורט",
              "channel_id": "UCyXf5cz6E9IIL40aivg7tOw",
              "search_template": "תקציר {home} {away}",
@@ -62,8 +58,15 @@ LEAGUES = {
              "allow_embed": False},
             {"id": "ipfl", "name": "ליגת העל",
              "channel_id": "UCxjaVFauWASy0CuJfHKZeiw",
-             "search_template": "{home} {away}",
+             "search_template": "תקציר {home} {away}",
+             "hebrew_names": True,
              "allow_embed": False},
+        ],
+        # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
+        "web_sources": [
+            {"name": "ספורט 1",  "query": "תקציר {home} {away} sport1.maariv.co.il"},
+            {"name": "וואלה",    "query": "תקציר {home} {away} sports.walla.co.il"},
+            {"name": "ספורט 5",  "query": "תקציר {home} {away} vod.sport5.co.il"},
         ],
     },
     "bundesliga": {
@@ -86,6 +89,8 @@ LEAGUES = {
             {"id": "one_laliga", "name": "ONE",
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "תקציר {home} {away}",
+             "hebrew_names": True,
+             "require_team_match": True,
              "allow_embed": False},
             {"id": "laliga_official", "name": "LALIGA",
              "channel_id": "", "search_template": "{home} {away} resumen",
@@ -101,6 +106,8 @@ LEAGUES = {
             {"id": "one_seriea", "name": "ONE",
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "תקציר {home} {away}",
+             "hebrew_names": True,
+             "require_team_match": True,
              "allow_embed": False},
             {"id": "seriea_official", "name": "Serie A",
              "channel_id": "UCBJeMCIeLQos7wacox4hmLQ",
@@ -456,6 +463,56 @@ HEB_TEAMS = [
     ("kiryat shmona",     "עירוני קריית שמונה"),
     ("tiberias",          "עירוני טבריה"),
     ("ashdod",            "אשדוד"),
+    # ── סריה A (סדר חשוב: אינטר לפני מילאן) ──
+    ("inter",             "אינטר"),
+    ("milan",             "מילאן"),
+    ("juventus",          "יובנטוס"),
+    ("napoli",            "נאפולי"),
+    ("roma",              "רומא"),
+    ("lazio",             "לאציו"),
+    ("atalanta",          "אטאלנטה"),
+    ("fiorentina",        "פיורנטינה"),
+    ("bologna",           "בולוניה"),
+    ("torino",            "טורינו"),
+    ("genoa",             "ג'נואה"),
+    ("cagliari",          "קליארי"),
+    ("parma",             "פארמה"),
+    ("sassuolo",          "ססואולו"),
+    ("udinese",           "אודינזה"),
+    ("lecce",             "לצ'ה"),
+    ("verona",            "ורונה"),
+    ("como",              "קומו"),
+    ("monza",             "מונצה"),
+    ("empoli",            "אמפולי"),
+    ("venezia",           "ונציה"),
+    ("cremonese",         "קרמונזה"),
+    ("pisa",              "פיזה"),
+    ("frosinone",         "פרוזינונה"),
+    ("salernitana",       "סלרניטנה"),
+    # ── לה ליגה ──
+    ("real madrid",       "ריאל מדריד"),
+    ("barcelona",         "ברצלונה"),
+    ("tico madrid",       "אתלטיקו מדריד"),   # תופס Atlético/Atletico
+    ("sevilla",           "סביליה"),
+    ("betis",             "בטיס"),
+    ("sociedad",          "ריאל סוסיאדד"),
+    ("bilbao",            "אתלטיק בילבאו"),
+    ("villarreal",        "ויאריאל"),
+    ("valencia",          "ולנסיה"),
+    ("getafe",            "חטאפה"),
+    ("espanyol",          "אספניול"),
+    ("celta",             "סלטה ויגו"),
+    ("rayo",              "ראיו וייקאנו"),
+    ("alav",              "אלאבס"),            # Alavés עם/בלי אקצנט
+    ("levante",           "לבנטה"),
+    ("elche",             "אלצ'ה"),
+    ("mallorca",          "מיורקה"),
+    ("osasuna",           "אוססונה"),
+    ("girona",            "ג'ירונה"),
+    ("laga",              "מאלגה"),            # Málaga/Malaga
+    ("santander",         "ראסינג סנטנדר"),
+    ("coru",              "דפורטיבו לה קורוניה"),  # A Coruña
+    ("oviedo",            "אוביידו"),
 ]
 
 def to_hebrew_team(name: str) -> str:
@@ -480,7 +537,12 @@ def clean_title_for_display(title: str) -> str:
     """Remove anything that looks like a score from a video title."""
     return SCORE_PATTERN.sub("", title).strip()
 
-def is_match_highlight(title: str, home: str, away: str) -> bool:
+def is_match_highlight(title: str, home: str, away: str,
+                       home_alt: str = None, away_alt: str = None,
+                       require_team: bool = False) -> bool:
+    """home_alt/away_alt: שמות חלופיים (עברית) לזיהוי בכותרת.
+    require_team: חובה לזהות קבוצה בכותרת גם כשיש מילת "תקציר" —
+    למקורות רב-ליגתיים (ONE), מונע וידאו מליגה לא נכונה."""
     t = title.lower()
 
     def clean(team):
@@ -501,6 +563,11 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
             return True
         return False
 
+    def team_in_ex(team, alt):
+        if team_in(team):
+            return True
+        return bool(alt) and alt != team and alt in title
+
     exclude = any(w in t for w in
                   ["compilation", "best of", "every goal", "parade", "bts",
                    "training", "press conference", "interview", "#shorts",
@@ -514,9 +581,12 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
     if "תקציר" in t and not exclude:
-        return True
+        if not require_team:
+            return True
+        # מקור רב-ליגתי: חובה לפחות קבוצה אחת מזוהה בכותרת
+        return team_in_ex(home, home_alt) or team_in_ex(away, away_alt)
 
-    has_both  = team_in(home) and team_in(away)
+    has_both  = team_in_ex(home, home_alt) and team_in_ex(away, away_alt)
     highlight = any(w in t for w in
                     ["highlight", "match", "goals", "extended",
                      "שערים", "sign off", "vs", "v.", "\U0001f19a",
@@ -528,7 +598,9 @@ def is_match_highlight(title: str, home: str, away: str) -> bool:
 def search_youtube(home: str, away: str, match_date: str,
                    channel_id: str, query: str = None,
                    title_exclude: list = None,
-                   title_include: list = None) -> list:
+                   title_include: list = None,
+                   home_alt: str = None, away_alt: str = None,
+                   require_team: bool = False) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not YOUTUBE_API_KEY or not channel_id:
         return []
@@ -562,7 +634,8 @@ def search_youtube(home: str, away: str, match_date: str,
             continue
         if title_include and not any(x.lower() in tl for x in title_include):
             continue
-        if is_match_highlight(title, home, away):
+        if is_match_highlight(title, home, away,
+                              home_alt, away_alt, require_team):
             results.append({
                 "video_id": item["id"]["videoId"],
                 "extended": "extended" in tl or "מורחב" in title,
@@ -784,6 +857,9 @@ def get_highlights(request: Request, match_id: str):
             query=query,
             title_exclude=source.get("title_exclude"),
             title_include=source.get("title_include"),
+            home_alt=to_hebrew_team(row["home_team"]),
+            away_alt=to_hebrew_team(row["away_team"]),
+            require_team=source.get("require_team_match", False),
         )
 
         # Save cache
@@ -802,10 +878,20 @@ def get_highlights(request: Request, match_id: str):
                         "status": "found" if videos else "not_found",
                         "allow_embed": allow_embed})
 
+    # קישורי אתר (same-day): DuckDuckGo עם \ קופץ ישר לתוצאה הראשונה
+    league = LEAGUES.get(row["league_key"], {})
+    web_links = []
+    for w in league.get("web_sources", []):
+        wq = w["query"].format(home=to_hebrew_team(row["home_team"]),
+                               away=to_hebrew_team(row["away_team"]))
+        web_links.append({"name": w["name"],
+                          "url": "https://duckduckgo.com/?q=" + quote("\\" + wq)})
+
     return {
         "available": True,
         "match":     f"{row['home_team']} vs {row['away_team']}",
         "sources":   results,
+        "web_links": web_links,
     }
 
 
@@ -1045,7 +1131,9 @@ def debug_highlights(request: Request, q: str):
             tl = title.lower()
             if any(x.lower() in tl for x in excl):
                 verdict = "נפסל: סינון מקור"
-            elif not is_match_highlight(title, home, away):
+            elif not is_match_highlight(title, home, away,
+                                         to_hebrew_team(home), to_hebrew_team(away),
+                                         source.get("require_team_match", False)):
                 verdict = "נפסל: לא זוהה כתקציר"
             else:
                 verdict = "עבר ✓"

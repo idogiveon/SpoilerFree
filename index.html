@@ -510,7 +510,15 @@
           }
         }
 
-        if (!hasChannel) {
+        // כפתורי אתר (ספורט1/וואלה/ספורט5) — קפיצה לתוצאה ראשונה
+        const webBtns = (data.web_links || []).map(l =>
+          `<button class="retry-btn" onclick="window.open('${l.url}','_blank')">🔗 ${l.name} ↗</button>`);
+        const webRow = webBtns.length
+          ? `<div class="sources-row">${webBtns.join('')}</div>
+             <div class="shield-note">🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד</div>`
+          : '';
+
+        if (!hasChannel && !webBtns.length) {
           body.innerHTML = `
             <div class="no-highlight-msg">
               🎬 מקור תקצירים לליגה זו עדיין לא הוגדר
@@ -521,10 +529,13 @@
 
         if (!allBtns.length) {
           body.innerHTML = `
-            <div class="no-highlight-msg">
-              🔍 התקציר עדיין לא הועלה
-              <br><small style="opacity:0.5">נסה שוב בעוד כמה דקות</small>
-              <br><button class="retry-btn" onclick="retryHighlights('${matchId}', '${home}', '${away}')">↻ נסה שוב</button>
+            <div class="video-container">
+              <div class="spoiler-shield">
+                <div class="shield-icon">🔍</div>
+                <div class="shield-text">התקציר עדיין לא הועלה ליוטיוב</div>
+                ${webRow}
+                <button class="retry-btn" onclick="retryHighlights('${matchId}', '${home}', '${away}')">↻ נסה שוב</button>
+              </div>
             </div>`;
           return;
         }
@@ -536,6 +547,7 @@
               <div class="shield-text">בחר גרסה לצפייה</div>
               <div class="sources-row">${allBtns.join('')}</div>
               <div class="shield-note">↗ = נפתח ביוטיוב בטאב חדש</div>
+              ${webRow}
             </div>
             <div id="video-frame"></div>
           </div>`;
