@@ -746,13 +746,18 @@ def search_youtube(home: str, away: str, match_date: str,
     }
 
     try:
-        items = requests.get(
+        resp = requests.get(
             "https://www.googleapis.com/youtube/v3/search",
             params=params, timeout=10
-        ).json().get("items", [])
+        ).json()
+        if "error" in resp:
+            # quotaExceeded וכד' — מחזירים None כדי שלא ייכנס לקאש כ"ריק"
+            print(f"YouTube API error: {resp['error'].get('message')}")
+            return None
+        items = resp.get("items", [])
     except Exception as e:
         print(f"YouTube search error: {e}")
-        return []
+        return None
 
     results = []
     for item in items:
@@ -990,6 +995,13 @@ def get_highlights(request: Request, match_id: str):
             away_alt=to_hebrew_team(row["away_team"]),
             require_team=source.get("require_team_match", False),
         )
+
+        if videos is None:
+            # שגיאת API (מכסה?) — לא שומרים בקאש, ינוסה שוב בפתיחה הבאה
+            results.append({"source_id": source_id, "name": source["name"],
+                            "videos": [], "status": "api_error",
+                            "allow_embed": allow_embed})
+            continue
 
         # Save cache
         conn = get_db()
@@ -1382,6 +1394,14 @@ def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str
             anchors.append({"href": m.group(1)[:100], "text": text[:80]})
         report["video_anchors_found"] = len(anchors)
         report["sample"] = anchors[:6]
+        # אולי הדף נבנה ב-JS והנתונים חיים ב-JSON מוטמע — סורקים גולמי
+        raw_refs = re.findall(r"/video/\d+", html)
+        report["raw_video_refs"] = len(raw_refs)
+        contexts = []
+        for m in list(re.finditer(r"/video/\d+", html))[:4]:
+            s = max(0, m.start() - 150)
+            contexts.append(html[s:m.end() + 20].replace("\n", " ")[-170:])
+        report["raw_contexts"] = contexts
         report["matched_url"] = scrape_sport1_vod(home, away)
     except Exception as ex:
         report["exception"] = str(ex)
