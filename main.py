@@ -5,6 +5,7 @@ import re
 import os
 import json
 import hashlib
+import unicodedata
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -65,6 +66,7 @@ LEAGUES = {
         # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
         "web_sources": [
             {"name": "ספורט 1", "domain": "sport1.maariv.co.il",
+             "resolver": "sport1_vod",
              "query": "תקציר {home} {away}"},
             {"name": "וואלה",   "domain": "sports.walla.co.il",
              "query": "תקציר {home} {away}"},
@@ -96,7 +98,8 @@ LEAGUES = {
              "require_team_match": True,
              "allow_embed": False},
             {"id": "laliga_official", "name": "LALIGA",
-             "channel_id": "", "search_template": "{home} {away} resumen",
+             "channel_id": "UCTv-XvfzLX3i4IGWAm4sbmA",
+             "search_template": "{home} {away} resumen",
              "allow_embed": False},
         ],
     },
@@ -106,10 +109,10 @@ LEAGUES = {
         "sportsdb_ids": ["4332"],
         "sportsdb_season": "2026-2027",
         "sources": [
+            # ONE מתייגים את איטליה באנגלית (ואת ספרד בעברית) — חיפוש אנגלי
             {"id": "one_seriea", "name": "ONE",
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
-             "search_template": "תקציר {home} {away}",
-             "hebrew_names": True,
+             "search_template": "{home} {away}",
              "require_team_match": True,
              "allow_embed": False},
             {"id": "seriea_official", "name": "Serie A",
@@ -537,6 +540,61 @@ GOOGLE_SEARCH_KEY = os.environ.get("GOOGLE_SEARCH_KEY", "")
 GOOGLE_CSE_ID     = os.environ.get("GOOGLE_CSE_ID", "")
 _ddg_fail_until   = [0.0]   # מפסק זרם: אחרי כישלון, לא מנסים 15 דקות
 
+# קיצורים נפוצים בכותרות ישראליות: מכבי ת"א, הפועל ב"ש...
+HE_ABBREV = {
+    "תל אביב":     ['ת"א', 'ת״א'],
+    "באר שבע":     ['ב"ש', 'ב״ש'],
+    "פתח תקווה":   ['פ"ת', 'פ״ת'],
+    "קריית שמונה": ['ק"ש', 'ק״ש'],
+    "רמת גן":      ['ר"ג', 'ר״ג'],
+    "כפר סבא":     ['כ"ס', 'כ״ס'],
+    "ירושלים":     ["י-ם", 'י"ם', 'י״ם'],
+}
+
+def he_team_variants(heb_name: str) -> list:
+    """גרסאות לזיהוי קבוצה בכותרת: השם המלא, החלק המזהה (בלי מכבי/הפועל),
+    וקיצורים מקובלים. למשל 'הפועל פתח תקווה' → גם 'פתח תקווה' וגם 'פ"ת'."""
+    variants = [heb_name]
+    core = heb_name
+    for prefix in ("מכבי ", "הפועל ", 'בית"ר ', "עירוני ", "בני ", "מ.ס. "):
+        if core.startswith(prefix):
+            core = core[len(prefix):]
+            break
+    if core != heb_name:
+        variants.append(core)
+    variants.extend(HE_ABBREV.get(core, []))
+    return variants
+
+def scrape_sport1_vod(home_he: str, away_he: str):
+    """קורא את עמוד ה-VOD של ספורט 1 ומאתר את התקציר של המשחק.
+    מחזיר URL ישיר לכתבה, או None."""
+    try:
+        r = requests.get(
+            "https://sport1.maariv.co.il/vod/",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return None
+        html = r.text
+        home_v = he_team_variants(home_he)
+        away_v = he_team_variants(away_he)
+        for m in re.finditer(
+                r'<a[^>]+href="([^"]*?/video/\d+[^"]*)"[^>]*>(.*?)</a>',
+                html, re.S):
+            href = m.group(1)
+            text = re.sub(r"<[^>]+>", " ", m.group(2))
+            # מוסיפים גם title= של העוגן אם קיים
+            text += " " + (re.search(r'title="([^"]*)"', m.group(0)) or [None, ""])[1]
+            if any(v in text for v in home_v) and any(v in text for v in away_v):
+                if href.startswith("/"):
+                    href = "https://sport1.maariv.co.il" + href
+                return href
+    except Exception as ex:
+        print(f"[sport1vod] {ex}")
+    return None
+
+
 def resolve_web_link(query: str, domain: str):
     """מחלץ URL ישיר לכתבה הראשונה מהדומיין המבוקש.
     מסלול ראשי: Google Custom Search API (אמין, 100/יום חינם).
@@ -600,10 +658,15 @@ def is_match_highlight(title: str, home: str, away: str,
     """home_alt/away_alt: שמות חלופיים (עברית) לזיהוי בכותרת.
     require_team: חובה לזהות קבוצה בכותרת גם כשיש מילת "תקציר" —
     למקורות רב-ליגתיים (ONE), מונע וידאו מליגה לא נכונה."""
-    t = title.lower()
+    def deaccent(s):
+        # Lanús→lanus, Alavés→alaves — משווים בלי אקצנטים
+        return "".join(c for c in unicodedata.normalize("NFD", s)
+                       if not unicodedata.combining(c))
+
+    t = deaccent(title.lower())
 
     def clean(team):
-        return (team.lower()
+        return deaccent(team.lower()
                 .replace(" fc","").replace(" afc","")
                 .replace(" national football team","")
                 .strip())
@@ -962,7 +1025,11 @@ def get_highlights(request: Request, match_id: str):
         if cached:
             url = json.loads(cached["videos_json"])["url"]
         else:
-            url = resolve_web_link(wq, w["domain"])
+            if w.get("resolver") == "sport1_vod":
+                url = scrape_sport1_vod(to_hebrew_team(row["home_team"]),
+                                        to_hebrew_team(row["away_team"]))
+            else:
+                url = resolve_web_link(wq, w["domain"])
             if url:
                 # קאש רק לקישור ישיר — כישלון ינוסה שוב בפתיחה הבאה
                 conn = get_db()
@@ -1290,6 +1357,34 @@ def debug_weblink(request: Request, q: str, domain: str):
             report["cse_first_links"] = [i.get("link") for i in items[:3]]
         except Exception as ex:
             report["cse_exception"] = str(ex)
+    return report
+
+
+@app.get("/debug/vodscrape")
+def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str = "הפועל רמת גן"):
+    """אבחון סקרייפר ספורט 1: מה העמוד מחזיר והאם נמצאה התאמה."""
+    require_auth(request)
+    report = {"home_variants": he_team_variants(home),
+              "away_variants": he_team_variants(away)}
+    try:
+        r = requests.get(
+            "https://sport1.maariv.co.il/vod/",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            timeout=8,
+        )
+        report["http_status"] = r.status_code
+        html = r.text
+        report["html_length"] = len(html)
+        anchors = []
+        for m in re.finditer(r'<a[^>]+href="([^"]*?/video/\d+[^"]*)"[^>]*>(.*?)</a>',
+                             html, re.S):
+            text = re.sub(r"<[^>]+>", " ", m.group(2)).strip()
+            anchors.append({"href": m.group(1)[:100], "text": text[:80]})
+        report["video_anchors_found"] = len(anchors)
+        report["sample"] = anchors[:6]
+        report["matched_url"] = scrape_sport1_vod(home, away)
+    except Exception as ex:
+        report["exception"] = str(ex)
     return report
 
 
