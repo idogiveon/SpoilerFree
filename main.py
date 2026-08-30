@@ -1395,6 +1395,72 @@ def debug_highlights(request: Request, q: str):
     return report
 
 
+@app.get("/debug/channels")
+def debug_channels(request: Request):
+    """אימות ערוצים: שואל את YouTube (channels.list, יחידת quota אחת)
+    מה השם האמיתי של כל channel_id מקובע — מועדוני פרמייר + מקורות הליגות.
+    ID שגוי יתגלה מיד: שם לא קשור, או 'לא קיים'."""
+    require_auth(request)
+
+    # אוספים את כל ה-IDs: מועדונים + מקורות ליגה
+    entries = []   # (label, channel_id)
+    conn = get_db()
+    for c in conn.execute("SELECT name, yt_channel_id FROM clubs "
+                          "WHERE yt_channel_id != ''").fetchall():
+        entries.append((f"club: {c['name']}", c["yt_channel_id"]))
+    conn.close()
+    for lk, league in LEAGUES.items():
+        for s in league.get("sources", []):
+            if s.get("channel_id"):
+                entries.append((f"{lk}: {s['name']}", s["channel_id"]))
+
+    ids = list({cid for _, cid in entries})
+    titles = {}
+    try:
+        # channels.list תומך עד 50 IDs בקריאה אחת = 1 יחידת quota
+        for i in range(0, len(ids), 50):
+            batch = ids[i:i+50]
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/channels",
+                params={"key": YOUTUBE_API_KEY, "part": "snippet",
+                        "id": ",".join(batch), "maxResults": 50},
+                timeout=10
+            ).json()
+            if "error" in resp:
+                return {"error": resp["error"].get("message")}
+            for item in resp.get("items", []):
+                titles[item["id"]] = item["snippet"]["title"]
+    except Exception as ex:
+        return {"error": str(ex)}
+
+    report = []
+    for label, cid in entries:
+        report.append({
+            "who": label,
+            "channel_id": cid,
+            "youtube_says": titles.get(cid, "❌ ערוץ לא קיים / ID שגוי"),
+        })
+    return {"channels": report,
+            "note": "השווה בעין: who מול youtube_says. אי-התאמה = ID שגוי — "
+                    "תקן עם /admin/set_channel ושלח לי את pl_teams לקיבוע."}
+
+
+@app.get("/debug/match")
+def debug_match(request: Request, q: str):
+    """השורה הגולמית של משחק מה-DB — סטטוס, תאריך, מתי נשלף."""
+    require_auth(request)
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, league_key, home_team, away_team, date_utc, time_utc, "
+        "matchday, status, fetched_at FROM matches "
+        "WHERE home_team LIKE ? OR away_team LIKE ? "
+        "ORDER BY date_utc DESC LIMIT 5",
+        (f"%{q}%", f"%{q}%")
+    ).fetchall()
+    conn.close()
+    return {"matches": [dict(r) for r in rows]}
+
+
 @app.get("/admin/resolve_channel")
 def admin_resolve_channel(request: Request, url: str):
     """פותר handle של יוטיוב ל-channel ID, בלי לכתוב כלום.

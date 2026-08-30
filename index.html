@@ -486,12 +486,9 @@
 
     title.textContent = `${home} נגד ${away}`;
 
-    if (!isOver) {
-      body.innerHTML = `<div class="no-highlight-msg">⏳ המשחק עדיין לא נגמר<br><small style="opacity:0.5">התקציר יהיה זמין אחרי סיום המשחק</small></div>`;
-      modal.classList.add('open');
-      return;
-    }
-
+    // תמיד פונים לשרת — גם אם הרשימה חושבת שהמשחק לא נגמר.
+    // הסטטוס ברשימה עלול להיות מיושן; השרת יודע לרענן אוטומטית
+    // (football-data) או להחזיר הודעה מדויקת עם הנחיה.
     body.innerHTML = '<div class="loading">מחפש תקצירים</div>';
     modal.classList.add('open');
 
