@@ -643,11 +643,15 @@ def resolve_web_link(query: str, domain: str):
             headers={"User-Agent": "Mozilla/5.0 (SpoilerFree)"},
             timeout=4,
         )
-        for m in re.finditer(r'uddg=([^&"\']+)', r.text):
-            url = unquote(m.group(1))
+        links = [unquote(m.group(1))
+                 for m in re.finditer(r'uddg=([^&"\']+)', r.text)]
+        for url in links:
             if domain in url:
                 return url
-        _ddg_fail_until[0] = _time.time() + 900
+        # יש תוצאות אבל אף אחת מהדומיין — זו לא תקלת DDG,
+        # לא מפעילים מפסק (הדומיין הבא בתור עשוי דווקא להצליח).
+        if r.status_code != 200 or not links:
+            _ddg_fail_until[0] = _time.time() + 900
     except Exception as ex:
         print(f"[weblink/ddg] {domain}: {ex}")
         _ddg_fail_until[0] = _time.time() + 900
@@ -836,8 +840,22 @@ def get_sources_for_match(row) -> list:
             clubs.append(club)
     clubs.sort(key=lambda c: c["tier"])
 
+    # שאילתה משמות קצרים: "Crystal Palace Man City" ולא
+    # "Crystal Palace FC Manchester City FC" — חיפוש-בתוך-ערוץ ביוטיוב
+    # רגיש לפורמליות, ואומת (אבחון סיטי—פאלאס) שהשמות המלאים מחזירים אפס.
+    def _short(club_row, fallback):
+        if club_row and club_row["short_name"]:
+            return club_row["short_name"]
+        s = fallback.replace(" FC", "").replace(" AFC", "").strip()
+        if s.startswith("AFC "):
+            s = s[4:]
+        return s
+    short_q = (f"{_short(home_club, row['home_team'])} "
+               f"{_short(away_club, row['away_team'])}")
+
     club_sources = [{"id": f"club_{c['id']}", "name": c["short_name"],
-                     "channel_id": c["yt_channel_id"], "allow_embed": False}
+                     "channel_id": c["yt_channel_id"], "allow_embed": False,
+                     "query_override": short_q}
                     for c in clubs]
 
     # מקורות גיבוי ברמת הליגה (למשל Sky Sports) — אחרי המועדונים
@@ -1034,8 +1052,10 @@ def get_highlights(request: Request, match_id: str):
                                 "allow_embed": allow_embed})
                 continue
 
-        # Build query from source's search template (+ עברית אם צריך)
-        query = build_source_query(source, row["home_team"], row["away_team"])
+        # Build query: עדיפות לשאילתה מוכנה (שמות קצרים למועדונים),
+        # אחרת מתבנית המקור (+ עברית אם צריך)
+        query = (source.get("query_override")
+                 or build_source_query(source, row["home_team"], row["away_team"]))
 
         videos = search_youtube(
             home=row["home_team"],
@@ -1329,7 +1349,8 @@ def debug_highlights(request: Request, q: str):
             report["sources"].append(entry)
             continue
 
-        query = build_source_query(source, home, away)
+        query = (source.get("query_override")
+                 or build_source_query(source, home, away))
         entry["query"] = query
 
         try:
