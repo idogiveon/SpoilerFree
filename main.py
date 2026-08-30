@@ -911,7 +911,20 @@ def get_matches(request: Request, league_key: str,
             "status":   row["status"],
         })
 
-    return {"matches": matches, "count": len(matches)}
+    # מדד טריות: מתי הליגה רועננה לאחרונה. הפרונט משתמש בזה
+    # כדי לרענן אוטומטית בלי לחיצה כשהנתונים מיושנים.
+    last_fetch, stale = None, True
+    fetch_times = [r["fetched_at"] for r in rows if r["fetched_at"]]
+    if fetch_times:
+        last_fetch = max(fetch_times)
+        try:
+            dt = datetime.fromisoformat(last_fetch)
+            stale = (datetime.now(timezone.utc) - dt) > timedelta(hours=3)
+        except Exception:
+            stale = True
+
+    return {"matches": matches, "count": len(matches),
+            "stale": stale, "last_fetched": last_fetch}
 
 
 @app.post("/refresh/{league_key}")

@@ -171,6 +171,8 @@
   let currentLeague   = 'premier';
   let currentMatchday = null;
   let matchdayList    = [];   // המחזורים שקיימים בפועל בנתונים, ממוינים
+  // ליגות שכבר רועננו אוטומטית בביקור הזה — מונע רענון חוזר בכל מעבר טאב
+  const autoRefreshed = new Set();
 
   // ── Utils ──────────────────────────────────────────
 
@@ -337,6 +339,18 @@
     document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
     try {
       const data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
+
+      // רענון אוטומטי: אם הנתונים מיושנים (3+ שעות) או שאין בכלל —
+      // מרעננים בלי לחיצה, פעם אחת לליגה לכל ביקור. doRefresh
+      // מסתיים בקריאה חוזרת לכאן, אז הזרימה נמשכת רגיל.
+      if ((data.stale || !data.matches.length) && !autoRefreshed.has(league)) {
+        autoRefreshed.add(league);
+        document.getElementById('matches-container').innerHTML =
+          '<div class="loading">הנתונים התיישנו — מרענן אוטומטית</div>';
+        await doRefresh();
+        return;
+      }
+
       const withMd = data.matches.filter(m => m.matchday);
 
       // אין נתוני מחזור לליגה הזו — תצוגת תאריכים רגילה
