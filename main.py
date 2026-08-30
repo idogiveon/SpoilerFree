@@ -456,6 +456,23 @@ def to_israel_time(date_str: str, time_str: str) -> dict:
 def is_over(status: str) -> bool:
     return status in ("FINISHED", "FT", "AET", "PEN", "AP", "Match Finished")
 
+def kickoff_passed(row, hours: float = 2.5) -> bool:
+    """האם עברו לפחות X שעות משעת הפתיחה — כלומר המשחק כנראה נגמר במציאות,
+    גם אם הסטטוס ב-DB עדיין ישן (לא רוענן מאז)."""
+    try:
+        dt = datetime.fromisoformat(f"{row['date_utc']}T{row['time_utc']}+00:00")
+        return datetime.now(timezone.utc) > dt + timedelta(hours=hours)
+    except Exception:
+        return False
+
+def fetched_recently(row, minutes: int = 10) -> bool:
+    """מגן נגד רענוני-אוטו חוזרים: אם השורה נשלפה ממש עכשיו, אין טעם לנסות שוב."""
+    try:
+        dt = datetime.fromisoformat(row["fetched_at"])
+        return datetime.now(timezone.utc) - dt < timedelta(minutes=minutes)
+    except Exception:
+        return False
+
 # ── Hebrew team names for YouTube search ──────────────
 # ערוצים ישראליים מתייגים בעברית — חיפוש בשמות אנגליים מחזיר ריק.
 # התאמה לפי הכלה (case-insensitive), הארוך/ספציפי קודם.
@@ -937,7 +954,31 @@ def get_highlights(request: Request, match_id: str):
         raise HTTPException(404, "משחק לא נמצא")
 
     if not is_over(row["status"]):
-        return {"available": False, "reason": "המשחק עדיין לא נגמר", "sources": []}
+        league_cfg = LEAGUES.get(row["league_key"], {})
+
+        # סטטוס מיושן? אם שעת הפתיחה עברה מזמן, המשחק כנראה נגמר במציאות
+        # וה-DB פשוט לא רוענן. בליגות football-data (נגיש מ-Render) —
+        # מרעננים אוטומטית מצד השרת ובודקים שוב.
+        if kickoff_passed(row) and not fetched_recently(row):
+            if league_cfg.get("source") == "football-data":
+                try:
+                    fetch_football_data(row["league_key"])
+                except Exception as ex:
+                    print(f"[auto-refresh] {row['league_key']}: {ex}")
+                conn = get_db()
+                row = conn.execute("SELECT * FROM matches WHERE id=?",
+                                   (match_id,)).fetchone()
+                conn.close()
+
+        if not is_over(row["status"]):
+            if kickoff_passed(row):
+                # sportsdb חסום מצד השרת — הרענון חייב לבוא מהדפדפן
+                return {"available": False,
+                        "reason": "לפי הנתונים המשחק טרם נגמר, אבל שעת הפתיחה "
+                                  "כבר עברה — לחץ ↻ רענן מ-API בטאב הליגה ופתח שוב",
+                        "sources": []}
+            return {"available": False, "reason": "המשחק עדיין לא נגמר",
+                    "sources": []}
 
     sources = get_sources_for_match(row)
     results = []
@@ -1038,8 +1079,12 @@ def get_highlights(request: Request, match_id: str):
             url = json.loads(cached["videos_json"])["url"]
         else:
             if w.get("resolver") == "sport1_vod":
-                url = scrape_sport1_vod(to_hebrew_team(row["home_team"]),
-                                        to_hebrew_team(row["away_team"]))
+                # עמוד ה-VOD מציג רק את הכתבות האחרונות — משחק בן שבוע
+                # כבר גלל החוצה. אם הסקרייפר החטיא, נופלים לאותו מסלול
+                # חילוץ שעובד לוואלה/ספורט 5 לפני שמוותרים לעמוד חיפוש.
+                url = (scrape_sport1_vod(to_hebrew_team(row["home_team"]),
+                                         to_hebrew_team(row["away_team"]))
+                       or resolve_web_link(wq, w["domain"]))
             else:
                 url = resolve_web_link(wq, w["domain"])
             if url:
