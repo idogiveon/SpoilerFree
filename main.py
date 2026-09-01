@@ -1,5 +1,10 @@
 import sqlite3
 from urllib.parse import quote, unquote
+
+try:
+    import libsql  # Turso — נטען רק אם מותקן; בלעדיו נופלים ל-sqlite מקומי
+except ImportError:
+    libsql = None
 import requests
 import re
 import os
@@ -26,6 +31,11 @@ ISRAEL_TZ = timezone(timedelta(hours=3))
 YOUTUBE_API_KEY   = os.environ.get("YOUTUBE_API_KEY", "")
 FOOTBALL_DATA_KEY = os.environ.get("FOOTBALL_DATA_KEY", "")
 APP_PASSWORD      = os.environ.get("APP_PASSWORD", "")
+
+# Turso (DB בענן) — כששני המשתנים מוגדרים, ה-DB מסונכרן לענן ושורד deploys.
+# בלעדיהם: sqlite מקומי רגיל (התנהגות ישנה) — האתר לעולם לא נשבר בגלל Turso.
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "")
+TURSO_AUTH_TOKEN   = os.environ.get("TURSO_AUTH_TOKEN", "")
 
 # ── League config ──────────────────────────────────────
 # season 2026-27 (התחילה אוגוסט 2026). ארגנטינה — עונה קלנדרית 2026.
@@ -215,7 +225,82 @@ document.getElementById('pw').addEventListener('keydown',
 
 # ── DB ─────────────────────────────────────────────────
 
+class _LibsqlRow:
+    """התנהגות כמו sqlite3.Row: row["col"], row[0], dict(row)."""
+    __slots__ = ("_cols", "_vals")
+
+    def __init__(self, cols, vals):
+        self._cols, self._vals = cols, vals
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._vals[key]
+        return self._vals[self._cols.index(key)]
+
+    def keys(self):
+        return list(self._cols)
+
+    def __len__(self):
+        return len(self._vals)
+
+    def __repr__(self):
+        return repr(dict(zip(self._cols, self._vals)))
+
+
+class _LibsqlCursor:
+    def __init__(self, cur):
+        self._cur = cur
+        self._cols = [d[0] for d in (cur.description or [])]
+
+    def fetchone(self):
+        r = self._cur.fetchone()
+        return _LibsqlRow(self._cols, r) if r is not None else None
+
+    def fetchall(self):
+        return [_LibsqlRow(self._cols, r) for r in self._cur.fetchall()]
+
+
+class _LibsqlConn:
+    """עוטף חיבור libsql כך שיתנהג כמו sqlite3 עם row_factory=Row.
+    commit() גם מסנכרן מול הענן, כדי שקריאות עוקבות יראו את הכתיבה."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        return _LibsqlCursor(self._conn.execute(sql, tuple(params)))
+
+    def executemany(self, sql, seq):
+        self._conn.executemany(sql, [tuple(p) for p in seq])
+
+    def commit(self):
+        self._conn.commit()
+        try:
+            self._conn.sync()
+        except Exception as e:
+            print(f"[turso] sync after commit failed: {e}")
+
+    def close(self):
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+
 def get_db():
+    if TURSO_DATABASE_URL and libsql is not None:
+        # embedded replica: קובץ מקומי (קריאות מהירות) שמסונכרן ל-Turso.
+        # connect() כבר מבצע סנכרון מהענן — אחרי deploy (דיסק ריק) הוא
+        # מושך את כל ה-DB; אחר כך המשיכות אינקרמנטליות וזולות.
+        try:
+            conn = libsql.connect("turso_replica.db",
+                                  sync_url=TURSO_DATABASE_URL,
+                                  auth_token=TURSO_AUTH_TOKEN)
+            return _LibsqlConn(conn)
+        except Exception as e:
+            # Turso לא זמין? האתר ממשיך על sqlite מקומי במקום ליפול
+            print(f"[turso] connect failed — falling back to local sqlite: {e}")
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -290,13 +375,28 @@ def init_db():
         ("PL-fd71",   "Sunderland AFC",            "Sunderland",     "premier", 2, "UCrw-7k6yJc0EMJdf-0BAkoQ", "71"),
     ]
 
-    # ניקוי שורות ישנות (סגלים קודמים) והכנסה מחדש — דטרמיניסטי
-    conn.execute("DELETE FROM clubs WHERE league_key='premier'")
-    conn.executemany("""
-        INSERT OR REPLACE INTO clubs
-        (id, name, short_name, league_key, tier, yt_channel_id, fd_team_id)
-        VALUES (?,?,?,?,?,?,?)
-    """, premier_clubs)
+    # seed מנוהל-גרסה: מזריעים מחדש רק כשהרשימה בקוד השתנתה (הקפץ את
+    # SEED_VERSION אחרי כל עריכה שלה). אחרת — מה שב-DB, כולל מיפויים
+    # שנעשו עם /admin/set_channel, שורד restarts ו-deploys.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    SEED_VERSION = 2  # v2 = תיקון 7 ערוצי הפרמייר (1/9/26)
+    row = conn.execute("SELECT value FROM meta WHERE key='clubs_seed_version'").fetchone()
+    current = int(row["value"]) if row else 0
+    if current < SEED_VERSION:
+        conn.execute("DELETE FROM clubs WHERE league_key='premier'")
+        conn.executemany("""
+            INSERT OR REPLACE INTO clubs
+            (id, name, short_name, league_key, tier, yt_channel_id, fd_team_id)
+            VALUES (?,?,?,?,?,?,?)
+        """, premier_clubs)
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('clubs_seed_version', ?)",
+                     (str(SEED_VERSION),))
+        print(f"[seed] clubs reseeded to version {SEED_VERSION}")
 
     conn.commit()
     conn.close()
