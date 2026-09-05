@@ -125,6 +125,7 @@
   <button class="tab" data-league="ligue1">🇫🇷 ליג 1</button>
   <button class="tab" data-league="ucl">⭐ צ'מפיונס ליג</button>
   <button class="tab" data-league="argentina">🇦🇷 ארגנטינה</button>
+  <button class="tab" data-league="__byday" style="margin-right:auto; border-style:dashed">📅 לפי יום</button>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
@@ -132,6 +133,13 @@
   <div class="md-label" id="md-label">מחזור 1</div>
   <button class="md-btn" id="md-next">←</button>
   <select class="md-select" id="md-select"></select>
+</div>
+
+<div class="matchday-nav hidden" id="day-nav">
+  <button class="md-btn" id="day-prev">→</button>
+  <div class="md-label" id="day-label" style="min-width:160px"></div>
+  <button class="md-btn" id="day-next">←</button>
+  <button class="md-btn" id="day-today">חזרה להיום</button>
 </div>
 
 <main>
@@ -241,6 +249,37 @@
 
   // ── Render ─────────────────────────────────────────
 
+  function matchCardHTML(m) {
+    const isLive = m.status === 'LIVE';
+    const badge = isLive
+      ? '<span class="live-badge">🔴 LIVE</span>'
+      : (m.is_over ? '<span class="highlight-badge">▶ תקציר</span>' : '');
+    const timeClass = isLive ? 'live' : (m.is_over ? 'past' : '');
+    const cardClass = isLive ? 'is-live' : (m.is_over ? 'is-over' : '');
+    return `
+      <div class="match-card ${cardClass}"
+           data-id="${m.id}" data-home="${m.home}"
+           data-away="${m.away}" data-is-over="${m.is_over}">
+        <div class="team away"><div class="team-name">${m.away}</div></div>
+        <div class="match-meta">
+          <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
+          <div class="match-vs">VS</div>
+          <div class="venue">${m.venue||''}</div>
+        </div>
+        <div class="team home"><div class="team-name">${m.home}</div></div>
+        ${badge}
+      </div>`;
+  }
+
+  function bindMatchCards(container) {
+    container.querySelectorAll('.match-card').forEach(card => {
+      card.addEventListener('click', () => {
+        openMatchModal(card.dataset.id, card.dataset.home,
+                       card.dataset.away, card.dataset.isOver === 'true');
+      });
+    });
+  }
+
   function renderMatches(matches) {
     const container = document.getElementById('matches-container');
     const countEl   = document.getElementById('match-count');
@@ -272,27 +311,7 @@
         </div>`;
 
       for (const m of dayMatches) {
-        const isLive = m.status === 'LIVE';
-        const badge = isLive
-          ? '<span class="live-badge">🔴 LIVE</span>'
-          : (m.is_over ? '<span class="highlight-badge">▶ תקציר</span>' : '');
-
-        const timeClass = isLive ? 'live' : (m.is_over ? 'past' : '');
-        const cardClass = isLive ? 'is-live' : (m.is_over ? 'is-over' : '');
-
-        html += `
-          <div class="match-card ${cardClass}"
-               data-id="${m.id}" data-home="${m.home}"
-               data-away="${m.away}" data-is-over="${m.is_over}">
-            <div class="team away"><div class="team-name">${m.away}</div></div>
-            <div class="match-meta">
-              <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
-              <div class="match-vs">VS</div>
-              <div class="venue">${m.venue||''}</div>
-            </div>
-            <div class="team home"><div class="team-name">${m.home}</div></div>
-            ${badge}
-          </div>`;
+        html += matchCardHTML(m);
       }
       html += '</div>';
     }
@@ -307,12 +326,7 @@
       }, 100);
     }
 
-    container.querySelectorAll('.match-card').forEach(card => {
-      card.addEventListener('click', () => {
-        openMatchModal(card.dataset.id, card.dataset.home,
-                       card.dataset.away, card.dataset.isOver === 'true');
-      });
-    });
+    bindMatchCards(container);
   }
 
   // ── Fetch ──────────────────────────────────────────
@@ -597,6 +611,78 @@
     if (f) f.innerHTML = '';
   }
 
+  // ── תצוגת "לפי יום" ─────────────────────────────────
+
+  let currentDay = new Date();
+  const HEB_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+  function isoDay(d) {
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  function enterDayView() {
+    showMatchdayNav(false);
+    document.getElementById('day-nav').classList.remove('hidden');
+    document.getElementById('refresh-btn').style.display = 'none';
+    currentDay = new Date();
+    loadDay();
+  }
+
+  function exitDayView() {
+    document.getElementById('day-nav').classList.add('hidden');
+    document.getElementById('refresh-btn').style.display = '';
+  }
+
+  function updateDayUI() {
+    const iso = isoDay(currentDay), todayIso = isoDay(new Date());
+    const [y, mo, d] = iso.split('-');
+    let label = `${HEB_DAYS[currentDay.getDay()]} · ${d}/${mo}`;
+    if (iso === todayIso) label += ' (היום)';
+    document.getElementById('day-label').textContent = label;
+    document.getElementById('day-today').disabled = iso === todayIso;
+  }
+
+  async function loadDay() {
+    updateDayUI();
+    const container = document.getElementById('matches-container');
+    container.innerHTML = '<div class="loading">טוען משחקים</div>';
+    try {
+      const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}`)
+                     .then(r => r.json());
+      renderDayMatches(data.matches);
+    } catch (err) {
+      if (err.message === 'auth') return;
+      container.innerHTML = `<div class="error">שגיאה: ${err.message}</div>`;
+    }
+  }
+
+  function renderDayMatches(matches) {
+    const container = document.getElementById('matches-container');
+    const countEl   = document.getElementById('match-count');
+    if (!matches.length) {
+      container.innerHTML = '<div class="empty">אין משחקים בתאריך זה<br>' +
+        '<small style="opacity:0.6">מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה</small></div>';
+      countEl.textContent = '';
+      return;
+    }
+    countEl.textContent = `${matches.length} משחקים`;
+    // השרת כבר מיין: סדר ליגות ואז שעה — נשאר רק לקבץ לכותרות
+    let html = '', lastLeague = null;
+    for (const m of matches) {
+      if (m.league !== lastLeague) {
+        if (lastLeague !== null) html += '</div>';
+        html += `<div class="date-group">
+          <div class="date-label"><span class="weekday">${m.league}</span></div>`;
+        lastLeague = m.league;
+      }
+      html += matchCardHTML(m);
+    }
+    html += '</div>';
+    container.innerHTML = html;
+    bindMatchCards(container);
+  }
+
   // ── Events ─────────────────────────────────────────
 
   document.querySelectorAll('.tab').forEach(tab => {
@@ -604,7 +690,8 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentLeague = tab.dataset.league;
-      loadNearestMatchday(currentLeague);
+      if (currentLeague === '__byday') { enterDayView(); }
+      else { exitDayView(); loadNearestMatchday(currentLeague); }
     });
   });
 
@@ -618,6 +705,16 @@
   });
   document.getElementById('md-select').addEventListener('change', e => {
     currentMatchday = parseInt(e.target.value); updateMatchdayUI(); loadMatches(currentLeague, currentMatchday);
+  });
+
+  document.getElementById('day-prev').addEventListener('click', () => {
+    currentDay.setDate(currentDay.getDate() - 1); loadDay();
+  });
+  document.getElementById('day-next').addEventListener('click', () => {
+    currentDay.setDate(currentDay.getDate() + 1); loadDay();
+  });
+  document.getElementById('day-today').addEventListener('click', () => {
+    currentDay = new Date(); loadDay();
   });
 
   document.getElementById('modal-close').addEventListener('click', closeModal);

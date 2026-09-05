@@ -1326,6 +1326,53 @@ def get_matches(request: Request, league_key: str,
             "stale": stale, "last_fetched": last_fetch}
 
 
+@app.get("/matches/by_date/{date_il}")
+def get_matches_by_date(request: Request, date_il: str):
+    """כל המשחקים מכל הליגות בתאריך נתון בשעון ישראל (YYYY-MM-DD),
+    ממוינים לפי סדר הליגות ואז שעת פתיחה. קורא מה-DB בלבד —
+    רענון נתונים נעשה בטאבי הליגות."""
+    require_auth(request)
+    try:
+        day = datetime.fromisoformat(date_il).date()
+    except ValueError:
+        raise HTTPException(400, "פורמט תאריך: YYYY-MM-DD")
+
+    # תאריך ישראלי אחד מכסה שני תאריכי UTC (ישראל מקדימה ב-2/3 שעות)
+    d_prev = (day - timedelta(days=1)).isoformat()
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM matches WHERE date_utc IN (?, ?)",
+        (d_prev, day.isoformat())).fetchall()
+    conn.close()
+
+    order = {k: i for i, k in enumerate(LEAGUES)}
+    want = day.strftime("%d/%m/%Y")
+    matches = []
+    for row in rows:
+        il = to_israel_time(row["date_utc"], row["time_utc"])
+        if il["date"] != want:
+            continue
+        lk = row["league_key"]
+        matches.append({
+            "id":         row["id"],
+            "home":       row["home_team"],
+            "away":       row["away_team"],
+            "date":       il["date"],
+            "time":       il["time"],
+            "weekday":    il["weekday"],
+            "venue":      row["venue"] or "",
+            "matchday":   row["matchday"],
+            "league":     LEAGUES.get(lk, {}).get("name", lk),
+            "league_key": lk,
+            "is_over":    is_over(row["status"]),
+            "status":     row["status"],
+        })
+    matches.sort(key=lambda m: (order.get(m["league_key"], 99), m["time"]))
+    heb = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+    return {"date": day.isoformat(), "weekday": heb[day.weekday()],
+            "count": len(matches), "matches": matches}
+
+
 @app.post("/refresh/{league_key}")
 def refresh_from_client(request: Request, league_key: str,
                         payload: dict = Body(...)):
@@ -1344,13 +1391,24 @@ def refresh_from_client(request: Request, league_key: str,
 
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    # purge: מנקה את הליגה לפני הכנסה — מסלק נתוני עונות ישנות.
-    # רק אם הגיעו אירועים, כדי לא למחוק לוח קיים על רענון כושל.
+    # purge סלקטיבי: רק משחקים עתידיים — היסטוריה שהסתיימה ושורות
+    # הלוח הידני שורדות רענון. לאיפוס מלא (עונה חדשה): "hard": true.
     if payload.get("purge") and events:
-        conn.execute("DELETE FROM matches WHERE league_key=?", (league_key,))
+        if payload.get("hard"):
+            conn.execute("DELETE FROM matches WHERE league_key=?",
+                         (league_key,))
+        else:
+            conn.execute(
+                "DELETE FROM matches WHERE league_key=? "
+                "AND status NOT IN ('FINISHED','FT','AET','PEN','AP','Match Finished') "
+                "AND id NOT LIKE 'manual-%'", (league_key,))
     stored = _store_sportsdb_events(conn, league_key, events, now)
     conn.commit()
     conn.close()
+
+    # הלוח הרשמי הידני גובר על מה שהדפדפן שלח (placeholder-ים וכו')
+    if league_key in MANUAL_FIXTURES:
+        apply_manual_fixtures(league_key)
 
     return {"ok": True, "received": len(events), "stored": stored}
 
