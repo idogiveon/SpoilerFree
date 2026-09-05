@@ -90,7 +90,7 @@ LEAGUES = {
         "sportsdb_ids": ["4331"],
         "sportsdb_season": "2026-2027",
         "sources": [
-		{"id": "bundesliga_official", "name": "Bundesliga",
+            {"id": "bundesliga_official", "name": "Bundesliga",
              "channel_id": "UC6UL29enLNe4mqwTfAyeNuw",
              "search_template": "{home} {away} highlights",
              "allow_embed": False},
@@ -599,6 +599,38 @@ HEB_TEAMS = [
     ("kiryat shmona",     "עירוני קריית שמונה"),
     ("tiberias",          "עירוני טבריה"),
     ("ashdod",            "אשדוד"),
+    # ── צ'מפיונס: אנגליה, גרמניה, צרפת ושאר אירופה ──
+    # (איטליה/ספרד/ישראל מכוסות בבלוקים האחרים)
+    ("manchester city",   "מנצ'סטר סיטי"),
+    ("manchester united", "מנצ'סטר יונייטד"),
+    ("liverpool",         "ליברפול"),
+    ("arsenal",           "ארסנל"),
+    ("chelsea",           "צ'לסי"),
+    ("tottenham",         "טוטנהאם"),
+    ("newcastle",         "ניוקאסל"),
+    ("aston villa",       "אסטון וילה"),
+    ("bayern",            "באיירן מינכן"),
+    ("dortmund",          "דורטמונד"),
+    ("leverkusen",        "לברקוזן"),
+    ("leipzig",           "לייפציג"),
+    ("frankfurt",         "פרנקפורט"),
+    ("stuttgart",         "שטוטגרט"),
+    ("paris",             "פאריס סן ז'רמן"),   # Paris SG / Paris Saint-Germain
+    ("monaco",            "מונאקו"),
+    ("marseille",         "מארסיי"),
+    ("lille",             "ליל"),
+    ("porto",             "פורטו"),
+    ("benfica",           "בנפיקה"),
+    ("sporting",          "ספורטינג ליסבון"),
+    ("ajax",              "אייאקס"),
+    ("psv",               "פ.ס.וו איינדהובן"),
+    ("feyenoord",         "פיינורד"),
+    ("celtic",            "סלטיק"),            # חייב לפני "celta" (סלטה ויגו)
+    ("galatasaray",       "גלאטסראיי"),
+    ("olympiacos",        "אולימפיאקוס"),
+    ("brugge",            "קלאב ברוז'"),
+    ("salzburg",          "זלצבורג"),
+    ("copenhagen",        "קופנהגן"),
     # ── סריה A (סדר חשוב: אינטר לפני מילאן) ──
     ("inter",             "אינטר"),
     ("milan",             "מילאן"),
@@ -649,36 +681,6 @@ HEB_TEAMS = [
     ("santander",         "ראסינג סנטנדר"),
     ("coru",              "דפורטיבו לה קורוניה"),  # A Coruña
     ("oviedo",            "אוביידו"),
-    ("manchester city",   "מנצ'סטר סיטי"),
-    ("manchester united", "מנצ'סטר יונייטד"),
-    ("liverpool",         "ליברפול"),
-    ("arsenal",           "ארסנל"),
-    ("chelsea",           "צ'לסי"),
-    ("tottenham",         "טוטנהאם"),
-    ("newcastle",         "ניוקאסל"),
-    ("aston villa",       "אסטון וילה"),
-    ("bayern",            "באיירן מינכן"),
-    ("dortmund",          "דורטמונד"),
-    ("leverkusen",        "לברקוזן"),
-    ("leipzig",           "לייפציג"),
-    ("frankfurt",         "פרנקפורט"),
-    ("stuttgart",         "שטוטגרט"),
-    ("paris",             "פאריס סן ז'רמן"),   # Paris SG / Paris Saint-Germain
-    ("monaco",            "מונאקו"),
-    ("marseille",         "מארסיי"),
-    ("lille",             "ליל"),
-    ("porto",             "פורטו"),
-    ("benfica",           "בנפיקה"),
-    ("sporting",          "ספורטינג ליסבון"),
-    ("ajax",              "אייאקס"),
-    ("psv",               "פ.ס.וו איינדהובן"),
-    ("feyenoord",         "פיינורד"),
-    ("celtic",            "סלטיק"),            # חייב לפני "celta"!
-    ("galatasaray",       "גלאטסראיי"),
-    ("olympiacos",        "אולימפיאקוס"),
-    ("brugge",            "קלאב ברוז'"),
-    ("salzburg",          "זלצבורג"),
-    ("copenhagen",        "קופנהגן"),
 ]
 
 def to_hebrew_team(name: str) -> str:
@@ -861,7 +863,9 @@ def is_match_highlight(title: str, home: str, away: str,
                    "post-match press", "reaction",
                    "bench cam", "player cam", "fan cam", "tunnel",
                    "pitchside", "pitch side", "behind the scenes",
-                   "unseen", "warm up", "warm-up", "arrival", "access all"])
+                   "unseen", "warm up", "warm-up", "arrival", "access all",
+                   # ליג 1: שידור חוזר של אולפן טרום-משחק
+                   "avant-match", "avant match", "tous les buts"])
 
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
@@ -876,8 +880,34 @@ def is_match_highlight(title: str, home: str, away: str,
                     ["highlight", "match", "goals", "extended",
                      "שערים", "sign off", "vs", "v.", "\U0001f19a",
                      "fifaworldcup", "full match", "resumen",
-                     "zusammenfassung"])
+                     "zusammenfassung",
+                     # ליג 1: הפורמט "TEAM - TEAM () | Week N" בלי מילת
+                     # תקציר; resume/journee = Résumé/journée אחרי deaccent
+                     "week", "resume", "journee"])
     return has_both and highlight and not exclude
+
+
+def _video_durations(video_ids: list) -> dict:
+    """videos.list — משך כל וידאו בשניות. יחידת quota אחת לעד 50 IDs."""
+    if not video_ids:
+        return {}
+    durs = {}
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={"key": YOUTUBE_API_KEY, "part": "contentDetails",
+                    "id": ",".join(video_ids[:50])},
+            timeout=10
+        ).json()
+        for item in resp.get("items", []):
+            m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?",
+                         item["contentDetails"]["duration"])
+            if m:
+                h, mi, s = (int(x) if x else 0 for x in m.groups())
+                durs[item["id"]] = h * 3600 + mi * 60 + s
+    except Exception as ex:
+        print(f"[durations] {ex}")
+    return durs
 
 
 def search_youtube(home: str, away: str, match_date: str,
@@ -938,15 +968,37 @@ def search_youtube(home: str, away: str, match_date: str,
     explicit_pool = [v for v in results if any(k in v["_title"] for k in EXPLICIT)]
     pool = explicit_pool if explicit_pool else results
 
-    regular  = next((v for v in pool if not v["extended"]), None)
-    extended = next((v for v in pool if v["extended"]),     None)
+    # משכים: מבדיל תקציר-דקה (יום המשחק) מתקציר מלא (יום-יומיים אחרי).
+    # עלות: יחידת quota אחת — זניח מול 100 של החיפוש עצמו.
+    durs = _video_durations([v["video_id"] for v in pool])
+    for v in pool:
+        v["_dur"] = durs.get(v["video_id"], 0)
+
+    SHORT_MAX = 150        # עד 2:30 = קצר
+    LONG_CAP  = 20 * 60    # מעל 20 דק' = שידור חוזר, לא תקציר
+
+    titled_ext = next((v for v in pool if v["extended"]), None)
+    shorts = [v for v in pool if 0 < v["_dur"] <= SHORT_MAX]
+    longs  = [v for v in pool if SHORT_MAX < v["_dur"] <= LONG_CAP
+              and not v["extended"]]
 
     final = []
-    for v in (regular, extended):
-        if v:
-            final.append({"video_id": v["video_id"],
-                          "label": "תקציר מורחב" if v["extended"] else "תקציר",
-                          "extended": v["extended"]})
+    if shorts and (longs or titled_ext):
+        # יש גם קצר וגם מלא — מציגים את שניהם, מתויגים
+        final.append({"video_id": shorts[0]["video_id"],
+                      "label": "תקציר קצר", "extended": False})
+        long_v = titled_ext or longs[0]
+        final.append({"video_id": long_v["video_id"],
+                      "label": "תקציר מורחב" if long_v is titled_ext else "תקציר מלא",
+                      "extended": True})
+    else:
+        # מקרה רגיל: וידאו אחד רלוונטי + מורחב-לפי-כותרת אם קיים
+        regular = next((v for v in pool if not v["extended"]), None)
+        for v in (regular, titled_ext):
+            if v:
+                final.append({"video_id": v["video_id"],
+                              "label": "תקציר מורחב" if v["extended"] else "תקציר",
+                              "extended": v["extended"]})
     return final
 
 
@@ -1170,15 +1222,20 @@ def get_highlights(request: Request, match_id: str):
 
         if cached:
             videos = json.loads(cached["videos_json"])
-            # If cache is empty and older than 30 min, re-search
             cache_age_ok = True
+            try:
+                found_dt = datetime.fromisoformat(cached["found_at"])
+                age = datetime.now(timezone.utc) - found_dt
+            except:
+                age = None
             if not videos:
-                try:
-                    found_dt = datetime.fromisoformat(cached["found_at"])
-                    age = datetime.now(timezone.utc) - found_dt
-                    if age > timedelta(minutes=30):
-                        cache_age_ok = False
-                except:
+                # קאש ריק — ניסיון חוזר אחרי 30 דקות
+                if age is None or age > timedelta(minutes=30):
+                    cache_age_ok = False
+            elif not any(v.get("extended") for v in videos):
+                # נמצא רק תקציר קצר — המלא עולה לרוב יום-יומיים אחרי.
+                # מרעננים לכל היותר פעם ב-12 שעות, עד 3 ימים מהמציאה.
+                if age is not None and timedelta(hours=12) < age < timedelta(days=3):
                     cache_age_ok = False
 
             if cache_age_ok:
