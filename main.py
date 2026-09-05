@@ -90,8 +90,9 @@ LEAGUES = {
         "sportsdb_ids": ["4331"],
         "sportsdb_season": "2026-2027",
         "sources": [
-            {"id": "bundesliga_official", "name": "Bundesliga",
-             "channel_id": "", "search_template": "{home} {away} highlights",
+		{"id": "bundesliga_official", "name": "Bundesliga",
+             "channel_id": "UC6UL29enLNe4mqwTfAyeNuw",
+             "search_template": "{home} {away} highlights",
              "allow_embed": False},
         ],
     },
@@ -138,7 +139,8 @@ LEAGUES = {
         "sportsdb_season": "2026-2027",
         "sources": [
             {"id": "ligue1_official", "name": "Ligue 1",
-             "channel_id": "", "search_template": "{home} {away} highlights",
+             "channel_id": "UCQsH5XtIc9hONE1BQjucM0g",
+             "search_template": "{home} {away} highlights",
              "allow_embed": False},
         ],
     },
@@ -147,10 +149,13 @@ LEAGUES = {
         "source": "sportsdb",
         "sportsdb_ids": ["4480"],
         "sportsdb_season": "2026-2027",
-        "sources": [
-            {"id": "ucl_official", "name": "UEFA",
-             "channel_id": "", "search_template": "{home} {away} highlights",
-             "allow_embed": False},
+        # אין ערוץ יוטיוב רשמי שמעלה תקצירים של כולם (אומת ידנית 5/9/26) —
+        # התקצירים מפוזרים בערוצי הקבוצות (באיחור יום-יומיים).
+        # המקור: ספורט 5, המשדרת בישראל — כתבה/VOD ישירים.
+        "sources": [],
+        "web_sources": [
+            {"name": "ספורט 5", "domain": "sport5.co.il",
+             "query": "תקציר {home} {away}"},
         ],
     },
     "argentina": {
@@ -644,6 +649,36 @@ HEB_TEAMS = [
     ("santander",         "ראסינג סנטנדר"),
     ("coru",              "דפורטיבו לה קורוניה"),  # A Coruña
     ("oviedo",            "אוביידו"),
+    ("manchester city",   "מנצ'סטר סיטי"),
+    ("manchester united", "מנצ'סטר יונייטד"),
+    ("liverpool",         "ליברפול"),
+    ("arsenal",           "ארסנל"),
+    ("chelsea",           "צ'לסי"),
+    ("tottenham",         "טוטנהאם"),
+    ("newcastle",         "ניוקאסל"),
+    ("aston villa",       "אסטון וילה"),
+    ("bayern",            "באיירן מינכן"),
+    ("dortmund",          "דורטמונד"),
+    ("leverkusen",        "לברקוזן"),
+    ("leipzig",           "לייפציג"),
+    ("frankfurt",         "פרנקפורט"),
+    ("stuttgart",         "שטוטגרט"),
+    ("paris",             "פאריס סן ז'רמן"),   # Paris SG / Paris Saint-Germain
+    ("monaco",            "מונאקו"),
+    ("marseille",         "מארסיי"),
+    ("lille",             "ליל"),
+    ("porto",             "פורטו"),
+    ("benfica",           "בנפיקה"),
+    ("sporting",          "ספורטינג ליסבון"),
+    ("ajax",              "אייאקס"),
+    ("psv",               "פ.ס.וו איינדהובן"),
+    ("feyenoord",         "פיינורד"),
+    ("celtic",            "סלטיק"),            # חייב לפני "celta"!
+    ("galatasaray",       "גלאטסראיי"),
+    ("olympiacos",        "אולימפיאקוס"),
+    ("brugge",            "קלאב ברוז'"),
+    ("salzburg",          "זלצבורג"),
+    ("copenhagen",        "קופנהגן"),
 ]
 
 def to_hebrew_team(name: str) -> str:
