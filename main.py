@@ -480,7 +480,12 @@ def fetch_football_data(league_key: str, purge: bool = False):
 
     # purge רק אחרי ששליפה הצליחה — לא מוחקים אם ה-API החזיר ריק
     if purge and matches:
-        conn.execute("DELETE FROM matches WHERE league_key=?", (league_key,))
+        # purge סלקטיבי: מוחק רק משחקים עתידיים של המקור —
+        # היסטוריה שהסתיימה ושורות הלוח הידני לעולם לא נמחקות ברענון
+        conn.execute(
+            "DELETE FROM matches WHERE league_key=? "
+            "AND status NOT IN ('FINISHED','FT','AET','PEN','AP','Match Finished') "
+            "AND id NOT LIKE 'manual-%'", (league_key,))
 
     for m in matches:
         utc_dt = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
@@ -529,7 +534,12 @@ def fetch_sportsdb(league_key: str, purge: bool = False):
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
     if purge and all_events:
-        conn.execute("DELETE FROM matches WHERE league_key=?", (league_key,))
+        # purge סלקטיבי: מוחק רק משחקים עתידיים של המקור —
+        # היסטוריה שהסתיימה ושורות הלוח הידני לעולם לא נמחקות ברענון
+        conn.execute(
+            "DELETE FROM matches WHERE league_key=? "
+            "AND status NOT IN ('FINISHED','FT','AET','PEN','AP','Match Finished') "
+            "AND id NOT LIKE 'manual-%'", (league_key,))
     _store_sportsdb_events(conn, league_key, all_events, now)
     conn.commit()
     conn.close()
@@ -670,52 +680,62 @@ def _il_to_utc(date_str: str, time_str: str):
 
 
 def apply_manual_fixtures(league_key: str):
-    """מיישם את הלוח הרשמי מעל נתוני sportsdb:
-    - משחק שקיים ב-sportsdb: עדכון תאריך/שעה/אצטדיון (סטטוס ותוצאה לא נוגעים).
+    """מיישם את הלוח הרשמי מעל נתוני sportsdb — מבוסס diff:
+    SELECT אחד לכל הליגה, ואז נכתב רק מה שבאמת השתנה. במצב יציב זה
+    אפס כתיבות, כך שרענון לא פותח חלון של מצב-ביניים מול קוראים.
+    - משחק שקיים ב-sportsdb: עדכון תאריך/שעה/אצטדיון (סטטוס/תוצאה לא נוגעים).
     - משחק חסר: הוספת שורת manual-*.
-    - אם sportsdb השלים משחק שהיה אצלנו כ-manual: השורה הכפולה נמחקת.
-    בטוח להרצה חוזרת (אידמפוטנטי)."""
+    - אם sportsdb השלים משחק שהיה אצלנו כ-manual: הכפילות נמחקת."""
     fixtures = MANUAL_FIXTURES.get(league_key, [])
     if not fixtures:
         return
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    updated = added = 0
+    by_key = {}
+    for r in conn.execute(
+            """SELECT id, matchday, home_team, away_team, date_utc, time_utc,
+                      venue FROM matches WHERE league_key=?""",
+            (league_key,)).fetchall():
+        k = (r["matchday"], str(r["home_team"]).strip().lower(),
+             str(r["away_team"]).strip().lower())
+        by_key.setdefault(k, []).append(r)
+
+    updates, inserts, deletes = [], [], []
     for rnd, d_il, t_il, home, away, venue, _tv in fixtures:
         date_utc, time_utc = _il_to_utc(d_il, t_il)
-        rows = conn.execute(
-            """SELECT id FROM matches
-               WHERE league_key=? AND matchday=?
-                 AND lower(home_team)=lower(?) AND lower(away_team)=lower(?)""",
-            (league_key, rnd, home, away)).fetchall()
-        real   = [r for r in rows if not str(r["id"]).startswith("manual-")]
-        manual = [r for r in rows if str(r["id"]).startswith("manual-")]
+        rows_k = by_key.get((rnd, home.lower(), away.lower()), [])
+        real   = [r for r in rows_k if not str(r["id"]).startswith("manual-")]
+        manual = [r for r in rows_k if str(r["id"]).startswith("manual-")]
         if real:
-            conn.execute(
-                "UPDATE matches SET date_utc=?, time_utc=?, venue=? WHERE id=?",
-                (date_utc, time_utc, venue, real[0]["id"]))
-            updated += 1
-            for m in manual:
-                conn.execute("DELETE FROM matches WHERE id=?", (m["id"],))
+            r = real[0]
+            if (r["date_utc"], r["time_utc"], r["venue"]) != (date_utc, time_utc, venue):
+                updates.append((date_utc, time_utc, venue, r["id"]))
+            deletes.extend((m["id"],) for m in manual)
         elif manual:
-            conn.execute(
-                "UPDATE matches SET date_utc=?, time_utc=?, venue=? WHERE id=?",
-                (date_utc, time_utc, venue, manual[0]["id"]))
-            updated += 1
+            m = manual[0]
+            if (m["date_utc"], m["time_utc"], m["venue"]) != (date_utc, time_utc, venue):
+                updates.append((date_utc, time_utc, venue, m["id"]))
         else:
-            mid = f"manual-{league_key}-r{rnd}-{_fixture_slug(home)}"
-            conn.execute(
-                """INSERT OR REPLACE INTO matches
-                   (id, league_key, home_team, away_team, home_team_id,
-                    away_team_id, date_utc, time_utc, venue, matchday,
-                    status, fetched_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (mid, league_key, home, away, "", "", date_utc, time_utc,
-                 venue, rnd, "SCHEDULED", now))
-            added += 1
-    conn.commit()
+            inserts.append((f"manual-{league_key}-r{rnd}-{_fixture_slug(home)}",
+                            league_key, home, away, "", "", date_utc, time_utc,
+                            venue, rnd, "SCHEDULED", now))
+
+    for u in updates:
+        conn.execute("UPDATE matches SET date_utc=?, time_utc=?, venue=? WHERE id=?", u)
+    for d in deletes:
+        conn.execute("DELETE FROM matches WHERE id=?", d)
+    for i in inserts:
+        conn.execute(
+            """INSERT OR REPLACE INTO matches
+               (id, league_key, home_team, away_team, home_team_id,
+                away_team_id, date_utc, time_utc, venue, matchday,
+                status, fetched_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", i)
+    if updates or deletes or inserts:
+        conn.commit()
     conn.close()
-    print(f"[manual] {league_key}: updated={updated} added={added}")
+    print(f"[manual] {league_key}: updated={len(updates)} "
+          f"added={len(inserts)} deduped={len(deletes)}")
 
 
 # ── Utils ──────────────────────────────────────────────
