@@ -543,6 +543,180 @@ def fetch_and_store(league_key: str, purge: bool = False):
         fetch_football_data(league_key, purge)
     else:
         fetch_sportsdb(league_key, purge)
+    # לוח רשמי ידני גובר על נתוני המקור (ראו MANUAL_FIXTURES)
+    if league_key in MANUAL_FIXTURES:
+        apply_manual_fixtures(league_key)
+
+
+# ── לוח רשמי — ליגת העל, מחזורים 4–15 ──────────────────
+# מקור: מסמך דוברות מנהלת הליגות "ליגת Winner מחזורים 4-15" (1.9.26).
+# רקע: sportsdb מחזיק placeholder למחזור 4 (כל המשחקים "שני 20:00" —
+# בפועל 6/7 שגויים) ומחזורים 5–15 חסרים אצלו לגמרי (נבדק 5.9.26).
+# שדות: (מחזור, תאריך, שעה בשעון ישראל, בית, חוץ, אצטדיון, שידור)
+# שידור: תיעוד לעתיד (תיעדוף מקור פר-משחק, שלב 34.5+); לא נשמר ב-DB.
+# גמר גביע הטוטו (28.10, מכבי ת"א–הפועל ת"א) אינו משחק ליגה — לא נכלל.
+# שעון: המרה ל-UTC דרך ISRAEL_TZ — מעבר לשעון חורף 25.10.26 מטופל אוטומטית.
+MANUAL_FIXTURES = {
+    "israel": [
+        # מחזור 4
+        (4,  "2026-09-13", "20:30", "Hapoel Petah Tikva", "Hapoel Be'er Sheva", "שלמה ביטוח", "ספורט 4"),
+        (4,  "2026-09-14", "19:30", "Hapoel Haifa", "Bnei Sakhnin", "סמי עופר", "5LIVE"),
+        (4,  "2026-09-14", "19:30", "Hapoel Ramat Gan", "Maccabi Netanya", "רחובות", "ספורט 3"),
+        (4,  "2026-09-14", "20:00", "Hapoel Ironi Kiryat Shmona", "Maccabi Haifa", "מרים", "ספורט 4"),
+        (4,  "2026-09-14", "20:30", "Maccabi Tel Aviv", "Hapoel Tel-Aviv", "בלומפילד", "5SPORT"),
+        (4,  "2026-09-15", "19:30", "Ironi Tiberias", "Hapoel Jerusalem", "בראל", "5LIVE"),
+        (4,  "2026-09-15", "20:00", "Beitar Jerusalem", "Maccabi Petah Tikva", "בלומפילד", "ספורט 2"),
+        # מחזור 5
+        (5,  "2026-09-18", "15:45", "Hapoel Tel-Aviv", "Hapoel Petah Tikva", "בלומפילד", "ספורט 1"),
+        (5,  "2026-09-19", "19:30", "Bnei Sakhnin", "Hapoel Ramat Gan", "דוחא", "5LIVE"),
+        (5,  "2026-09-19", "19:30", "Maccabi Petah Tikva", "Hapoel Jerusalem", "שלמה ביטוח", "5STARS"),
+        (5,  "2026-09-19", "20:00", "Maccabi Haifa", "Ironi Tiberias", "סמי עופר", "ספורט 2"),
+        (5,  "2026-09-19", "20:00", "Maccabi Netanya", "Maccabi Tel Aviv", "מרים", "ספורט 4"),
+        (5,  "2026-09-19", "20:15", "Hapoel Be'er Sheva", "Hapoel Ironi Kiryat Shmona", "טוטו טרנר", "ספורט 3"),
+        (5,  "2026-09-19", "20:30", "Beitar Jerusalem", "Hapoel Haifa", "בלומפילד", "5SPORT"),
+        # מחזור 6
+        (6,  "2026-10-10", "19:00", "Hapoel Haifa", "Maccabi Petah Tikva", "סמי עופר", "5LIVE"),
+        (6,  "2026-10-10", "19:00", "Ironi Tiberias", "Hapoel Be'er Sheva", "בראל", "ספורט 1"),
+        (6,  "2026-10-10", "19:15", "Hapoel Ironi Kiryat Shmona", "Hapoel Tel-Aviv", "מרים", "ספורט 3"),
+        (6,  "2026-10-10", "19:15", "Hapoel Petah Tikva", "Maccabi Netanya", "שלמה ביטוח", "5STARS"),
+        (6,  "2026-10-10", "19:30", "Maccabi Tel Aviv", "Bnei Sakhnin", "בלומפילד", "ספורט 4"),
+        (6,  "2026-10-11", "20:15", "Hapoel Ramat Gan", "Beitar Jerusalem", "רחובות", "ספורט 4"),
+        (6,  "2026-10-12", "20:30", "Hapoel Jerusalem", "Maccabi Haifa", "טדי", "5SPORT"),
+        # מחזור 7
+        (7,  "2026-10-17", "18:45", "Hapoel Tel-Aviv", "Ironi Tiberias", "בלומפילד", "ספורט 3"),
+        (7,  "2026-10-17", "19:00", "Hapoel Haifa", "Hapoel Ramat Gan", "סמי עופר", "5LIVE"),
+        (7,  "2026-10-17", "19:15", "Bnei Sakhnin", "Hapoel Petah Tikva", "דוחא", "5STARS"),
+        (7,  "2026-10-17", "19:15", "Maccabi Netanya", "Hapoel Ironi Kiryat Shmona", "מרים", "ספורט 2"),
+        (7,  "2026-10-17", "19:30", "Maccabi Petah Tikva", "Maccabi Haifa", "שלמה ביטוח", "ספורט 4"),
+        (7,  "2026-10-18", "20:15", "Hapoel Be'er Sheva", "Hapoel Jerusalem", "טוטו טרנר", "ספורט 4"),
+        (7,  "2026-10-19", "20:30", "Beitar Jerusalem", "Maccabi Tel Aviv", "טדי", "5SPORT"),
+        # מחזור 8 (25.10 = מעבר לשעון חורף)
+        (8,  "2026-10-24", "18:45", "Hapoel Jerusalem", "Hapoel Tel-Aviv", "טדי", "ספורט 3"),
+        (8,  "2026-10-24", "18:45", "Hapoel Ironi Kiryat Shmona", "Bnei Sakhnin", "מרים", "5LIVE"),
+        (8,  "2026-10-24", "19:00", "Hapoel Ramat Gan", "Maccabi Petah Tikva", "רחובות", None),
+        (8,  "2026-10-24", "19:00", "Ironi Tiberias", "Maccabi Netanya", "בראל", None),
+        (8,  "2026-10-24", "19:30", "Maccabi Tel Aviv", "Hapoel Haifa", "בלומפילד", "ספורט 4"),
+        (8,  "2026-10-25", "20:15", "Hapoel Petah Tikva", "Beitar Jerusalem", "שלמה ביטוח", "ספורט 4"),
+        (8,  "2026-10-26", "20:30", "Maccabi Haifa", "Hapoel Be'er Sheva", "סמי עופר", "5SPORT"),
+        # מחזור 9
+        (9,  "2026-10-31", "15:00", "Beitar Jerusalem", "Hapoel Ironi Kiryat Shmona", "טדי", "ספורט 4"),
+        (9,  "2026-10-31", "17:30", "Hapoel Haifa", "Hapoel Petah Tikva", "סמי עופר", "5STARS"),
+        (9,  "2026-10-31", "18:00", "Bnei Sakhnin", "Ironi Tiberias", "דוחא", "5LIVE"),
+        (9,  "2026-10-31", "19:30", "Maccabi Netanya", "Hapoel Jerusalem", "מרים", "ספורט 4"),
+        (9,  "2026-11-01", "20:00", "Maccabi Petah Tikva", "Hapoel Be'er Sheva", "שלמה ביטוח", "ספורט 3"),
+        (9,  "2026-11-01", "20:15", "Hapoel Ramat Gan", "Maccabi Tel Aviv", "רחובות", "ספורט 4"),
+        (9,  "2026-11-02", "20:30", "Hapoel Tel-Aviv", "Maccabi Haifa", "בלומפילד", "5SPORT"),
+        # מחזור 10 (הערת המסמך: יתכנו שינויים לפי זימוני נבחרות)
+        (10, "2026-11-06", "14:00", "Maccabi Tel Aviv", "Maccabi Petah Tikva", "בלומפילד", "ספורט 4"),
+        (10, "2026-11-07", "15:00", "Hapoel Petah Tikva", "Hapoel Ramat Gan", "שלמה ביטוח", "ספורט 4"),
+        (10, "2026-11-07", "17:30", "Maccabi Haifa", "Maccabi Netanya", "סמי עופר", "ספורט 4"),
+        (10, "2026-11-07", "18:00", "Hapoel Ironi Kiryat Shmona", "Hapoel Haifa", "מרים", "5LIVE"),
+        (10, "2026-11-07", "18:00", "Hapoel Jerusalem", "Bnei Sakhnin", "טדי", "5STARS"),
+        (10, "2026-11-07", "19:30", "Ironi Tiberias", "Beitar Jerusalem", "בראל", "ספורט 3"),
+        (10, "2026-11-08", "20:30", "Hapoel Be'er Sheva", "Hapoel Tel-Aviv", "טוטו טרנר", "5SPORT"),
+        # מחזור 11
+        (11, "2026-11-27", "14:00", "Maccabi Petah Tikva", "Hapoel Tel-Aviv", "שלמה ביטוח", "ספורט 1"),
+        (11, "2026-11-28", "15:00", "Bnei Sakhnin", "Maccabi Haifa", "דוחא", "ספורט 4"),
+        (11, "2026-11-28", "17:30", "Hapoel Ramat Gan", "Hapoel Ironi Kiryat Shmona", "רחובות", "5LIVE"),
+        (11, "2026-11-28", "18:00", "Hapoel Haifa", "Ironi Tiberias", "סמי עופר", "5STARS"),
+        (11, "2026-11-28", "19:00", "Maccabi Tel Aviv", "Hapoel Petah Tikva", "בלומפילד", "ספורט 4"),
+        (11, "2026-11-28", "20:00", "Beitar Jerusalem", "Hapoel Jerusalem", "טדי", "5SPORT"),
+        (11, "2026-11-30", "20:00", "Maccabi Netanya", "Hapoel Be'er Sheva", "מרים", "ספורט 1"),
+        # מחזור 12
+        (12, "2026-12-01", "19:30", "Ironi Tiberias", "Hapoel Ramat Gan", "בראל", "5LIVE"),
+        (12, "2026-12-01", "19:45", "Hapoel Jerusalem", "Hapoel Haifa", "טדי", "5STARS"),
+        (12, "2026-12-01", "19:45", "Maccabi Petah Tikva", "Hapoel Petah Tikva", "שלמה ביטוח", "ספורט 1"),
+        (12, "2026-12-01", "20:00", "Hapoel Ironi Kiryat Shmona", "Maccabi Tel Aviv", "מרים", "ספורט 4"),
+        (12, "2026-12-02", "20:30", "Maccabi Haifa", "Beitar Jerusalem", "סמי עופר", "5SPORT"),
+        (12, "2026-12-03", "19:45", "Hapoel Be'er Sheva", "Bnei Sakhnin", "טוטו טרנר", "ספורט 1"),
+        (12, "2026-12-03", "20:00", "Hapoel Tel-Aviv", "Maccabi Netanya", "בלומפילד", "ספורט 2"),
+        # מחזור 13
+        (13, "2026-12-05", "15:00", "Maccabi Tel Aviv", "Ironi Tiberias", "בלומפילד", "ספורט 3"),
+        (13, "2026-12-05", "17:30", "Hapoel Petah Tikva", "Hapoel Ironi Kiryat Shmona", "שלמה ביטוח", None),
+        (13, "2026-12-05", "18:00", "Hapoel Ramat Gan", "Hapoel Jerusalem", "רחובות", None),
+        (13, "2026-12-05", "19:30", "Hapoel Haifa", "Maccabi Haifa", "סמי עופר", "ספורט 4"),
+        (13, "2026-12-06", "20:30", "Beitar Jerusalem", "Hapoel Be'er Sheva", "טדי", "5SPORT"),
+        (13, "2026-12-07", "19:45", "Maccabi Netanya", "Maccabi Petah Tikva", "מרים", None),
+        (13, "2026-12-07", "20:00", "Bnei Sakhnin", "Hapoel Tel-Aviv", "דוחא", "ספורט 4"),
+        # מחזור 14
+        (14, "2026-12-11", "14:00", "Hapoel Petah Tikva", "Ironi Tiberias", "שלמה ביטוח", None),
+        (14, "2026-12-12", "15:00", "Bnei Sakhnin", "Maccabi Netanya", "דוחא", None),
+        (14, "2026-12-12", "17:30", "Hapoel Ramat Gan", "Maccabi Haifa", "רחובות", "ספורט 1"),
+        (14, "2026-12-12", "18:00", "Hapoel Ironi Kiryat Shmona", "Maccabi Petah Tikva", "מרים", "5STARS"),
+        (14, "2026-12-12", "19:00", "Maccabi Tel Aviv", "Hapoel Jerusalem", "בלומפילד", "ספורט 4"),
+        (14, "2026-12-14", "20:00", "Hapoel Haifa", "Hapoel Be'er Sheva", "סמי עופר", "ספורט 4"),
+        (14, "2026-12-14", "20:30", "Beitar Jerusalem", "Hapoel Tel-Aviv", "טדי", "5SPORT"),
+        # מחזור 15
+        (15, "2026-12-18", "14:00", "Hapoel Jerusalem", "Hapoel Petah Tikva", "טדי", "ספורט 1"),
+        (15, "2026-12-19", "15:00", "Hapoel Tel-Aviv", "Hapoel Haifa", "בלומפילד", "ספורט 4"),
+        (15, "2026-12-19", "18:00", "Ironi Tiberias", "Hapoel Ironi Kiryat Shmona", "בראל", "5LIVE"),
+        (15, "2026-12-19", "18:00", "Maccabi Petah Tikva", "Bnei Sakhnin", "שלמה ביטוח", "5STARS"),
+        (15, "2026-12-19", "19:30", "Maccabi Netanya", "Beitar Jerusalem", "מרים", "ספורט 4"),
+        (15, "2026-12-20", "20:15", "Hapoel Be'er Sheva", "Hapoel Ramat Gan", "טוטו טרנר", "ספורט 4"),
+        (15, "2026-12-21", "20:30", "Maccabi Haifa", "Maccabi Tel Aviv", "סמי עופר", "5SPORT"),
+    ],
+}
+
+
+def _fixture_slug(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+
+def _il_to_utc(date_str: str, time_str: str):
+    """שעון ישראל → UTC. קיץ/חורף אוטומטית דרך ISRAEL_TZ."""
+    dt_il = datetime.fromisoformat(f"{date_str}T{time_str}:00").replace(tzinfo=ISRAEL_TZ)
+    dt_u = dt_il.astimezone(timezone.utc)
+    return dt_u.strftime("%Y-%m-%d"), dt_u.strftime("%H:%M:%S")
+
+
+def apply_manual_fixtures(league_key: str):
+    """מיישם את הלוח הרשמי מעל נתוני sportsdb:
+    - משחק שקיים ב-sportsdb: עדכון תאריך/שעה/אצטדיון (סטטוס ותוצאה לא נוגעים).
+    - משחק חסר: הוספת שורת manual-*.
+    - אם sportsdb השלים משחק שהיה אצלנו כ-manual: השורה הכפולה נמחקת.
+    בטוח להרצה חוזרת (אידמפוטנטי)."""
+    fixtures = MANUAL_FIXTURES.get(league_key, [])
+    if not fixtures:
+        return
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    updated = added = 0
+    for rnd, d_il, t_il, home, away, venue, _tv in fixtures:
+        date_utc, time_utc = _il_to_utc(d_il, t_il)
+        rows = conn.execute(
+            """SELECT id FROM matches
+               WHERE league_key=? AND matchday=?
+                 AND lower(home_team)=lower(?) AND lower(away_team)=lower(?)""",
+            (league_key, rnd, home, away)).fetchall()
+        real   = [r for r in rows if not str(r["id"]).startswith("manual-")]
+        manual = [r for r in rows if str(r["id"]).startswith("manual-")]
+        if real:
+            conn.execute(
+                "UPDATE matches SET date_utc=?, time_utc=?, venue=? WHERE id=?",
+                (date_utc, time_utc, venue, real[0]["id"]))
+            updated += 1
+            for m in manual:
+                conn.execute("DELETE FROM matches WHERE id=?", (m["id"],))
+        elif manual:
+            conn.execute(
+                "UPDATE matches SET date_utc=?, time_utc=?, venue=? WHERE id=?",
+                (date_utc, time_utc, venue, manual[0]["id"]))
+            updated += 1
+        else:
+            mid = f"manual-{league_key}-r{rnd}-{_fixture_slug(home)}"
+            conn.execute(
+                """INSERT OR REPLACE INTO matches
+                   (id, league_key, home_team, away_team, home_team_id,
+                    away_team_id, date_utc, time_utc, venue, matchday,
+                    status, fetched_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (mid, league_key, home, away, "", "", date_utc, time_utc,
+                 venue, rnd, "SCHEDULED", now))
+            added += 1
+    conn.commit()
+    conn.close()
+    print(f"[manual] {league_key}: updated={updated} added={added}")
+
 
 # ── Utils ──────────────────────────────────────────────
 
