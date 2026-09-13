@@ -79,6 +79,32 @@ LEAGUES = {
         # "... | Southampton 4-1 Bristol City | EFL Highlights" (אומת 13.9.26).
         # ערוץ עמוס ורב-ליגתי: title_include מגביל לכותרות EFL, והתאמת שתי
         # הקבוצות מסננת את ליג 1/ליג 2. משחק בן יום-יומיים+ → search.list.
+        # ערוצי המועדונים קודם (כמו בפרמייר ובצ'מפיונס), Sky אחריהם כגיבוי.
+        # אומתו 13.9.26 מול ה-RSS הציבורי: כל ערוץ כאן העלה תקציר ממחזור 6–7.
+        # בלי ערוץ פעיל: לינקולן, נוריץ' (@OfficialNCFC הוא נוטס קאונטי),
+        # וולבס, רקסהאם — מקבלים את ערוץ היריבה + Sky.
+        "club_channels": {
+            "Birmingham City":      "UCW1HMToSBse9JgQtsm2vMsQ",
+            "Blackburn Rovers":     "UCg4185wSpo9swSCSUEYUGTg",
+            "Bolton Wanderers":     "UC6oTkDRXLR6GO53l44i0LFw",
+            "Bristol City":         "UCq_5VYwAoOvaL4lyGkwoboQ",
+            "Burnley":              "UChvUXuSDeEFSQZS8GcPMtkg",
+            "Cardiff City":         "UCfBVy8PAMwyNbac6D0Mk8gQ",
+            "Charlton Athletic":    "UC99akEsugT_s4tv_r2oxuOQ",
+            "Derby County":         "UCsOKCDfSRPwRhnbCqBO8CQw",
+            "Middlesbrough":        "UCdXWsJhkXzx5hFJGcxjy_5Q",
+            "Millwall":             "UCPyLfjCylafteypHYuYvGbQ",
+            "Portsmouth":           "UC2pUjr6WECIEprPQxcD51OA",
+            "Preston North End":    "UCWSRYI78ApCEDssqg5UjXKw",
+            "Queens Park Rangers":  "UCiegSQxYwraPK5efklvTO5w",
+            "Sheffield United":     "UCVER_UoBt84YUrA6s402Q-g",
+            "Southampton":          "UCxvXjfiIHQ2O6saVx_ZFqnw",
+            "Stoke City":           "UCmFPjHUFr0hyE6eFGvCm7IA",
+            "Swansea City":         "UCSMZZFBE92Yn-_XYdDiiANA",
+            "Watford":              "UCptKljTrbdMTgmuekGKhRug",
+            "West Bromwich Albion": "UCnDBNo0zLm11TTXPVXvEN1g",
+            "West Ham United":      "UCCNOsmurvpEit9paBOzWtUg",
+        },
         "sources": [
             {"id": "sky_efl", "name": "Sky Sports",
              "channel_id": "UCZ7wY7MRDSygp63HIEfdQZA",
@@ -1637,6 +1663,16 @@ TEAM_ALIASES = {
     "Queens Park Rangers": ["qpr"],
     "West Bromwich Albion": ["west brom"],
     "Sheffield United": ["sheff utd", "sheffield utd"],
+    "Portsmouth": ["pompey"],
+    "Preston North End": ["pne"],
+}
+
+# סיומות כלליות — לא מספיקות לבד לזיהוי קבוצה בכותרת. בלי זה, היריבה
+# "Bristol City" "נמצאה" בכל כותרת עם City ("Stockport 3-4 Leicester City"
+# עבר עבור לינקולן; "Notts County 0-1 Bradford City" עבר עבור נוריץ').
+GENERIC_TEAM_WORDS = {
+    "city", "united", "county", "rovers", "athletic", "town", "wanderers",
+    "albion", "rangers", "wednesday", "end",
 }
 
 
@@ -1667,7 +1703,7 @@ def is_match_highlight(title: str, home: str, away: str,
             return True
         if any(a in t for a in TEAM_ALIASES.get(team, [])):
             return True
-        if len(words) >= 1 and words[-1] in t:
+        if len(words) >= 1 and words[-1] not in GENERIC_TEAM_WORDS and words[-1] in t:
             return True
         # מילה ראשונה משמעותית: "Inter Milan" בכותרת "INTER-MONZA",
         # "Manchester City" בכותרת "MAN CITY". מינימום 4 תווים נגד רעש.
@@ -1697,7 +1733,8 @@ def is_match_highlight(title: str, home: str, away: str,
                    "training", "press conference", "interview", "#shorts",
                    "season review", "all goals season", "preview",
                    "prediction", "lineup", "tactical", "pre-match",
-                   "post-match press", "reaction",
+                   # post-match: מסיבות עיתונאים וניתוחים ("POST-MATCH ANALYSIS")
+                   "post-match", "reaction",
                    "bench cam", "player cam", "fan cam", "tunnel",
                    "pitchside", "pitch side", "behind the scenes",
                    "unseen", "warm up", "warm-up", "arrival", "access all",

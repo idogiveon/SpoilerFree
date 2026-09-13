@@ -25,6 +25,36 @@ def test_sky_titles(title, home, away, expected):
     assert main.is_match_highlight(title, home, away) is expected
 
 
+@pytest.mark.parametrize("title, home, away, club, expected", [
+    # כותרות אמיתיות מערוצי המועדונים (RSS, 8–13.9.26) — הערוץ הוא של club
+    ("HIGHLIGHTS | Wanderers v Cardiff City", "Bolton Wanderers", "Cardiff City", "Bolton Wanderers", True),
+    ("Highlights 🟡 | Charlton v Pompey", "Charlton Athletic", "Portsmouth", "Portsmouth", True),
+    ("Highlights | PNE 0-1 Lincoln City", "Preston North End", "Lincoln City", "Preston North End", True),
+    ("Callum Styles’ strike earns point | Albion 1-1 QPR | MATCH HIGHLIGHTS",
+     "West Bromwich Albion", "Queens Park Rangers", "West Bromwich Albion", True),
+    ("Southampton 4-1 Bristol City | Extended Highlights", "Southampton", "Bristol City", "Bristol City", True),
+    ("Extended Highlights: Rovers 3-1 Millwall", "Blackburn Rovers", "Millwall", "Blackburn Rovers", True),
+    # תוכן אחרי המשחק — לא תקציר
+    ("POST-MATCH ANALYSIS | Southampton 4-1 Bristol City", "Southampton", "Bristol City", "Bristol City", False),
+    ("John Mousinho post-match 🎙️ | Charlton v Pompey", "Charlton Athletic", "Portsmouth", "Portsmouth", False),
+    # סיומת כללית לא מספיקה לבד: ערוצים שגויים שהיו "עוברים" בגלל City/County
+    ("Riis Brace Fires Foxes To Victory | Stockport County 3-4 Leicester City | Extended Highlights",
+     "Lincoln City", "Bristol City", "Lincoln City", False),
+    ("HIGHLIGHTS | NOTTS COUNTY 0-1 BRADFORD CITY", "Middlesbrough", "Norwich City", "Norwich City", False),
+])
+def test_club_channel_titles(title, home, away, club, expected):
+    assert main.is_match_highlight(title, home, away, implicit_team=club) is expected
+
+
+def test_sources_clubs_first_then_sky():
+    def ids(home, away):
+        row = {"league_key": "championship", "home_team": home, "away_team": away,
+               "home_team_id": None, "away_team_id": None}
+        return [s["id"] for s in main.get_sources_for_match(row)]
+    assert ids("Southampton", "Bristol City") == ["club_southampton", "club_bristol-city", "sky_efl"]
+    assert ids("Lincoln City", "Wrexham") == ["sky_efl"]          # בלי ערוץ פעיל — רק Sky
+
+
 def test_title_include_drops_other_leagues(monkeypatch):
     feed = [
         ("laliga", "Mbappe and Bellingham star again! | Real Madrid 4-1 Rayo Vallecano | La Liga Highlights",
@@ -39,7 +69,3 @@ def test_title_include_drops_other_leagues(monkeypatch):
     assert [v["video_id"] for v in res] == ["efl"]
 
 
-def test_sources_for_championship_match():
-    row = {"league_key": "championship", "home_team": "Southampton", "away_team": "Bristol City",
-           "home_team_id": None, "away_team_id": None}
-    assert [s["id"] for s in main.get_sources_for_match(row)] == ["sky_efl"]
