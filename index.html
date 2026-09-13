@@ -388,6 +388,7 @@
   // שמות מקורות: אתרים ישראליים באנגלית, ערוץ מועדון — שם הקבוצה
   const SRC_NAMES = { 'ספורט 1': 'Sport 1', 'ספורט 5': 'Sport 5', 'וואלה': 'Walla' };
   function srcName(s) {
+    if (s.club_name) return s.club_name;   // ערוץ מועדון — שם הקבוצה בשפה שנבחרה
     if (LANG === 'he') return s.name;
     return s.club_team || SRC_NAMES[s.name] || s.name;
   }
@@ -565,18 +566,20 @@
       : (m.is_over ? `<span class="highlight-badge">${t('badge')}</span>` : '');
     const timeClass = isLive ? 'live' : (m.is_over ? 'past' : '');
     const cardClass = isLive ? 'is-live' : (m.is_over ? 'is-over' : '');
+    // שמות בשפת המשתמש (מהשרת); escape — יש שמות עם ' ו-" (צ'רלטון, Newell's)
+    const home = esc(m.home_name || m.home), away = esc(m.away_name || m.away);
     // הבית ראשון בכיוון הקריאה — בכל שפה (RTL: מימין, LTR: משמאל)
     return `
       <div class="match-card ${cardClass}"
-           data-id="${m.id}" data-home="${m.home}"
-           data-away="${m.away}" data-is-over="${m.is_over}">
-        <div class="team home"><div class="team-name">${m.home}</div></div>
+           data-id="${m.id}" data-home="${home}"
+           data-away="${away}" data-is-over="${m.is_over}">
+        <div class="team home"><div class="team-name">${home}</div></div>
         <div class="match-meta">
           <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
           <div class="match-vs">VS</div>
           <div class="venue">${m.venue||''}</div>
         </div>
-        <div class="team away"><div class="team-name">${m.away}</div></div>
+        <div class="team away"><div class="team-name">${away}</div></div>
         ${badge}
       </div>`;
   }
@@ -646,11 +649,11 @@
   const leagueData = {};   // league -> רשימת המשחקים המלאה
 
   function cacheGet(league) {
-    try { return JSON.parse(localStorage.getItem('sf:m:' + league)); }
+    try { return JSON.parse(localStorage.getItem('sf:m:' + LANG + ':' + league)); }
     catch (e) { return null; }
   }
   function cachePut(league, data) {
-    try { localStorage.setItem('sf:m:' + league, JSON.stringify(data)); }
+    try { localStorage.setItem('sf:m:' + LANG + ':' + league, JSON.stringify(data)); }
     catch (e) {}
   }
   function setSyncNote(text) {
@@ -703,7 +706,7 @@
 
     let data;
     try {
-      data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
+      data = await apiFetch(`${API}/matches/${league}?lang=${LANG}`).then(r => r.json());
     } catch (err) {
       if (err.message === 'auth' || league !== currentLeague) return;
       if (cached) setSyncNote(t('offline_cached'));
@@ -753,10 +756,10 @@
         // sportsdb חסום מ-Render — הדפדפן שולף ושולח לשרת
         const res = await clientRefreshSportsdb(league);
         note = res.fresh ? t('refreshed', { d: res.diag }) : t('refresh_empty');
-        data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
+        data = await apiFetch(`${API}/matches/${league}?lang=${LANG}`).then(r => r.json());
       } else {
         // football-data — שליפה מצד השרת (לא חסום); התשובה כבר מכילה הכל
-        data = await apiFetch(`${API}/matches/${league}?refresh=true`).then(r => r.json());
+        data = await apiFetch(`${API}/matches/${league}?refresh=true&lang=${LANG}`).then(r => r.json());
       }
       cachePut(league, data);
       showLeague(league, data.matches, true);
@@ -831,9 +834,11 @@
   // ── Modal ──────────────────────────────────────────
 
   let currentMatchId = null;   // למעקב: לאיזה משחק שייכת לחיצה על תקציר
+  let currentNames = ['', ''];  // שמות הקבוצות בחלון הפתוח (לכפתור "חפש שוב")
 
   function openMatchModal(matchId, home, away, isOver, retried = false) {
     currentMatchId = matchId;
+    currentNames = [home, away];
     if (!retried) track('match_open', { match_id: matchId,
                           league: currentLeague === '__byday' ? null : currentLeague });
     const modal = document.getElementById('modal');
@@ -848,7 +853,7 @@
     body.innerHTML = `<div class="loading">${t('searching')}</div>`;
     modal.classList.add('open');
 
-    apiFetch(`${API}/highlights/${matchId}`)
+    apiFetch(`${API}/highlights/${matchId}?lang=${LANG}`)
       .then(r => r.json())
       .then(data => {
         if (!data.available) {
@@ -914,7 +919,7 @@
                 <div class="shield-icon">🔍</div>
                 <div class="shield-text">${t('not_uploaded')}</div>
                 ${webRow}
-                <button class="retry-btn" onclick="retryHighlights('${matchId}', '${home}', '${away}')">${t('try_again')}</button>
+                <button class="retry-btn" onclick="retryHighlights('${matchId}')">${t('try_again')}</button>
               </div>
             </div>`;
           return;
@@ -929,7 +934,7 @@
               <div class="shield-note">${t('opens_youtube')}</div>
               ${webRow}
               <button class="retry-btn" style="opacity:0.6"
-                      onclick="retryHighlights('${matchId}', '${home}', '${away}')">${t('search_again')}</button>
+                      onclick="retryHighlights('${matchId}')">${t('search_again')}</button>
             </div>
             <div id="video-frame"></div>
           </div>`;
@@ -940,11 +945,12 @@
       });
   }
 
-  async function retryHighlights(matchId, home, away) {
+  // השמות נלקחים מהחלון הפתוח — לא עוברים דרך onclick (שמות עם ')
+  async function retryHighlights(matchId) {
     try {
       await apiFetch(`${API}/cache/${matchId}`, { method: 'DELETE' });
     } catch(e) {}
-    openMatchModal(matchId, home, away, true);
+    openMatchModal(matchId, currentNames[0], currentNames[1], true);
   }
 
   function openOnYoutube(videoId) {
@@ -1010,7 +1016,7 @@
     const container = document.getElementById('matches-container');
     container.innerHTML = `<div class="loading">${t('loading_matches')}</div>`;
     try {
-      const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}`)
+      const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}?lang=${LANG}`)
                      .then(r => r.json());
       renderDayMatches(data.matches);
 
@@ -1107,8 +1113,9 @@
     updateRefreshBtn();
     loadUserBar();
     setSyncNote('');
+    // שמות הקבוצות מגיעים מהשרת בשפה שנבחרה — טוענים מחדש
     if (currentLeague === '__byday') loadDay();
-    else if (leagueData[currentLeague]) showLeague(currentLeague, leagueData[currentLeague], true);
+    else openLeague(currentLeague);
   });
 
   // ── Init ───────────────────────────────────────────
