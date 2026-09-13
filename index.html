@@ -90,6 +90,10 @@
     /* הבית ראשון בכיוון הקריאה; הטקסט מיושר כלפי המרכז — עובד גם RTL וגם LTR */
     .team.home { text-align:end; }
     .team.away { text-align:start; }
+    .fav-row { display:flex; gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap; }
+    .fav-btn { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:100px; padding:0.15rem 0.6rem; font-size:0.72rem; cursor:pointer; font-family:'Heebo',sans-serif; }
+    .fav-btn:hover { border-color:#ffc107; color:#ffc107; }
+    .fav-group .date-label .weekday { color:#ffc107; }
     .header-tools { display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; }
     .lang-select { background:var(--surface); border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.75rem; padding:0.2rem 0.4rem; border-radius:6px; cursor:pointer; }
     .team-name { font-size:0.95rem; font-weight:700; line-height:1.2; }
@@ -208,7 +212,10 @@
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title" id="modal-title"></div>
+      <div>
+        <div class="modal-title" id="modal-title"></div>
+        <div class="fav-row" id="modal-favs"></div>
+      </div>
       <button class="modal-close" id="modal-close">✕</button>
     </div>
     <div id="modal-body"></div>
@@ -247,6 +254,7 @@
   "search_again": "↻ חפש שוב (מנקה קאש)", "search_error": "שגיאה בחיפוש תקציר",
   "no_matches_day": "אין משחקים בתאריך זה", "no_matches_day_hint": "מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה",
   "kind_short": "תקציר קצר", "kind_full": "תקציר מלא", "kind_extended": "תקציר מורחב", "kind_regular": "תקציר",
+  "favorites": "מועדפים", "fav_hint": "סמן/בטל קבוצה מועדפת",
   "reason_not_over": "המשחק עדיין לא נגמר",
   "reason_stale": "עדיין לא התקבל עדכון שהמשחק הסתיים — נסה שוב בעוד כמה דקות",
   "days": ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
@@ -280,6 +288,7 @@
   "search_again": "↻ Search again", "search_error": "Couldn't search for highlights",
   "no_matches_day": "No matches on this date", "no_matches_day_hint": "From the leagues we follow",
   "kind_short": "Short highlights", "kind_full": "Full highlights", "kind_extended": "Extended highlights", "kind_regular": "Highlights",
+  "favorites": "Favorites", "fav_hint": "Add/remove favorite team",
   "reason_not_over": "The match hasn't finished yet",
   "reason_stale": "We haven't received confirmation that the match has finished — try again in a few minutes",
   "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -313,6 +322,7 @@
   "search_again": "↻ Buscar de nuevo", "search_error": "Error al buscar el resumen",
   "no_matches_day": "No hay partidos en esta fecha", "no_matches_day_hint": "De las ligas que seguimos",
   "kind_short": "Resumen corto", "kind_full": "Resumen completo", "kind_extended": "Resumen extendido", "kind_regular": "Resumen",
+  "favorites": "Favoritos", "fav_hint": "Añadir/quitar equipo favorito",
   "reason_not_over": "El partido aún no ha terminado",
   "reason_stale": "Aún no hemos recibido la confirmación de que el partido terminó — inténtalo en unos minutos",
   "days": ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
@@ -346,6 +356,7 @@
   "search_again": "↻ Rechercher à nouveau", "search_error": "Erreur lors de la recherche du résumé",
   "no_matches_day": "Aucun match à cette date", "no_matches_day_hint": "Parmi les ligues suivies",
   "kind_short": "Résumé court", "kind_full": "Résumé complet", "kind_extended": "Résumé long", "kind_regular": "Résumé",
+  "favorites": "Favoris", "fav_hint": "Ajouter/retirer une équipe favorite",
   "reason_not_over": "Le match n'est pas encore terminé",
   "reason_stale": "Nous n'avons pas encore la confirmation que le match est terminé — réessayez dans quelques minutes",
   "days": ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
@@ -466,9 +477,75 @@
     } catch (e) {}
   }
 
+  // ── מועדפים ────────────────────────────────────────
+  // מפתח = ליגה + שם הקבוצה במקור. עם חשבון אישי — בשרת (כל המכשירים),
+  // בלי (סיסמה ישנה / מקומי) — במכשיר.
+  let ME = null;
+  let FAVS = new Set();
+  let favCtx = null;            // הקבוצות בחלון המשחק הפתוח
+  let lastDayMatches = null;    // לתצוגה מחדש של "לפי יום" בלי טעינה
+  const favKey = (lg, team) => `${lg}|${team}`;
+  const isFav = (lg, team) => FAVS.has(favKey(lg, team));
+  const matchLeague = m => m.league_key || currentLeague;
+  const isFavMatch = m => isFav(matchLeague(m), m.home) || isFav(matchLeague(m), m.away);
+  const serverFavs = () => !!(ME && ME.email);
+
+  async function loadFavorites() {
+    try {
+      if (serverFavs()) {
+        const r = await apiFetch(`${API}/favorites`).then(r => r.json());
+        FAVS = new Set(r.favorites.map(([lg, team]) => favKey(lg, team)));
+      } else {
+        FAVS = new Set(JSON.parse(localStorage.getItem('sf:favs') || '[]'));
+      }
+    } catch (e) {}
+  }
+
+  async function toggleFav(lg, team) {
+    const k = favKey(lg, team), on = !FAVS.has(k);
+    if (on) FAVS.add(k); else FAVS.delete(k);
+    renderFavRow();
+    rerender();
+    try {
+      if (serverFavs()) {
+        await apiFetch(`${API}/favorites`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ league_key: lg, team, on }),
+        });
+      } else {
+        localStorage.setItem('sf:favs', JSON.stringify([...FAVS]));
+      }
+    } catch (e) {}
+  }
+
+  function rerender() {
+    if (currentLeague === '__byday') { if (lastDayMatches) renderDayMatches(lastDayMatches); }
+    else if (leagueData[currentLeague]) showLeague(currentLeague, leagueData[currentLeague], true);
+  }
+
+  // כפתורי ☆/⭐ לשתי הקבוצות בחלון המשחק
+  function renderFavRow() {
+    const el = document.getElementById('modal-favs');
+    if (!favCtx) { el.innerHTML = ''; return; }
+    const teams = [[favCtx.home, favCtx.homeName], [favCtx.away, favCtx.awayName]];
+    el.innerHTML = teams.map(([key, name], i) =>
+      `<button class="fav-btn" data-i="${i}" title="${t('fav_hint')}">${isFav(favCtx.league, key) ? '⭐' : '☆'} ${esc(name)}</button>`
+    ).join('');
+    el.querySelectorAll('.fav-btn').forEach(btn => btn.addEventListener('click', () => {
+      toggleFav(favCtx.league, teams[+btn.dataset.i][0]);
+    }));
+  }
+
+  function favGroupHTML(ms) {
+    return `<div class="date-group fav-group">
+      <div class="date-label"><span class="weekday">⭐ ${t('favorites')}</span></div>
+      ${ms.map(matchCardHTML).join('')}</div>`;
+  }
+
   async function loadUserBar() {
     try {
       const me = await apiFetch(`${API}/auth/me`).then(r => r.json());
+      ME = me;
       if (!me.auth_on) return;
       const bar = document.getElementById('user-bar');
       const who = document.createElement('span');
@@ -568,18 +645,21 @@
     const cardClass = isLive ? 'is-live' : (m.is_over ? 'is-over' : '');
     // שמות בשפת המשתמש (מהשרת); escape — יש שמות עם ' ו-" (צ'רלטון, Newell's)
     const home = esc(m.home_name || m.home), away = esc(m.away_name || m.away);
+    const lg = matchLeague(m);
+    const star = team => isFav(lg, team) ? '⭐ ' : '';
     // הבית ראשון בכיוון הקריאה — בכל שפה (RTL: מימין, LTR: משמאל)
     return `
       <div class="match-card ${cardClass}"
            data-id="${m.id}" data-home="${home}"
-           data-away="${away}" data-is-over="${m.is_over}">
-        <div class="team home"><div class="team-name">${home}</div></div>
+           data-away="${away}" data-is-over="${m.is_over}"
+           data-league="${lg}" data-home-key="${esc(m.home)}" data-away-key="${esc(m.away)}">
+        <div class="team home"><div class="team-name">${star(m.home)}${home}</div></div>
         <div class="match-meta">
           <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
           <div class="match-vs">VS</div>
           <div class="venue">${m.venue||''}</div>
         </div>
-        <div class="team away"><div class="team-name">${away}</div></div>
+        <div class="team away"><div class="team-name">${star(m.away)}${away}</div></div>
         ${badge}
       </div>`;
   }
@@ -587,6 +667,9 @@
   function bindMatchCards(container) {
     container.querySelectorAll('.match-card').forEach(card => {
       card.addEventListener('click', () => {
+        favCtx = { league: card.dataset.league,
+                   home: card.dataset.homeKey, homeName: card.dataset.home,
+                   away: card.dataset.awayKey, awayName: card.dataset.away };
         openMatchModal(card.dataset.id, card.dataset.home,
                        card.dataset.away, card.dataset.isOver === 'true');
       });
@@ -604,8 +687,10 @@
     }
 
     countEl.textContent = t('n_matches', { n: matches.length });
-    const groups = groupByDate(matches);
-    let html = '';
+    // משחקי קבוצות מועדפות — קודם, בקבוצה משלהם; השאר לפי תאריך כרגיל
+    const favMs = matches.filter(isFavMatch);
+    const groups = groupByDate(matches.filter(m => !isFavMatch(m)));
+    let html = favMs.length ? favGroupHTML(favMs) : '';
     let todayGroupId = null;
 
     for (const [date, dayMatches] of Object.entries(groups)) {
@@ -846,6 +931,7 @@
     const body  = document.getElementById('modal-body');
 
     title.textContent = `${home} ${t('vs')} ${away}`;
+    renderFavRow();
 
     // תמיד פונים לשרת — גם אם הרשימה חושבת שהמשחק לא נגמר.
     // הסטטוס ברשימה עלול להיות מיושן; השרת יודע לרענן אוטומטית
@@ -1047,9 +1133,12 @@
       return;
     }
     countEl.textContent = t('n_matches', { n: matches.length });
+    lastDayMatches = matches;
+    // קודם "מועדפים" (מכל הליגות), אחר כך לפי ליגה — בלי כפילויות.
     // השרת כבר מיין: סדר ליגות ואז שעה — נשאר רק לקבץ לכותרות
-    let html = '', lastLeague = null;
-    for (const m of matches) {
+    const favMs = matches.filter(isFavMatch);
+    let html = favMs.length ? favGroupHTML(favMs) : '', lastLeague = null;
+    for (const m of matches.filter(m => !isFavMatch(m))) {
       if (m.league_key !== lastLeague) {
         if (lastLeague !== null) html += '</div>';
         html += `<div class="date-group">
@@ -1058,7 +1147,7 @@
       }
       html += matchCardHTML(m);
     }
-    html += '</div>';
+    if (lastLeague !== null) html += '</div>';
     container.innerHTML = html;
     bindMatchCards(container);
   }
@@ -1121,7 +1210,8 @@
   // ── Init ───────────────────────────────────────────
   applyStatic();
   enterDayView();
-  loadUserBar();
+  // המועדפים תלויים במשתמש (חשבון / מכשיר) — אחרי שיודעים מי מחובר
+  loadUserBar().then(loadFavorites).then(rerender);
   track('app_open');
 
   // PWA: הדף נשמר במכשיר ונפתח מיד גם כשהשרת ישן

@@ -881,6 +881,15 @@ def init_db():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_email ON events(email)")
+    # מועדפים: קבוצה לפי ליגה (השם במקור הנתונים) — לכל משתמש עם חשבון אישי
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS favorites (
+            email      TEXT,
+            league_key TEXT,
+            team       TEXT,
+            PRIMARY KEY (email, league_key, team)
+        )
+    """)
 
     conn.commit()
 
@@ -3484,13 +3493,52 @@ def auth_delete_account(request: Request, payload: dict = Body(...)):
     if str(payload.get("confirm") or "").strip().lower() != email:
         raise HTTPException(400, "כדי למחוק, הקלד את כתובת המייל שלך בדיוק")
     conn = get_db()
-    for table in ("events", "sessions", "login_codes", "users"):
+    for table in ("events", "sessions", "login_codes", "favorites", "users"):
         conn.execute(f"DELETE FROM {table} WHERE email=?", (email,))
     conn.commit()
     conn.close()
     resp = JSONResponse({"ok": True})
     resp.delete_cookie("sf_session")
     return resp
+
+
+# ── מועדפים ────────────────────────────────────────────
+# נשמרים בחשבון (זהים בכל המכשירים). בלי חשבון אישי (סיסמה ישנה / פיתוח
+# מקומי) — הפרונט שומר במכשיר.
+
+@app.get("/favorites")
+def get_favorites(request: Request):
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if not email:
+        return {"favorites": [], "per_device": True}
+    conn = get_db()
+    rows = conn.execute("SELECT league_key, team FROM favorites WHERE email=? "
+                        "ORDER BY league_key, team", (email,)).fetchall()
+    conn.close()
+    return {"favorites": [[r["league_key"], r["team"]] for r in rows]}
+
+
+@app.post("/favorites")
+def set_favorite(request: Request, payload: dict = Body(...)):
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if not email:
+        raise HTTPException(400, "בלי חשבון אישי — המועדפים נשמרים במכשיר")
+    league_key = str(payload.get("league_key") or "")
+    team = str(payload.get("team") or "").strip()[:120]
+    if league_key not in LEAGUES or not team:
+        raise HTTPException(400, "ליגה או קבוצה לא תקינה")
+    conn = get_db()
+    if payload.get("on", True):
+        conn.execute("INSERT OR IGNORE INTO favorites (email, league_key, team) VALUES (?,?,?)",
+                     (email, league_key, team))
+    else:
+        conn.execute("DELETE FROM favorites WHERE email=? AND league_key=? AND team=?",
+                     (email, league_key, team))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 # ── Admin: משתמשים ─────────────────────────────────────
