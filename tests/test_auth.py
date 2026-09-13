@@ -67,7 +67,7 @@ def test_full_flow_pending_approve_login_track_block(auth_on):
     assert friend.get("/debug/db").status_code == 403
     assert friend.get("/admin/api/users").status_code == 403
     r = friend.get("/admin/users", follow_redirects=False)
-    assert r.status_code in (302, 307) and r.headers["location"] == "/app"
+    assert r.status_code in (302, 307) and r.headers["location"] == "/"
     for ev in ({"type": "app_open"}, {"type": "league_view", "league": "ucl"},
                {"type": "match_open", "league": "ucl", "match_id": "1"},
                {"type": "highlight_play", "match_id": "1", "detail": "v"}):

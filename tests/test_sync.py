@@ -61,6 +61,28 @@ def test_league_freshness_recorded(db):
     assert main._league_fetched_at(db, "t") is not None
 
 
+def test_server_side_sportsdb_fetch_keeps_league_stale(db, monkeypatch):
+    """שליפה חלקית מהשרת לא מסמנת טרי — כדי שהדפדפן ישלוף את חלון המחזורים."""
+    from fastapi.testclient import TestClient
+
+    class Resp:
+        def json(self):
+            return {"events": [{"idEvent": "c1", "intRound": "7", "dateEvent": "2026-09-12",
+                                "strHomeTeam": "Charlton Athletic", "strAwayTeam": "Portsmouth",
+                                "strStatus": "FT"}]}
+
+    monkeypatch.setattr(main.requests, "get", lambda *a, **k: Resp())
+    c = TestClient(main.app)
+    first = c.get("/matches/championship").json()      # ליגה ריקה → שליפה מהשרת
+    assert first["count"] == 1 and first["stale"] is True
+    assert main._league_fetched_at(db, "championship") is None
+    # רענון מהדפדפן (הנתיב המלא) — כן מסמן טרי
+    c.post("/refresh/championship", json={"events": [
+        {"idEvent": "c2", "intRound": "8", "dateEvent": "2026-09-19",
+         "strHomeTeam": "Portsmouth", "strAwayTeam": "Watford"}]})
+    assert c.get("/matches/championship").json()["stale"] is False
+
+
 def test_min_date_drops_qualifiers(db):
     n = main._store_sportsdb_events(db, "ucl", [
         {"idEvent": "q", "dateEvent": "2026-07-14", "strHomeTeam": "A", "strAwayTeam": "B"},

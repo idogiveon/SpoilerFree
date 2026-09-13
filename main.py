@@ -392,8 +392,17 @@ button:disabled{opacity:0.5}
 margin-top:0.8rem;width:auto;padding:0.2rem;text-decoration:underline}
 .err{color:#ff4757;font-size:0.85rem;margin-top:0.8rem;min-height:1.2em}
 .ok{color:#00e5a0}
-.privacy{color:#6b6b80;font-size:0.7rem;line-height:1.5;margin-top:1.5rem;
-border-top:1px solid #2a2a3a;padding-top:1rem}
+button.cookie-link{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
+width:auto;background:none;color:#4a4a5a;font-weight:400;font-size:0.7rem;
+padding:0.2rem;text-decoration:underline}
+.cookie-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;
+align-items:center;justify-content:center;padding:1rem;z-index:10}
+.cookie-box{background:#13131a;border:1px solid #2a2a3a;border-radius:12px;
+max-width:460px;max-height:80vh;overflow:auto;padding:1.5rem;text-align:right}
+.cookie-box h2{font-size:1rem;margin:0 0 0.8rem}
+.cookie-box h3{font-size:0.8rem;color:#9a9ab0;margin:1rem 0 0.3rem}
+.cookie-box p{font-size:0.78rem;color:#6b6b80;margin:0}
+.cookie-box button{margin-top:1.2rem}
 [hidden]{display:none!important}
 </style></head><body>
 <div class="box"><h1>SPOILERFREE</h1>
@@ -425,12 +434,13 @@ border-top:1px solid #2a2a3a;padding-top:1rem}
 
 <div class="err" id="err"></div>
 <!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
-
-<div class="privacy">
-  מה נשמר: המייל שלך, זמני כניסה, ואילו ליגות, משחקים ותקצירים פתחת —
-  כדי לשפר את האתר. בלי פרסום ובלי העברה לאף אחד.
-  למחיקת החשבון והנתונים: <span dir="ltr">__CONTACT__</span>
-</div></div>
+</div>
+<button class="cookie-link" onclick="openCookies()">Cookie settings</button>
+<div class="cookie-overlay" id="cookie-overlay" hidden
+     onclick="if (event.target === this) closeCookies()">
+  <div class="cookie-box"><div id="cookie-body"></div>
+    <button onclick="closeCookies()">אישור</button></div>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 function show(id) {
@@ -462,14 +472,19 @@ async function verify() {
   $('verify-btn').disabled = true; $('err').textContent = '';
   try {
     await post('/auth/verify', {email: $('email').value.trim(), code});
-    location.href = '/app?fresh=1';
+    location.href = '/?fresh=1';
   } catch (e) { $('err').textContent = e.message; }
   finally { $('verify-btn').disabled = false; }
 }
 async function legacy() {
-  try { await post('/login', {password: $('pw').value}); location.href = '/app?fresh=1'; }
+  try { await post('/login', {password: $('pw').value}); location.href = '/?fresh=1'; }
   catch (e) { $('err').textContent = 'סיסמה שגויה'; }
 }
+async function openCookies() {
+  $('cookie-overlay').hidden = false;
+  try { $('cookie-body').innerHTML = await (await fetch('/cookies')).text(); } catch (e) {}
+}
+function closeCookies() { $('cookie-overlay').hidden = true; }
 $('email').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
 $('code').addEventListener('input', e => { if (e.target.value.trim().length === 6) verify(); });
@@ -479,7 +494,7 @@ $('email').focus();
 
 
 def render_login_page() -> str:
-    page = LOGIN_PAGE.replace("__CONTACT__", GMAIL_USER or "")
+    page = LOGIN_PAGE
     if not APP_PASSWORD:
         page = re.sub(r"<!--LEGACY-->.*?<!--/LEGACY-->", "", page, flags=re.S)
     return page
@@ -513,7 +528,7 @@ button.no{border-color:#ff4757;color:#ff4757}
 .muted{color:#6b6b80}
 </style></head><body>
 <h1>SPOILERFREE — משתמשים</h1>
-<div class="sub"><a href="/app">← חזרה לאפליקציה</a></div>
+<div class="sub"><a href="/">← חזרה לאפליקציה</a></div>
 <div class="kpis" id="kpis"></div>
 <div class="wrap"><table>
 <thead><tr><th>מייל</th><th>סטטוס</th><th>נרשם</th><th>כניסה אחרונה</th>
@@ -818,7 +833,7 @@ _MATCH_COLS = ("home_team", "away_team", "home_team_id", "away_team_id",
 
 def _sync_league_rows(conn, league_key: str, incoming: dict,
                       purge: bool = False, hard: bool = False,
-                      guard_status: bool = False) -> dict:
+                      guard_status: bool = False, mark_fresh: bool = True) -> dict:
     """כותב לטבלת matches רק את מה שהשתנה. incoming: {id: {col: val}}.
     ב-Turso כל כתיבה היא סבב רשת לענן — כתיבה מחדש של כל ~380 שורות
     הליגה בכל רענון לקחה ~30 שניות. במצב יציב זה עכשיו כמה כתיבות בודדות.
@@ -859,7 +874,7 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
              date_utc, time_utc, venue, matchday, status, fetched_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         """, writes)
-    if incoming:
+    if incoming and mark_fresh:
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                      (f"fetched:{league_key}", now))
     print(f"[sync] {league_key}: incoming={len(incoming)} "
@@ -868,14 +883,11 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
 
 
 def _league_fetched_at(conn, league_key: str):
-    """מתי הליגה רועננה לאחרונה (ISO). נופל ל-MAX(fetched_at) לנתונים ישנים."""
+    """מתי הליגה רועננה לאחרונה (ISO), או None. רק מ-meta: שורות שנכתבו
+    בשליפה חלקית (sportsdb מצד השרת) לא נחשבות רענון."""
     row = conn.execute("SELECT value FROM meta WHERE key=?",
                        (f"fetched:{league_key}",)).fetchone()
-    if row:
-        return row["value"]
-    row = conn.execute("SELECT MAX(fetched_at) AS f FROM matches WHERE league_key=?",
-                       (league_key,)).fetchone()
-    return row["f"] if row else None
+    return row["value"] if row else None
 
 
 def _sportsdb_rows(events: list) -> dict:
@@ -907,7 +919,8 @@ def _sportsdb_rows(events: list) -> dict:
 
 
 def _store_sportsdb_events(conn, league_key: str, events: list,
-                           purge: bool = False, hard: bool = False) -> int:
+                           purge: bool = False, hard: bool = False,
+                           mark_fresh: bool = True) -> int:
     """Store a list of TheSportsDB events into our matches table."""
     # min_date: מסנן משחקים מלפני תחילת השלב (מוקדמות הצ'מפיונס מיולי
     # מגיעות מ-sportsdb עם intRound=1 ונכנסו למחזור 1 של שלב הליגה)
@@ -916,7 +929,7 @@ def _store_sportsdb_events(conn, league_key: str, events: list,
         events = [e for e in events if (e.get("dateEvent") or "") >= min_date]
     rows = _sportsdb_rows(events)
     _sync_league_rows(conn, league_key, rows, purge=purge, hard=hard,
-                      guard_status=True)
+                      guard_status=True, mark_fresh=mark_fresh)
     return len(rows)
 
 
@@ -974,8 +987,12 @@ def fetch_sportsdb(league_key: str, purge: bool = False):
             except Exception as ex:
                 print(f"[sportsdb] {ep} ({sdb_id}) failed: {ex}")
 
+    # mark_fresh=False: בחינם sportsdb מחזיר מצד השרת רק ~7 משחקים. אם זה
+    # היה מסמן את הליגה "טרייה", הרענון מהדפדפן (חלון מחזורים מלא) לא היה
+    # רץ — כך נפתח טאב הצ'מפיונשיפ עם מחזור 1 חלקי בלבד (13.9.26).
     conn = get_db()
-    _store_sportsdb_events(conn, league_key, all_events, purge=purge)
+    _store_sportsdb_events(conn, league_key, all_events, purge=purge,
+                           mark_fresh=False)
     conn.commit()
     conn.close()
 
@@ -1970,8 +1987,38 @@ def get_sources_for_match(row) -> list:
 # ── Endpoints ──────────────────────────────────────────
 
 @app.get("/")
-def root():
+def root(request: Request):
+    """הכתובת הראשית: מסך כניסה, או האפליקציה למי שמחובר."""
+    return serve_frontend(request)
+
+
+@app.get("/health")
+def health():
     return {"status": "SpoilerFree API ✓"}
+
+
+COOKIES_HTML = """<h2>הגדרות עוגיות ופרטיות</h2>
+<p>אנחנו משתמשים בעוגיות ובטכנולוגיות דומות כדי שהאתר יעבוד, כדי לזכור את
+ההתחברות שלך וכדי לשפר את השירות.</p>
+<h3>עוגיות הכרחיות</h3>
+<p>נדרשות להתחברות ולאבטחה (עוגיית התחברות למשך עד 90 יום). אי אפשר לבטל אותן.</p>
+<h3>אחסון מקומי</h3>
+<p>לוח המשחקים והדף נשמרים במכשיר שלך, כדי שהאתר ייפתח מהר גם בחיבור חלש.</p>
+<h3>נתוני שימוש</h3>
+<p>אנחנו שומרים את כתובת המייל שלך, מועדי התחברות, ואילו ליגות, משחקים ותקצירים
+פתחת — לצורך תפעול ושיפור השירות. המידע לא נמכר ולא מועבר לצדדים שלישיים.</p>
+<h3>שירותי צד שלישי</h3>
+<p>סרטונים נפתחים ביוטיוב וכפופים למדיניות של YouTube ו-Google. גופנים נטענים
+מ-Google Fonts.</p>
+<h3>ניהול ומחיקה</h3>
+<p>אפשר לצפות בפרטי החשבון ולמחוק אותו לצמיתות דרך "חשבון" בראש העמוד, לאחר
+ההתחברות.</p>"""
+
+
+@app.get("/cookies")
+def cookies_policy():
+    """תוכן חלון "Cookie settings" — ציבורי, משותף למסך הכניסה ולאפליקציה."""
+    return HTMLResponse(COOKIES_HTML)
 
 
 @app.get("/health/db")
@@ -2908,12 +2955,48 @@ def log_event(request: Request, payload: dict = Body(...)):
     return {"ok": True}
 
 
+# ── חשבון אישי: פרטים ומחיקה ───────────────────────────
+
+@app.get("/auth/account")
+def auth_account(request: Request):
+    require_auth(request)
+    u = current_user(request) or {}
+    if not u.get("email"):
+        return {"email": None}
+    conn = get_db()
+    r = conn.execute("SELECT email, created_at, last_login, login_count FROM users WHERE email=?",
+                     (u["email"],)).fetchone()
+    n = conn.execute("SELECT COUNT(*) AS c FROM events WHERE email=?", (u["email"],)).fetchone()["c"]
+    conn.close()
+    return {"email": r["email"], "created_at": r["created_at"], "last_login": r["last_login"],
+            "login_count": r["login_count"] or 0, "events": n}
+
+
+@app.post("/auth/delete_account")
+def auth_delete_account(request: Request, payload: dict = Body(...)):
+    """מחיקה סופית של החשבון וכל נתוני השימוש. אישור: הקלדת המייל."""
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if not email:
+        raise HTTPException(400, "אין חשבון אישי למחיקה")
+    if str(payload.get("confirm") or "").strip().lower() != email:
+        raise HTTPException(400, "כדי למחוק, הקלד את כתובת המייל שלך בדיוק")
+    conn = get_db()
+    for table in ("events", "sessions", "login_codes", "users"):
+        conn.execute(f"DELETE FROM {table} WHERE email=?", (email,))
+    conn.commit()
+    conn.close()
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("sf_session")
+    return resp
+
+
 # ── Admin: משתמשים ─────────────────────────────────────
 
 @app.get("/admin/users")
 def admin_users_page(request: Request):
     if AUTH_ON and not (current_user(request) or {}).get("is_admin"):
-        return RedirectResponse("/app")
+        return RedirectResponse("/")
     return HTMLResponse(ADMIN_USERS_PAGE)
 
 
@@ -2979,7 +3062,7 @@ def admin_api_update_user(request: Request, email: str, payload: dict = Body(...
     conn.close()
     if status == "approved" and row["status"] != "approved":
         send_email(email, "אושרת ל-SpoilerFree ⚽",
-                   f"החשבון שלך אושר!\n\nלכניסה: {APP_URL}/app\n"
+                   f"החשבון שלך אושר!\n\nלכניסה: {APP_URL}\n"
                    f"הכנס את המייל הזה ותקבל קוד כניסה.\n")
     return {"ok": True}
 

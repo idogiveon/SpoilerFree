@@ -32,7 +32,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
 
-  if (url.pathname === '/app') {
+  // "/" (הכתובת הראשית) ו-"/app" (התקנות ישנות) — אותו דף, אותו קאש
+  if (url.pathname === '/' || url.pathname === '/app') {
     if (url.searchParams.has('fresh')) {
       e.respondWith(fetchAndStoreApp(e.request));
       return;
