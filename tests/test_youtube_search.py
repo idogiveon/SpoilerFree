@@ -40,30 +40,74 @@ def test_rss_covers_match_day_no_highlight_yet(monkeypatch, db):
     assert units(db) == 0
 
 
-def test_busy_channel_falls_back_to_api(monkeypatch, db):
-    busy = feed(*[(f"x{i}", "Some clip", "2026-09-12") for i in range(15)])
+BUSY = feed(*[(f"x{i}", "Some clip", "2026-09-12") for i in range(15)])   # הפיד לא מגיע ליום המשחק
+HL = "HIGHLIGHTS | FC BARCELONA 5 vs 1 FEYENOORD"
+
+
+class Resp:
+    def __init__(self, data):
+        self._d = data
+
+    def json(self):
+        return self._d
+
+
+def _pl(vid, title, date):
+    return {"snippet": {"title": title, "publishedAt": f"{date}T20:00:00Z",
+                        "resourceId": {"videoId": vid}}}
+
+
+def test_busy_channel_pages_uploads_instead_of_search(monkeypatch, db):
     calls = []
-
-    class Resp:
-        def __init__(self, data):
-            self._d = data
-
-        def json(self):
-            return self._d
 
     def fake_get(url, params=None, timeout=None):
         calls.append(url)
-        if url.endswith("/search"):
-            return Resp({"items": [{"id": {"videoId": "api1"},
-                                    "snippet": {"title": "HIGHLIGHTS | FC BARCELONA 5 vs 1 FEYENOORD"}}]})
-        return Resp({"items": [{"id": "api1", "contentDetails": {"duration": "PT4M10S"}}]})
+        if url.endswith("/playlistItems"):
+            assert params["playlistId"] == "UU" + CH[2:]
+            if not params.get("pageToken"):
+                return Resp({"items": [_pl("n1", "Some clip", "2026-09-12"), _pl("api1", HL, "2026-09-10")],
+                             "nextPageToken": "p2"})
+            return Resp({"items": [_pl("old", HL, "2026-09-01")], "nextPageToken": "p3"})
+        if url.endswith("/videos"):
+            return Resp({"items": [{"id": "api1", "contentDetails": {"duration": "PT4M10S"}}]})
+        raise AssertionError("search.list should not be called")
 
     monkeypatch.setattr(main, "YOUTUBE_API_KEY", "k")
     monkeypatch.setattr(main.requests, "get", fake_get)
-    res = search(monkeypatch, busy)
-    assert [v["video_id"] for v in res] == ["api1"]
-    assert sum(u.endswith("/search") for u in calls) == 1
-    assert units(db) == 101   # search 100 + videos.list 1
+    res = search(monkeypatch, BUSY)
+    assert [v["video_id"] for v in res] == ["api1"]              # "old" מלפני יום המשחק — לא
+    assert sum(u.endswith("/playlistItems") for u in calls) == 2  # עצר כשהגיע לפני יום המשחק
+    assert units(db) == 3                                         # 2 דפים + videos.list (היה 101)
+
+
+def test_uploads_error_falls_back_to_search(monkeypatch, db):
+    def fake_get(url, params=None, timeout=None):
+        if url.endswith("/playlistItems"):
+            return Resp({"error": {"message": "playlistNotFound"}})
+        if url.endswith("/search"):
+            return Resp({"items": [{"id": {"videoId": "s1"},
+                                    "snippet": {"title": HL, "publishedAt": "2026-09-10T20:00:00Z"}}]})
+        return Resp({"items": []})
+
+    monkeypatch.setattr(main, "YOUTUBE_API_KEY", "k")
+    monkeypatch.setattr(main.requests, "get", fake_get)
+    assert [v["video_id"] for v in search(monkeypatch, BUSY)] == ["s1"]
+    assert units(db) == 101
+
+
+def test_daily_brake_blocks_paid_calls(monkeypatch, db):
+    monkeypatch.setattr(main, "YOUTUBE_API_KEY", "k")
+    monkeypatch.setattr(main.requests, "get", no_network)
+    main._yt_units(9000)
+    assert search(monkeypatch, BUSY) is None   # None: לא נשמר כ"לא נמצא", ינסה שוב אחרי האיפוס
+
+
+def test_free_rss_still_works_above_brake(monkeypatch, db):
+    monkeypatch.setattr(main, "YOUTUBE_API_KEY", "k")
+    monkeypatch.setattr(main.requests, "get", no_network)
+    main._yt_units(9000)
+    res = search(monkeypatch, feed(("v1", HL, "2026-09-10"), ("v0", "Training", "2026-09-01")))
+    assert [v["video_id"] for v in res] == ["v1"]
 
 
 def test_rss_failure_without_key_returns_empty(monkeypatch):

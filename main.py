@@ -606,7 +606,7 @@ async function load() {
   document.getElementById('kpis').innerHTML =
     [['משתמשים', kpis.total], ['ממתינים', kpis.pending], ['פעילים 7 ימים', kpis.active_7d],
      ['תקצירים שנצפו', kpis.plays],
-     ['יוטיוב היום (מתוך 10,000)', kpis.yt_units_today.toLocaleString()]].map(([k,v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+     ['יוטיוב היום (בלם ב-9,000)', kpis.yt_units_today.toLocaleString()]].map(([k,v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
   document.getElementById('rows').innerHTML = users.map(u => {
     const e = esc(u.email);
     const btns = u.status === 'approved'
@@ -1864,7 +1864,7 @@ def is_headline_highlight(title: str, home_he: str, away_he: str,
 
 def _video_durations(video_ids: list) -> dict:
     """videos.list — משך כל וידאו בשניות. יחידת quota אחת לעד 50 IDs."""
-    if not video_ids or not YOUTUBE_API_KEY:
+    if not video_ids or not YOUTUBE_API_KEY or _yt_units_today() >= YT_DAILY_BRAKE:
         return {}
     _yt_units(1)
     durs = {}
@@ -1933,6 +1933,60 @@ def _yt_units(n: int):
         print(f"[yt] units counter: {ex}")
 
 
+YT_DAILY_BRAKE    = 9000   # מעל זה ביום: אין קריאות API בתשלום עד האיפוס
+UPLOADS_MAX_PAGES = 10     # 10×50 = 500 סרטונים אחורה — מספיק גם לערוץ MLS
+
+
+def _yt_units_today() -> int:
+    day = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT value FROM meta WHERE key=?",
+                           (f"yt_units:{day}",)).fetchone()
+        conn.close()
+        return int(row["value"]) if row else 0
+    except Exception:
+        return 0
+
+
+def _uploads_since(channel_id: str, match_date: str):
+    """רשימת ההעלאות של הערוץ (playlistItems: יחידה אחת ל-50 סרטונים, במקום
+    100 לחיפוש), מהחדש לישן, עד שמגיעים לסרטונים מלפני יום המשחק.
+    [(video_id, title, published)] — או None בשגיאה (אז נופלים ל-search.list)."""
+    playlist = "UU" + channel_id[2:]     # רשימת ה-uploads של כל ערוץ
+    out, token, page = [], None, 0
+    for page in range(1, UPLOADS_MAX_PAGES + 1):
+        params = {"key": YOUTUBE_API_KEY, "playlistId": playlist,
+                  "part": "snippet", "maxResults": 50}
+        if token:
+            params["pageToken"] = token
+        try:
+            resp = requests.get("https://www.googleapis.com/youtube/v3/playlistItems",
+                                params=params, timeout=10).json()
+        except Exception as ex:
+            print(f"[yt] uploads {channel_id}: {ex}")
+            return None
+        if "error" in resp:
+            print(f"[yt] uploads {channel_id}: {resp['error'].get('message')}")
+            return None
+        _yt_units(1)
+        reached_older = False
+        for it in resp.get("items", []):
+            sn = it.get("snippet", {})
+            pub = sn.get("publishedAt", "")
+            if pub[:10] < match_date:
+                reached_older = True
+                continue
+            out.append((sn.get("resourceId", {}).get("videoId"),
+                        _unescape(sn.get("title", "")), pub))
+        token = resp.get("nextPageToken")
+        if reached_older or not token:
+            break
+    print(f"[yt] uploads {channel_id}: {page} page(s) = {page} units, "
+          f"{len(out)} videos since {match_date}")
+    return out
+
+
 def search_youtube(home: str, away: str, match_date: str,
                    channel_id: str, query: str = None,
                    title_exclude: list = None,
@@ -1980,38 +2034,49 @@ def search_youtube(home: str, away: str, match_date: str,
         else:
             results = None   # ערוץ עמוס — הפיד לא מגיע עד יום המשחק
 
-    # 2. search.list (100 יחידות) — רק כשה-RSS לא יכול להכריע
+    # 2. API בתשלום — רק כשה-RSS לא יכול להכריע, ורק מתחת לבלם היומי
     if results is None:
         if not YOUTUBE_API_KEY:
             return []
-        params = {
-            "key":          YOUTUBE_API_KEY,
-            "channelId":    channel_id,
-            "part":         "snippet",
-            "order":        "relevance",
-            "maxResults":   15,
-            "type":         "video",
-            "q":            query or f"{home} {away}",
-            "publishedAfter": f"{match_date}T00:00:00Z",
-        }
-        try:
-            resp = requests.get(
-                "https://www.googleapis.com/youtube/v3/search",
-                params=params, timeout=10
-            ).json()
-            if "error" in resp:
-                # quotaExceeded וכד' — מחזירים None כדי שלא ייכנס לקאש כ"ריק"
-                print(f"YouTube API error: {resp['error'].get('message')}")
-                return None
-            items = resp.get("items", [])
-        except Exception as e:
-            print(f"YouTube search error: {e}")
+        if _yt_units_today() >= YT_DAILY_BRAKE:
+            # None = לא נשמר בקאש כ"לא נמצא" — יחפש שוב אחרי האיפוס היומי
+            print(f"[yt] daily brake {YT_DAILY_BRAKE} reached — no API for {channel_id}")
             return None
-        _yt_units(100)
-        print(f"[yt] api search {channel_id} (100 units)")
-        results = [_video(item["id"]["videoId"], t) for item in items
-                   for t in [_unescape(item["snippet"]["title"])]
-                   if _keep(t, item["snippet"].get("publishedAt", ""))]
+
+        # 2א. רשימת ההעלאות: יחידה לכל 50 סרטונים
+        uploads = _uploads_since(channel_id, match_date)
+        if uploads is not None:
+            results = [_video(v, t) for v, t, p in uploads if v and _keep(t, p)]
+        else:
+            # 2ב. גיבוי: search.list (100 יחידות) — רק אם הרשימה לא נגישה
+            params = {
+                "key":          YOUTUBE_API_KEY,
+                "channelId":    channel_id,
+                "part":         "snippet",
+                "order":        "relevance",
+                "maxResults":   15,
+                "type":         "video",
+                "q":            query or f"{home} {away}",
+                "publishedAfter": f"{match_date}T00:00:00Z",
+            }
+            try:
+                resp = requests.get(
+                    "https://www.googleapis.com/youtube/v3/search",
+                    params=params, timeout=10
+                ).json()
+                if "error" in resp:
+                    # quotaExceeded וכד' — מחזירים None כדי שלא ייכנס לקאש כ"ריק"
+                    print(f"YouTube API error: {resp['error'].get('message')}")
+                    return None
+                items = resp.get("items", [])
+            except Exception as e:
+                print(f"YouTube search error: {e}")
+                return None
+            _yt_units(100)
+            print(f"[yt] api search {channel_id} (100 units)")
+            results = [_video(item["id"]["videoId"], t) for item in items
+                       for t in [_unescape(item["snippet"]["title"])]
+                       if _keep(t, item["snippet"].get("publishedAt", ""))]
 
     # דירוג: כותרת עם מילת תקציר מפורשת גוברת על התאמה גנרית
     # (מונע bench cam / סרטוני צבע כשקיים תקציר אמיתי)
