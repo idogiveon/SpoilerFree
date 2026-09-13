@@ -147,7 +147,7 @@
 </header>
 
 <div class="league-tabs">
-  <button class="tab active" data-league="premier">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
+  <button class="tab" data-league="premier">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
   <button class="tab" data-league="championship">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
   <button class="tab" data-league="israel">🇮🇱 ליגת העל</button>
   <button class="tab" data-league="bundesliga">🇩🇪 בונדסליגה</button>
@@ -157,7 +157,7 @@
   <button class="tab" data-league="ucl">⭐ צ'מפיונס ליג</button>
   <button class="tab" data-league="mls">🇺🇸 MLS</button>
   <button class="tab" data-league="argentina">🇦🇷 ארגנטינה</button>
-  <button class="tab" data-league="__byday" style="margin-right:auto; border-style:dashed">📅 לפי יום</button>
+  <button class="tab active" data-league="__byday" style="margin-right:auto; border-style:dashed">📅 לפי יום</button>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
@@ -222,7 +222,7 @@
     argentina:  { ids: ['4406'], season: '2026' },
   };
 
-  let currentLeague   = 'premier';
+  let currentLeague   = '__byday';   // עמוד הפתיחה: "לפי יום"
   let currentMatchday = null;
   let matchdayList    = [];   // המחזורים שקיימים בפועל בנתונים, ממוינים
   // ליגות שכבר רועננו אוטומטית בביקור הזה — מונע רענון חוזר בכל מעבר טאב
@@ -915,7 +915,7 @@
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
   // ── Init ───────────────────────────────────────────
-  openLeague(currentLeague);
+  enterDayView();
   loadUserBar();
   track('app_open');
 
