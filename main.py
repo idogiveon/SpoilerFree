@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 app = FastAPI()
 
@@ -39,7 +40,9 @@ async def _timing(request, call_next):
     return resp
 
 DB_PATH = "database.db"
-ISRAEL_TZ = timezone(timedelta(hours=3))
+# שעון ישראל אמיתי (קיץ +3 / חורף +2, מעבר ב-25.10.26). היה offset קבוע +3 —
+# מהחורף כל המשחקים היו מוצגים שעה מאוחר מדי.
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 YOUTUBE_API_KEY   = os.environ.get("YOUTUBE_API_KEY", "")
 FOOTBALL_DATA_KEY = os.environ.get("FOOTBALL_DATA_KEY", "")
@@ -726,6 +729,164 @@ MANUAL_FIXTURES = {
         (15, "2026-12-20", "20:15", "Hapoel Be'er Sheva", "Hapoel Ramat Gan", "טוטו טרנר", "ספורט 4"),
         (15, "2026-12-21", "20:30", "Maccabi Haifa", "Maccabi Tel Aviv", "סמי עופר", "5SPORT"),
     ],
+    # צ'מפיונס ליג 2026-27, שלב הליגה — 8 מחזורים × 18 משחקים.
+    # מקור: UEFA "League phase draw results — calendar by matchday" (PDF רשמי).
+    # שעות ה-PDF (CET/CEST) הומרו לשעון ישראל; שמות = השמות ב-TheSportsDB
+    # (אומת: מחזורים 1–2 זהים 36/36 כולל שעות, 13.9.26). אצטדיון ריק = לא נוגעים.
+    "ucl": [
+        # מחזור 1
+        (1, "2026-09-08", "19:45", "AEK Athens", "LASK", "", ""),
+        (1, "2026-09-08", "19:45", "Club Brugge", "Aston Villa", "", ""),
+        (1, "2026-09-08", "22:00", "Borussia Dortmund", "Villarreal", "", ""),
+        (1, "2026-09-08", "22:00", "Lille", "Real Betis", "", ""),
+        (1, "2026-09-08", "22:00", "Porto", "Manchester City", "", ""),
+        (1, "2026-09-08", "22:00", "Real Madrid", "Inter Milan", "", ""),
+        (1, "2026-09-09", "19:45", "Barcelona", "Feyenoord", "", ""),
+        (1, "2026-09-09", "19:45", "Stuttgart", "Viking", "", ""),
+        (1, "2026-09-09", "22:00", "Liverpool", "Atlético Madrid", "", ""),
+        (1, "2026-09-09", "22:00", "Napoli", "Arsenal", "", ""),
+        (1, "2026-09-09", "22:00", "Paris Saint-Germain", "Slovan Bratislava", "", ""),
+        (1, "2026-09-09", "22:00", "Sporting CP", "Galatasaray", "", ""),
+        (1, "2026-09-10", "19:45", "Fenerbahçe", "Roma", "", ""),
+        (1, "2026-09-10", "19:45", "PSV Eindhoven", "Shakhtar Donetsk", "", ""),
+        (1, "2026-09-10", "22:00", "Bayern Munich", "Bodø/Glimt", "", ""),
+        (1, "2026-09-10", "22:00", "Como", "RB Leipzig", "", ""),
+        (1, "2026-09-10", "22:00", "Manchester United", "Sabah Baku", "", ""),
+        (1, "2026-09-10", "22:00", "Slavia Prague", "Lens", "", ""),
+        # מחזור 2
+        (2, "2026-10-13", "19:45", "Lens", "Sporting CP", "", ""),
+        (2, "2026-10-13", "19:45", "Sabah Baku", "Slavia Prague", "", ""),
+        (2, "2026-10-13", "22:00", "Arsenal", "Lille", "", ""),
+        (2, "2026-10-13", "22:00", "Atlético Madrid", "Manchester United", "", ""),
+        (2, "2026-10-13", "22:00", "Galatasaray", "Barcelona", "", ""),
+        (2, "2026-10-13", "22:00", "Inter Milan", "Club Brugge", "", ""),
+        (2, "2026-10-13", "22:00", "RB Leipzig", "PSV Eindhoven", "", ""),
+        (2, "2026-10-13", "22:00", "Viking", "Bayern Munich", "", ""),
+        (2, "2026-10-13", "22:00", "Villarreal", "Napoli", "", ""),
+        (2, "2026-10-14", "19:45", "Feyenoord", "Como", "", ""),
+        (2, "2026-10-14", "19:45", "LASK", "Liverpool", "", ""),
+        (2, "2026-10-14", "22:00", "Aston Villa", "Fenerbahçe", "", ""),
+        (2, "2026-10-14", "22:00", "Bodø/Glimt", "Borussia Dortmund", "", ""),
+        (2, "2026-10-14", "22:00", "Manchester City", "Paris Saint-Germain", "", ""),
+        (2, "2026-10-14", "22:00", "Real Betis", "Porto", "", ""),
+        (2, "2026-10-14", "22:00", "Roma", "Real Madrid", "", ""),
+        (2, "2026-10-14", "22:00", "Shakhtar Donetsk", "AEK Athens", "", ""),
+        (2, "2026-10-14", "22:00", "Slovan Bratislava", "Stuttgart", "", ""),
+        # מחזור 3
+        (3, "2026-10-20", "19:45", "Fenerbahçe", "Slavia Prague", "", ""),
+        (3, "2026-10-20", "19:45", "Sabah Baku", "Borussia Dortmund", "", ""),
+        (3, "2026-10-20", "22:00", "Liverpool", "Villarreal", "", ""),
+        (3, "2026-10-20", "22:00", "Manchester City", "AEK Athens", "", ""),
+        (3, "2026-10-20", "22:00", "Napoli", "Bodø/Glimt", "", ""),
+        (3, "2026-10-20", "22:00", "Paris Saint-Germain", "Barcelona", "", ""),
+        (3, "2026-10-20", "22:00", "Porto", "PSV Eindhoven", "", ""),
+        (3, "2026-10-20", "22:00", "Roma", "Slovan Bratislava", "", ""),
+        (3, "2026-10-20", "22:00", "Stuttgart", "Atlético Madrid", "", ""),
+        (3, "2026-10-21", "19:45", "Como", "Manchester United", "", ""),
+        (3, "2026-10-21", "19:45", "Lille", "Galatasaray", "", ""),
+        (3, "2026-10-21", "22:00", "Aston Villa", "Viking", "", ""),
+        (3, "2026-10-21", "22:00", "Bayern Munich", "Arsenal", "", ""),
+        (3, "2026-10-21", "22:00", "Club Brugge", "Lens", "", ""),
+        (3, "2026-10-21", "22:00", "Inter Milan", "Shakhtar Donetsk", "", ""),
+        (3, "2026-10-21", "22:00", "Real Betis", "Feyenoord", "", ""),
+        (3, "2026-10-21", "22:00", "Real Madrid", "RB Leipzig", "", ""),
+        (3, "2026-10-21", "22:00", "Sporting CP", "LASK", "", ""),
+        # מחזור 4
+        (4, "2026-11-03", "19:45", "Galatasaray", "Stuttgart", "", ""),
+        (4, "2026-11-03", "19:45", "Shakhtar Donetsk", "Sporting CP", "", ""),
+        (4, "2026-11-03", "22:00", "Atlético Madrid", "Bayern Munich", "", ""),
+        (4, "2026-11-03", "22:00", "Barcelona", "Aston Villa", "", ""),
+        (4, "2026-11-03", "22:00", "Bodø/Glimt", "Lille", "", ""),
+        (4, "2026-11-03", "22:00", "Feyenoord", "Inter Milan", "", ""),
+        (4, "2026-11-03", "22:00", "LASK", "Slovan Bratislava", "", ""),
+        (4, "2026-11-03", "22:00", "Manchester United", "Roma", "", ""),
+        (4, "2026-11-03", "22:00", "Villarreal", "Paris Saint-Germain", "", ""),
+        (4, "2026-11-04", "19:45", "AEK Athens", "Real Madrid", "", ""),
+        (4, "2026-11-04", "19:45", "Fenerbahçe", "Liverpool", "", ""),
+        (4, "2026-11-04", "22:00", "Borussia Dortmund", "Real Betis", "", ""),
+        (4, "2026-11-04", "22:00", "Lens", "Como", "", ""),
+        (4, "2026-11-04", "22:00", "PSV Eindhoven", "Club Brugge", "", ""),
+        (4, "2026-11-04", "22:00", "Porto", "Napoli", "", ""),
+        (4, "2026-11-04", "22:00", "RB Leipzig", "Manchester City", "", ""),
+        (4, "2026-11-04", "22:00", "Slavia Prague", "Arsenal", "", ""),
+        (4, "2026-11-04", "22:00", "Viking", "Sabah Baku", "", ""),
+        # מחזור 5
+        (5, "2026-11-24", "19:45", "Bodø/Glimt", "LASK", "", ""),
+        (5, "2026-11-24", "19:45", "Galatasaray", "Aston Villa", "", ""),
+        (5, "2026-11-24", "22:00", "Arsenal", "Borussia Dortmund", "", ""),
+        (5, "2026-11-24", "22:00", "Como", "AEK Athens", "", ""),
+        (5, "2026-11-24", "22:00", "Feyenoord", "Porto", "", ""),
+        (5, "2026-11-24", "22:00", "Manchester City", "Napoli", "", ""),
+        (5, "2026-11-24", "22:00", "RB Leipzig", "Lens", "", ""),
+        (5, "2026-11-24", "22:00", "Real Madrid", "PSV Eindhoven", "", ""),
+        (5, "2026-11-24", "22:00", "Slovan Bratislava", "Real Betis", "", ""),
+        (5, "2026-11-25", "19:45", "Sabah Baku", "Barcelona", "", ""),
+        (5, "2026-11-25", "19:45", "Slavia Prague", "Villarreal", "", ""),
+        (5, "2026-11-25", "22:00", "Atlético Madrid", "Viking", "", ""),
+        (5, "2026-11-25", "22:00", "Club Brugge", "Liverpool", "", ""),
+        (5, "2026-11-25", "22:00", "Inter Milan", "Stuttgart", "", ""),
+        (5, "2026-11-25", "22:00", "Lille", "Bayern Munich", "", ""),
+        (5, "2026-11-25", "22:00", "Paris Saint-Germain", "Roma", "", ""),
+        (5, "2026-11-25", "22:00", "Shakhtar Donetsk", "Fenerbahçe", "", ""),
+        (5, "2026-11-25", "22:00", "Sporting CP", "Manchester United", "", ""),
+        # מחזור 6
+        (6, "2026-12-08", "19:45", "Viking", "Feyenoord", "", ""),
+        (6, "2026-12-08", "19:45", "Villarreal", "Sabah Baku", "", ""),
+        (6, "2026-12-08", "22:00", "AEK Athens", "Galatasaray", "", ""),
+        (6, "2026-12-08", "22:00", "Aston Villa", "Paris Saint-Germain", "", ""),
+        (6, "2026-12-08", "22:00", "Barcelona", "Manchester City", "", ""),
+        (6, "2026-12-08", "22:00", "Bayern Munich", "Slavia Prague", "", ""),
+        (6, "2026-12-08", "22:00", "Manchester United", "RB Leipzig", "", ""),
+        (6, "2026-12-08", "22:00", "Napoli", "Club Brugge", "", ""),
+        (6, "2026-12-08", "22:00", "Roma", "Sporting CP", "", ""),
+        (6, "2026-12-09", "19:45", "Real Betis", "Como", "", ""),
+        (6, "2026-12-09", "19:45", "Slovan Bratislava", "Shakhtar Donetsk", "", ""),
+        (6, "2026-12-09", "22:00", "Arsenal", "Real Madrid", "", ""),
+        (6, "2026-12-09", "22:00", "Borussia Dortmund", "Inter Milan", "", ""),
+        (6, "2026-12-09", "22:00", "LASK", "Fenerbahçe", "", ""),
+        (6, "2026-12-09", "22:00", "Lens", "Bodø/Glimt", "", ""),
+        (6, "2026-12-09", "22:00", "Liverpool", "Porto", "", ""),
+        (6, "2026-12-09", "22:00", "PSV Eindhoven", "Atlético Madrid", "", ""),
+        (6, "2026-12-09", "22:00", "Stuttgart", "Lille", "", ""),
+        # מחזור 7
+        (7, "2027-01-19", "19:45", "Bodø/Glimt", "Atlético Madrid", "", ""),
+        (7, "2027-01-19", "19:45", "Galatasaray", "Feyenoord", "", ""),
+        (7, "2027-01-19", "22:00", "AEK Athens", "Roma", "", ""),
+        (7, "2027-01-19", "22:00", "Aston Villa", "Borussia Dortmund", "", ""),
+        (7, "2027-01-19", "22:00", "Inter Milan", "Liverpool", "", ""),
+        (7, "2027-01-19", "22:00", "Lille", "Slovan Bratislava", "", ""),
+        (7, "2027-01-19", "22:00", "Porto", "Slavia Prague", "", ""),
+        (7, "2027-01-19", "22:00", "Real Madrid", "LASK", "", ""),
+        (7, "2027-01-19", "22:00", "Stuttgart", "Club Brugge", "", ""),
+        (7, "2027-01-20", "19:45", "Fenerbahçe", "Villarreal", "", ""),
+        (7, "2027-01-20", "19:45", "Sabah Baku", "Napoli", "", ""),
+        (7, "2027-01-20", "22:00", "Como", "Paris Saint-Germain", "", ""),
+        (7, "2027-01-20", "22:00", "Lens", "Manchester City", "", ""),
+        (7, "2027-01-20", "22:00", "Manchester United", "Bayern Munich", "", ""),
+        (7, "2027-01-20", "22:00", "RB Leipzig", "Shakhtar Donetsk", "", ""),
+        (7, "2027-01-20", "22:00", "Real Betis", "Arsenal", "", ""),
+        (7, "2027-01-20", "22:00", "Sporting CP", "Barcelona", "", ""),
+        (7, "2027-01-20", "22:00", "Viking", "PSV Eindhoven", "", ""),
+        # מחזור 8
+        (8, "2027-01-27", "22:00", "Arsenal", "Sabah Baku", "", ""),
+        (8, "2027-01-27", "22:00", "Atlético Madrid", "Fenerbahçe", "", ""),
+        (8, "2027-01-27", "22:00", "Barcelona", "Como", "", ""),
+        (8, "2027-01-27", "22:00", "Bayern Munich", "Real Betis", "", ""),
+        (8, "2027-01-27", "22:00", "Borussia Dortmund", "AEK Athens", "", ""),
+        (8, "2027-01-27", "22:00", "Club Brugge", "Bodø/Glimt", "", ""),
+        (8, "2027-01-27", "22:00", "Feyenoord", "RB Leipzig", "", ""),
+        (8, "2027-01-27", "22:00", "LASK", "Porto", "", ""),
+        (8, "2027-01-27", "22:00", "Liverpool", "Lens", "", ""),
+        (8, "2027-01-27", "22:00", "Manchester City", "Sporting CP", "", ""),
+        (8, "2027-01-27", "22:00", "Napoli", "Viking", "", ""),
+        (8, "2027-01-27", "22:00", "PSV Eindhoven", "Stuttgart", "", ""),
+        (8, "2027-01-27", "22:00", "Paris Saint-Germain", "Galatasaray", "", ""),
+        (8, "2027-01-27", "22:00", "Roma", "Lille", "", ""),
+        (8, "2027-01-27", "22:00", "Shakhtar Donetsk", "Real Madrid", "", ""),
+        (8, "2027-01-27", "22:00", "Slavia Prague", "Aston Villa", "", ""),
+        (8, "2027-01-27", "22:00", "Slovan Bratislava", "Inter Milan", "", ""),
+        (8, "2027-01-27", "22:00", "Villarreal", "Manchester United", "", ""),
+    ],
 }
 
 
@@ -767,15 +928,18 @@ def apply_manual_fixtures(league_key: str):
         rows_k = by_key.get((rnd, home.lower(), away.lower()), [])
         real   = [r for r in rows_k if not str(r["id"]).startswith("manual-")]
         manual = [r for r in rows_k if str(r["id"]).startswith("manual-")]
+        # אצטדיון ריק בלוח (צ'מפיונס) = לא נוגעים באצטדיון הקיים
         if real:
             r = real[0]
-            if (r["date_utc"], r["time_utc"], r["venue"]) != (date_utc, time_utc, venue):
-                updates.append((date_utc, time_utc, venue, r["id"]))
+            v = venue or r["venue"]
+            if (r["date_utc"], r["time_utc"], r["venue"]) != (date_utc, time_utc, v):
+                updates.append((date_utc, time_utc, v, r["id"]))
             deletes.extend((m["id"],) for m in manual)
         elif manual:
             m = manual[0]
-            if (m["date_utc"], m["time_utc"], m["venue"]) != (date_utc, time_utc, venue):
-                updates.append((date_utc, time_utc, venue, m["id"]))
+            v = venue or m["venue"]
+            if (m["date_utc"], m["time_utc"], m["venue"]) != (date_utc, time_utc, v):
+                updates.append((date_utc, time_utc, v, m["id"]))
         else:
             inserts.append((f"manual-{league_key}-r{rnd}-{_fixture_slug(home)}",
                             league_key, home, away, "", "", date_utc, time_utc,
