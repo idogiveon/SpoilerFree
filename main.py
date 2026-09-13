@@ -70,6 +70,23 @@ LEAGUES = {
         "fd_season": "2026",
         "default_yt_search": "{home} {away}",
     },
+    "championship": {
+        "name": "צ'מפיונשיפ",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4329"],
+        "sportsdb_season": "2026-2027",
+        # Sky Sports Football מעלה תקציר לכל משחקי ה-EFL (שלוש הליגות), בפורמט
+        # "... | Southampton 4-1 Bristol City | EFL Highlights" (אומת 13.9.26).
+        # ערוץ עמוס ורב-ליגתי: title_include מגביל לכותרות EFL, והתאמת שתי
+        # הקבוצות מסננת את ליג 1/ליג 2. משחק בן יום-יומיים+ → search.list.
+        "sources": [
+            {"id": "sky_efl", "name": "Sky Sports",
+             "channel_id": "UCZ7wY7MRDSygp63HIEfdQZA",
+             "search_template": "{home} {away} EFL highlights",
+             "title_include": ["efl"],
+             "allow_embed": False},
+        ],
+    },
     "israel": {
         "name": "ליגת העל",
         "source": "sportsdb",
@@ -505,7 +522,7 @@ button.no{border-color:#ff4757;color:#ff4757}
 <tbody id="rows"><tr><td colspan="11" class="muted">טוען...</td></tr></tbody>
 </table></div>
 <script>
-const LEAGUES = {premier:'פרמייר', israel:'ליגת העל', bundesliga:'בונדסליגה', laliga:'לה ליגה',
+const LEAGUES = {premier:'פרמייר', championship:"צ'מפיונשיפ", israel:'ליגת העל', bundesliga:'בונדסליגה', laliga:'לה ליגה',
   seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", argentina:'ארגנטינה'};
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function when(iso) {
@@ -1598,6 +1615,11 @@ TEAM_ALIASES = {
     "Manchester City": ["man city"],
     "Manchester United": ["man utd", "man united"],
     "Bodø/Glimt": ["glimt"],
+    # צ'מפיונשיפ — הקיצורים של Sky Sports
+    "Wolverhampton Wanderers": ["wolves"],
+    "Queens Park Rangers": ["qpr"],
+    "West Bromwich Albion": ["west brom"],
+    "Sheffield United": ["sheff utd", "sheffield utd"],
 }
 
 

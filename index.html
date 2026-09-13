@@ -131,6 +131,7 @@
 
 <div class="league-tabs">
   <button class="tab active" data-league="premier">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
+  <button class="tab" data-league="championship">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
   <button class="tab" data-league="israel">🇮🇱 ליגת העל</button>
   <button class="tab" data-league="bundesliga">🇩🇪 בונדסליגה</button>
   <button class="tab" data-league="laliga">🇪🇸 לה ליגה</button>
@@ -181,6 +182,7 @@
   // קונפיג לרענון client-side (TheSportsDB חסום מ-Render — הדפדפן שולף)
   // חייב להיות תואם ל-LEAGUES ב-main.py
   const SPORTSDB_LEAGUES = {
+    championship: { ids: ['4329'], season: '2026-2027' },
     israel:     { ids: ['4644'], season: '2026-2027' },
     bundesliga: { ids: ['4331'], season: '2026-2027' },
     laliga:     { ids: ['4335'], season: '2026-2027' },
