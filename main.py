@@ -172,11 +172,13 @@ LEAGUES = {
         "sportsdb_ids": ["4335"],
         "sportsdb_season": "2026-2027",
         "sources": [
+            # ONE מעלים מהר מאוד, בכותרות חדשותיות בעברית (בלי "תקציר") —
+            # headline_titles: כלל זיהוי ייעודי (is_headline_highlight)
             {"id": "one_laliga", "name": "ONE",
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
-             "search_template": "תקציר {home} {away}",
+             "search_template": "{home} {away}",
              "hebrew_names": True,
-             "require_team_match": True,
+             "headline_titles": True,
              "allow_embed": False},
             {"id": "laliga_official", "name": "LALIGA",
              "channel_id": "UCTv-XvfzLX3i4IGWAm4sbmA",
@@ -190,11 +192,13 @@ LEAGUES = {
         "sportsdb_ids": ["4332"],
         "sportsdb_season": "2026-2027",
         "sources": [
-            # ONE מתייגים את איטליה באנגלית (ואת ספרד בעברית) — חיפוש אנגלי
+            # ONE — גם את איטליה כותבים עכשיו בעברית ("2:2 אדיר בין לאציו
+            # למילאן", 13.9.26): חיפוש בעברית + כלל הכותרות החדשותיות
             {"id": "one_seriea", "name": "ONE",
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "{home} {away}",
-             "require_team_match": True,
+             "hebrew_names": True,
+             "headline_titles": True,
              "allow_embed": False},
             {"id": "seriea_official", "name": "Serie A",
              "channel_id": "UCBJeMCIeLQos7wacox4hmLQ",
@@ -1806,6 +1810,47 @@ def is_match_highlight(title: str, home: str, away: str,
     return has_both and highlight and not exclude
 
 
+# ── ONE: כותרות חדשותיות בעברית ────────────────────────
+# ONE (לה ליגה, סריה A) לא כותבים "תקציר" — הכותרת היא כותרת חדשות:
+# "חוזרת לנצח: אספניול גוברת על אוססונה 0:2", "2:2 אדיר בין לאציו למילאן",
+# לפעמים רק קבוצה אחת: "מלדיני מוביל את קליארי לעוד ניצחון" (13.9.26).
+HE_GENERIC_WORDS = {"ריאל", "אתלטיק", "מדריד", "דפורטיבו"}   # משותפות לכמה קבוצות
+HEADLINE_EXCLUDE = ("#", "בדיוק היום", "ראיון", "מסיבת עיתונאים", "אימון",
+                    "החתימה", "הציגה את", "חתם", "פציעה", "נפצע", "פוטר",
+                    "שידור חי")
+HEADLINE_WINDOW_DAYS = 2   # כותרת עם קבוצה אחת — רק עד יומיים אחרי המשחק
+
+
+def _he_team_in(team_he: str, title: str) -> bool:
+    """שם מלא / גרסה מקובלת, או מילה מזהה מהשם ("ראיו", "בילבאו").
+    תחיליות עבריות (ל/ב/ו) מכוסות — בדיקת הכלה ("למילאן" מכיל "מילאן")."""
+    if any(v in title for v in he_team_variants(team_he)):
+        return True
+    return any(w in title for w in team_he.split()
+               if len(w) >= 3 and w not in HE_GENERIC_WORDS)
+
+
+def is_headline_highlight(title: str, home_he: str, away_he: str,
+                          published: str = "", match_date: str = "") -> bool:
+    """שתי הקבוצות בכותרת → תקציר. קבוצה אחת → רק אם עלה עד יומיים אחרי
+    המשחק. נוסטלגיה/שורטס (#, "בדיוק היום"), ראיונות והחתמות — לא."""
+    t = (title.replace("׳", "'").replace("’", "'")
+              .replace("״", '"'))
+    if any(x in t for x in HEADLINE_EXCLUDE):
+        return False
+    h, a = _he_team_in(home_he, t), _he_team_in(away_he, t)
+    if h and a:
+        return True
+    if (h or a) and published and match_date:
+        try:
+            days = (datetime.fromisoformat(published[:10]).date()
+                    - datetime.fromisoformat(match_date).date()).days
+        except ValueError:
+            return False
+        return 0 <= days <= HEADLINE_WINDOW_DAYS
+    return False
+
+
 def _video_durations(video_ids: list) -> dict:
     """videos.list — משך כל וידאו בשניות. יחידת quota אחת לעד 50 IDs."""
     if not video_ids or not YOUTUBE_API_KEY:
@@ -1883,18 +1928,22 @@ def search_youtube(home: str, away: str, match_date: str,
                    title_include: list = None,
                    home_alt: str = None, away_alt: str = None,
                    require_team: bool = False,
-                   implicit_team: str = None) -> list:
+                   implicit_team: str = None,
+                   headline: bool = False) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not channel_id:
         return []
 
-    def _keep(title: str) -> bool:
+    def _keep(title: str, published: str = "") -> bool:
         tl = title.lower()
         # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
         if title_exclude and any(x.lower() in tl for x in title_exclude):
             return False
         if title_include and not any(x.lower() in tl for x in title_include):
             return False
+        if headline:   # ONE — כותרות חדשותיות בעברית
+            return is_headline_highlight(title, home_alt or home, away_alt or away,
+                                         published, match_date)
         return is_match_highlight(title, home, away, home_alt, away_alt,
                                   require_team, implicit_team)
 
@@ -1910,7 +1959,7 @@ def search_youtube(home: str, away: str, match_date: str,
     feed = _rss_feed(channel_id)
     if feed is not None:
         results = [_video(v, t) for v, t, p in feed
-                   if p[:10] >= match_date and _keep(t)]
+                   if p[:10] >= match_date and _keep(t, p)]
         covers = len(feed) < 15 or min(p for _, _, p in feed)[:10] < match_date
         if results:
             print(f"[yt] rss hit {channel_id}: {len(results)} (0 units)")
@@ -1950,7 +1999,8 @@ def search_youtube(home: str, away: str, match_date: str,
         _yt_units(100)
         print(f"[yt] api search {channel_id} (100 units)")
         results = [_video(item["id"]["videoId"], t) for item in items
-                   for t in [_unescape(item["snippet"]["title"])] if _keep(t)]
+                   for t in [_unescape(item["snippet"]["title"])]
+                   if _keep(t, item["snippet"].get("publishedAt", ""))]
 
     # דירוג: כותרת עם מילת תקציר מפורשת גוברת על התאמה גנרית
     # (מונע bench cam / סרטוני צבע כשקיים תקציר אמיתי)
@@ -2238,6 +2288,8 @@ def get_matches_by_date(request: Request, date_il: str):
             "league_key": lk,
             "is_over":    is_over(row["status"]),
             "status":     row["status"],
+            # הפתיחה עברה מזמן אבל לא מסומן כגמור — הדפדפן ירענן את הליגה
+            "needs_refresh": not is_over(row["status"]) and kickoff_passed(row),
         })
     matches.sort(key=lambda m: (order.get(m["league_key"], 99), m["time"]))
     heb = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
@@ -2306,10 +2358,12 @@ def get_highlights(request: Request, match_id: str):
 
         if not is_over(row["status"]):
             if kickoff_passed(row):
-                # sportsdb חסום מצד השרת — הרענון חייב לבוא מהדפדפן
-                return {"available": False,
-                        "reason": "לפי הנתונים המשחק טרם נגמר, אבל שעת הפתיחה "
-                                  "כבר עברה — לחץ ↻ רענן מ-API בטאב הליגה ופתח שוב",
+                # סטטוס מיושן, ו-sportsdb חסום מצד השרת: הדפדפן מרענן את
+                # הליגה בעצמו (needs_refresh) ופותח שוב — מכל עמוד, כולל "לפי יום"
+                return {"available": False, "needs_refresh": True,
+                        "league_key": row["league_key"],
+                        "reason": "המשחק עדיין לא מסומן כגמור במקור הנתונים — "
+                                  "נסה שוב בעוד כמה דקות",
                         "sources": []}
             return {"available": False, "reason": "המשחק עדיין לא נגמר",
                     "sources": []}
@@ -2377,6 +2431,7 @@ def get_highlights(request: Request, match_id: str):
             away_alt=to_hebrew_team(row["away_team"]),
             require_team=source.get("require_team_match", False),
             implicit_team=source.get("club_team"),
+            headline=source.get("headline_titles", False),
         )
 
         if videos is None:
