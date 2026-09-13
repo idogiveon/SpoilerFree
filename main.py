@@ -1429,6 +1429,16 @@ def kickoff_passed(row, hours: float = 2.5) -> bool:
     except Exception:
         return False
 
+def likely_over(row) -> bool:
+    """הסתיים לפי הסטטוס, או שעברו 6 שעות מהפתיחה (מקור הנתונים לפעמים
+    מתעדכן באיחור של יום — ליג 1, 13.9.26). נדחה/בוטל — לא."""
+    if is_over(row["status"]):
+        return True
+    if row["status"] in ("POSTPONED", "CANCELLED"):
+        return False
+    return kickoff_passed(row, hours=6)
+
+
 def fetched_recently(row, minutes: int = 10) -> bool:
     """מגן נגד רענוני-אוטו חוזרים: אם הליגה רועננה ממש עכשיו, אין טעם לנסות שוב."""
     conn = get_db()
@@ -2230,7 +2240,7 @@ def get_matches(request: Request, league_key: str,
             "venue":    row["venue"] or "",
             "matchday": row["matchday"],
             "league":   league_name,
-            "is_over":  is_over(row["status"]),
+            "is_over":  likely_over(row),
             "status":   row["status"],
         })
 
@@ -2286,7 +2296,7 @@ def get_matches_by_date(request: Request, date_il: str):
             "matchday":   row["matchday"],
             "league":     LEAGUES.get(lk, {}).get("name", lk),
             "league_key": lk,
-            "is_over":    is_over(row["status"]),
+            "is_over":    likely_over(row),
             "status":     row["status"],
             # הפתיחה עברה מזמן אבל לא מסומן כגמור — הדפדפן ירענן את הליגה
             "needs_refresh": not is_over(row["status"]) and kickoff_passed(row),
@@ -2339,7 +2349,7 @@ def get_highlights(request: Request, match_id: str):
     if not row:
         raise HTTPException(404, "משחק לא נמצא")
 
-    if not is_over(row["status"]):
+    if not likely_over(row):
         league_cfg = LEAGUES.get(row["league_key"], {})
 
         # סטטוס מיושן? אם שעת הפתיחה עברה מזמן, המשחק כנראה נגמר במציאות
@@ -2356,13 +2366,13 @@ def get_highlights(request: Request, match_id: str):
                                    (match_id,)).fetchone()
                 conn.close()
 
-        if not is_over(row["status"]):
+        if not likely_over(row):
             if kickoff_passed(row):
                 # סטטוס מיושן, ו-sportsdb חסום מצד השרת: הדפדפן מרענן את
                 # הליגה בעצמו (needs_refresh) ופותח שוב — מכל עמוד, כולל "לפי יום"
                 return {"available": False, "needs_refresh": True,
                         "league_key": row["league_key"],
-                        "reason": "המשחק עדיין לא מסומן כגמור במקור הנתונים — "
+                        "reason": "עדיין לא התקבל עדכון שהמשחק הסתיים — "
                                   "נסה שוב בעוד כמה דקות",
                         "sources": []}
             return {"available": False, "reason": "המשחק עדיין לא נגמר",
