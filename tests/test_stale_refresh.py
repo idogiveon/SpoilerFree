@@ -14,8 +14,22 @@ def _insert(db, mid, when, status="SCHEDULED", league="laliga"):
     db.commit()
 
 
+def test_old_stale_match_goes_straight_to_highlights(db, monkeypatch):
+    """ליג 1 (13.9): משחק מאתמול עדיין SCHEDULED במקור — אחרי 6 שעות מחפשים תקציר."""
+    monkeypatch.setattr(main, "search_youtube", lambda *a, **k: [])
+    monkeypatch.setattr(main, "resolve_web_link", lambda *a, **k: None)
+    _insert(db, "old", datetime.now(timezone.utc) - timedelta(hours=20))
+    r = TestClient(main.app).get("/highlights/old").json()
+    assert r["available"] is True and not r.get("needs_refresh")
+
+
+def test_postponed_match_is_not_treated_as_over(db):
+    _insert(db, "pp", datetime.now(timezone.utc) - timedelta(hours=20), status="POSTPONED")
+    assert TestClient(main.app).get("/highlights/pp").json()["available"] is False
+
+
 def test_stale_sportsdb_match_asks_browser_to_refresh(db):
-    _insert(db, "m1", datetime.now(timezone.utc) - timedelta(hours=20))
+    _insert(db, "m1", datetime.now(timezone.utc) - timedelta(hours=3))
     r = TestClient(main.app).get("/highlights/m1").json()
     assert r["available"] is False
     assert r["needs_refresh"] is True and r["league_key"] == "laliga"
