@@ -165,10 +165,42 @@ LEAGUES = {
         "source": "sportsdb",
         "sportsdb_ids": ["4480"],
         "sportsdb_season": "2026-2027",
+        # שלב הליגה התחיל 8.9 — משחקי המוקדמות (יולי–אוגוסט) לא מוצגים
+        "min_date": "2026-09-01",
         # אין ערוץ יוטיוב רשמי שמעלה תקצירים של כולם (אומת ידנית 5/9/26) —
         # התקצירים מפוזרים בערוצי הקבוצות (באיחור יום-יומיים).
         # המקור: ספורט 5, המשדרת בישראל — כתבה/VOD ישירים.
         "sources": [],
+        # ערוצי המועדונים ביוטיוב — שם התקצירים עולים הכי מהר (לרוב באותו לילה).
+        # מפתח = שם הקבוצה ב-TheSportsDB. אומתו 13.9.26 מול ה-RSS הציבורי של
+        # כל ערוץ: הועלה תקציר של מחזור 1, או תקציר מליגה מקומית באותו פורמט.
+        # בלי ערוץ (אין בו תקצירים / אין ערוץ פעיל): נאפולי, גלאטסראי, פורטו,
+        # לאנס, שטוטגרט, PSG, AEK, שחטאר, סבאח, ויקינג, בודו, סלביה, לאסק, קומו.
+        # עלות: חיפוש לכל ערוץ = 100 יחידות quota, פעם אחת למשחק (קאש).
+        "club_channels": {
+            "Arsenal":            "UCpryVRk_VDudG8SHXgWcG0w",
+            "Aston Villa":        "UCICNP0mvtr0prFwGUQIABfQ",
+            "Liverpool":          "UC9LQwHZoucFT94I2h6JOcjw",
+            "Manchester City":    "UCkzCjdRMrW2vXLx8mvPVLdQ",
+            "Manchester United":  "UC6yW44UGJJBvYTlfC7CRg2Q",
+            "Atlético Madrid":    "UCuzKFwdh7z2GHcIOX_tXgxA",
+            "Barcelona":          "UC14UlmYlSNiQCBe9Eookf_A",
+            "Real Madrid":        "UCWV3obpZVGgJ3j9FVhEjF2Q",
+            "Real Betis":         "UCeB7JZwcar2fVoK2w2f9OwA",
+            "Villarreal":         "UC0MLWyQ0L7uEZY8wbkDSTkw",
+            "Bayern Munich":      "UCZkcxFIsqW5htimoUQKA0iA",
+            "Borussia Dortmund":  "UCK8rTVgp3-MebXkmeJcQb1Q",
+            "RB Leipzig":         "UCkZwB4IGoNBvRmVT2gaO4XA",
+            "Inter Milan":        "UCvXzEblUa0cfny4HAJ_ZOWw",
+            "Roma":               "UCLttSYJ6kPtlcurY96kXkQw",
+            "Lille":              "UCae9u1pNGzaklyZC8OKkeCQ",
+            "Club Brugge":        "UCr4sbmZGQY9T4p4KcknxSNw",
+            "Feyenoord":          "UCg_DGzRRIQlXpHxCrMMiAIQ",
+            "PSV Eindhoven":      "UC_2ynsXrRrKP8zYrU7Hc06A",
+            "Sporting CP":        "UCnJj6L93JX3Jrhzv81ayywA",
+            "Fenerbahçe":         "UCgqlho3-8a6FmDqQm7Q6gJw",
+            "Slovan Bratislava":  "UC7ldMqVVX6CD6NMZaqsihTw",
+        },
         "web_sources": [
             {"name": "ספורט 5", "domain": "sport5.co.il",
              "query": "תקציר {home} {away}"},
@@ -419,6 +451,12 @@ def init_db():
                      (str(SEED_VERSION),))
         print(f"[seed] clubs reseeded to version {SEED_VERSION}")
 
+    # ניקוי משחקים מלפני תחילת השלב (min_date) — למשל מוקדמות הצ'מפיונס
+    for lk, cfg in LEAGUES.items():
+        if cfg.get("min_date"):
+            conn.execute("DELETE FROM matches WHERE league_key=? AND date_utc<?",
+                         (lk, cfg["min_date"]))
+
     conn.commit()
     conn.close()
 
@@ -543,6 +581,11 @@ def _sportsdb_rows(events: list) -> dict:
 def _store_sportsdb_events(conn, league_key: str, events: list,
                            purge: bool = False, hard: bool = False) -> int:
     """Store a list of TheSportsDB events into our matches table."""
+    # min_date: מסנן משחקים מלפני תחילת השלב (מוקדמות הצ'מפיונס מיולי
+    # מגיעות מ-sportsdb עם intRound=1 ונכנסו למחזור 1 של שלב הליגה)
+    min_date = LEAGUES.get(league_key, {}).get("min_date")
+    if min_date:
+        events = [e for e in events if (e.get("dateEvent") or "") >= min_date]
     rows = _sportsdb_rows(events)
     _sync_league_rows(conn, league_key, rows, purge=purge, hard=hard,
                       guard_status=True)
@@ -1234,9 +1277,23 @@ def clean_title_for_display(title: str) -> str:
     """Remove anything that looks like a score from a video title."""
     return SCORE_PATTERN.sub("", title).strip()
 
+# כינויים שמופיעים בכותרות במקום השם הרשמי (אחרי lower+deaccent).
+# נמצאו בכותרות אמיתיות של ערוצי המועדונים (צ'מפיונס, מחזור 1, 13.9.26).
+TEAM_ALIASES = {
+    "Paris Saint-Germain": ["psg"],
+    "Lille": ["losc"],
+    "PSV Eindhoven": ["psv"],
+    "Atlético Madrid": ["atleti"],
+    "Manchester City": ["man city"],
+    "Manchester United": ["man utd", "man united"],
+    "Bodø/Glimt": ["glimt"],
+}
+
+
 def is_match_highlight(title: str, home: str, away: str,
                        home_alt: str = None, away_alt: str = None,
-                       require_team: bool = False) -> bool:
+                       require_team: bool = False,
+                       implicit_team: str = None) -> bool:
     """home_alt/away_alt: שמות חלופיים (עברית) לזיהוי בכותרת.
     require_team: חובה לזהות קבוצה בכותרת גם כשיש מילת "תקציר" —
     למקורות רב-ליגתיים (ONE), מונע וידאו מליגה לא נכונה."""
@@ -1258,6 +1315,8 @@ def is_match_highlight(title: str, home: str, away: str,
         words = c.split()
         if c in t:
             return True
+        if any(a in t for a in TEAM_ALIASES.get(team, [])):
+            return True
         if len(words) >= 1 and words[-1] in t:
             return True
         # מילה ראשונה משמעותית: "Inter Milan" בכותרת "INTER-MONZA",
@@ -1271,6 +1330,10 @@ def is_match_highlight(title: str, home: str, away: str,
                        .replace("\u05f4", '"'))
 
     def team_in_ex(team, alt):
+        # implicit_team: בערוץ של מועדון, המועדון עצמו לא תמיד בכותרת
+        # ("HIGHLIGHTS | Kicking Off ... vs Shakhtar Donetsk" בערוץ PSV)
+        if implicit_team and team == implicit_team:
+            return True
         if team_in(team):
             return True
         if not alt or alt == team:
@@ -1289,7 +1352,17 @@ def is_match_highlight(title: str, home: str, away: str,
                    "pitchside", "pitch side", "behind the scenes",
                    "unseen", "warm up", "warm-up", "arrival", "access all",
                    # ליג 1: שידור חוזר של אולפן טרום-משחק
-                   "avant-match", "avant match", "tous les buts"])
+                   "avant-match", "avant match", "tous les buts",
+                   # ערוצי מועדונים (צ'מפיונס): מסיבות עיתונאים בשפות שונות —
+                   # "FC Porto vs. Manchester City" עבר את הפילטר בגלל "vs"
+                   "conferencia de imprensa", "conferencia de prensa",
+                   "conferenza stampa", "conference de presse",
+                   "pressekonferenz", "persconferentie",
+                   # קבוצות נוער / תוכן נלווה מאותו ערוץ ואותו יריב
+                   "u19", "uyl", "youth league", "watchparty", "re-live",
+                   "vlog", "uncut", "backstage",
+                   # תוכנית אולפן לפני המשחק (Man City, Shakhtar)
+                   "matchday live"])
 
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
@@ -1307,7 +1380,13 @@ def is_match_highlight(title: str, home: str, away: str,
                      "zusammenfassung",
                      # ליג 1: הפורמט "TEAM - TEAM () | Week N" בלי מילת
                      # תקציר; resume/journee = Résumé/journée אחרי deaccent
-                     "week", "resume", "journee"])
+                     "week", "resume", "journee",
+                     # ערוצי מועדונים: טורקית (özet = תקציר, hafta = מחזור),
+                     # הולנדית, איטלקית, פורטוגזית
+                     "ozet", "hafta", "samenvatting", "sintesi",
+                     "resumo", "melhores momentos",
+                     # סלובקית (Slovan Bratislava: "ZOSTRIH | PSG – ŠK Slovan")
+                     "zostrih"])
     return has_both and highlight and not exclude
 
 
@@ -1339,7 +1418,8 @@ def search_youtube(home: str, away: str, match_date: str,
                    title_exclude: list = None,
                    title_include: list = None,
                    home_alt: str = None, away_alt: str = None,
-                   require_team: bool = False) -> list:
+                   require_team: bool = False,
+                   implicit_team: str = None) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not YOUTUBE_API_KEY or not channel_id:
         return []
@@ -1379,7 +1459,8 @@ def search_youtube(home: str, away: str, match_date: str,
         if title_include and not any(x.lower() in tl for x in title_include):
             continue
         if is_match_highlight(title, home, away,
-                              home_alt, away_alt, require_team):
+                              home_alt, away_alt, require_team,
+                              implicit_team):
             results.append({
                 "video_id": item["id"]["videoId"],
                 "extended": "extended" in tl or "מורחב" in title,
@@ -1429,6 +1510,18 @@ def search_youtube(home: str, away: str, match_date: str,
 def get_sources_for_match(row) -> list:
     league_key = row["league_key"]
     league     = LEAGUES.get(league_key, {})
+
+    if "club_channels" in league:
+        # צ'מפיונס: ערוצי שני המועדונים (לפי שם ב-sportsdb), ואחריהם מקורות
+        # הליגה. club_team: בערוץ של מועדון, שמו לא חייב להופיע בכותרת.
+        cc = league["club_channels"]
+        q = f"{row['home_team']} {row['away_team']}"
+        club_sources = [
+            {"id": f"club_{_fixture_slug(team)}", "name": to_hebrew_team(team),
+             "channel_id": cc[team], "allow_embed": False,
+             "query_override": q, "club_team": team}
+            for team in (row["home_team"], row["away_team"]) if team in cc]
+        return club_sources + league.get("sources", [])
 
     if "sources" in league:
         return league["sources"]
@@ -1746,6 +1839,7 @@ def get_highlights(request: Request, match_id: str):
             home_alt=to_hebrew_team(row["home_team"]),
             away_alt=to_hebrew_team(row["away_team"]),
             require_team=source.get("require_team_match", False),
+            implicit_team=source.get("club_team"),
         )
 
         if videos is None:
