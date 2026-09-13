@@ -12,6 +12,7 @@ import json
 import time
 import hashlib
 import unicodedata
+from html import unescape as _unescape
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -1392,8 +1393,9 @@ def is_match_highlight(title: str, home: str, away: str,
 
 def _video_durations(video_ids: list) -> dict:
     """videos.list — משך כל וידאו בשניות. יחידת quota אחת לעד 50 IDs."""
-    if not video_ids:
+    if not video_ids or not YOUTUBE_API_KEY:
         return {}
+    _yt_units(1)
     durs = {}
     try:
         resp = requests.get(
@@ -1413,6 +1415,53 @@ def _video_durations(video_ids: list) -> dict:
     return durs
 
 
+# ── YouTube RSS: חינם, בלי מכסה ────────────────────────
+# לכל ערוץ יש פיד ציבורי עם 15 הסרטונים האחרונים. בודקים אותו לפני
+# search.list (100 יחידות מתוך 10,000 ביום). קאש בזיכרון 10 דקות לערוץ —
+# ערוץ של מועדון משרת כמה משחקים.
+_RSS_TTL = 600
+_rss_cache = {}
+
+
+def _rss_feed(channel_id: str):
+    """[(video_id, title, published_iso)] מהחדש לישן, או None בכשל."""
+    hit = _rss_cache.get(channel_id)
+    if hit and time.time() - hit[0] < _RSS_TTL:
+        return hit[1]
+    try:
+        r = requests.get("https://www.youtube.com/feeds/videos.xml",
+                         params={"channel_id": channel_id}, timeout=8)
+        if r.status_code != 200:
+            print(f"[rss] {channel_id}: HTTP {r.status_code}")
+            return None
+        items = []
+        for entry in re.findall(r"<entry>(.*?)</entry>", r.text, re.S):
+            vid   = re.search(r"<yt:videoId>(.*?)</yt:videoId>", entry)
+            title = re.search(r"<title>(.*?)</title>", entry, re.S)
+            pub   = re.search(r"<published>(.*?)</published>", entry)
+            if vid and title and pub:
+                items.append((vid.group(1), _unescape(title.group(1)), pub.group(1)))
+    except Exception as ex:
+        print(f"[rss] {channel_id}: {ex}")
+        return None
+    _rss_cache[channel_id] = (time.time(), items)
+    return items
+
+
+def _yt_units(n: int):
+    """מונה quota יומי ב-meta. היום לפי שעון פסיפיק — כמו האיפוס של גוגל."""
+    day = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
+    try:
+        conn = get_db()
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + ?",
+                     (f"yt_units:{day}", str(n), n))
+        conn.commit()
+        conn.close()
+    except Exception as ex:
+        print(f"[yt] units counter: {ex}")
+
+
 def search_youtube(home: str, away: str, match_date: str,
                    channel_id: str, query: str = None,
                    title_exclude: list = None,
@@ -1421,51 +1470,72 @@ def search_youtube(home: str, away: str, match_date: str,
                    require_team: bool = False,
                    implicit_team: str = None) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
-    if not YOUTUBE_API_KEY or not channel_id:
+    if not channel_id:
         return []
 
-    params = {
-        "key":          YOUTUBE_API_KEY,
-        "channelId":    channel_id,
-        "part":         "snippet",
-        "order":        "relevance",
-        "maxResults":   15,
-        "type":         "video",
-        "q":            query or f"{home} {away}",
-        "publishedAfter": f"{match_date}T00:00:00Z",
-    }
-
-    try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/search",
-            params=params, timeout=10
-        ).json()
-        if "error" in resp:
-            # quotaExceeded וכד' — מחזירים None כדי שלא ייכנס לקאש כ"ריק"
-            print(f"YouTube API error: {resp['error'].get('message')}")
-            return None
-        items = resp.get("items", [])
-    except Exception as e:
-        print(f"YouTube search error: {e}")
-        return None
-
-    results = []
-    for item in items:
-        title = item["snippet"]["title"]
+    def _keep(title: str) -> bool:
         tl = title.lower()
         # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
         if title_exclude and any(x.lower() in tl for x in title_exclude):
-            continue
+            return False
         if title_include and not any(x.lower() in tl for x in title_include):
-            continue
-        if is_match_highlight(title, home, away,
-                              home_alt, away_alt, require_team,
-                              implicit_team):
-            results.append({
-                "video_id": item["id"]["videoId"],
+            return False
+        return is_match_highlight(title, home, away, home_alt, away_alt,
+                                  require_team, implicit_team)
+
+    def _video(video_id: str, title: str) -> dict:
+        tl = title.lower()
+        return {"video_id": video_id,
                 "extended": "extended" in tl or "מורחב" in title,
-                "_title":   tl,
-            })
+                "_title":   tl}
+
+    # 1. RSS (חינם). אם הפיד מגיע אחורה עד יום המשחק ואין בו תקציר —
+    #    התקציר פשוט עוד לא עלה, ואין טעם לשלם על חיפוש.
+    results = None
+    feed = _rss_feed(channel_id)
+    if feed is not None:
+        results = [_video(v, t) for v, t, p in feed
+                   if p[:10] >= match_date and _keep(t)]
+        covers = len(feed) < 15 or min(p for _, _, p in feed)[:10] < match_date
+        if results:
+            print(f"[yt] rss hit {channel_id}: {len(results)} (0 units)")
+        elif covers:
+            print(f"[yt] rss covers {channel_id} since {match_date}: none yet (0 units)")
+            return []
+        else:
+            results = None   # ערוץ עמוס — הפיד לא מגיע עד יום המשחק
+
+    # 2. search.list (100 יחידות) — רק כשה-RSS לא יכול להכריע
+    if results is None:
+        if not YOUTUBE_API_KEY:
+            return []
+        params = {
+            "key":          YOUTUBE_API_KEY,
+            "channelId":    channel_id,
+            "part":         "snippet",
+            "order":        "relevance",
+            "maxResults":   15,
+            "type":         "video",
+            "q":            query or f"{home} {away}",
+            "publishedAfter": f"{match_date}T00:00:00Z",
+        }
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/search",
+                params=params, timeout=10
+            ).json()
+            if "error" in resp:
+                # quotaExceeded וכד' — מחזירים None כדי שלא ייכנס לקאש כ"ריק"
+                print(f"YouTube API error: {resp['error'].get('message')}")
+                return None
+            items = resp.get("items", [])
+        except Exception as e:
+            print(f"YouTube search error: {e}")
+            return None
+        _yt_units(100)
+        print(f"[yt] api search {channel_id} (100 units)")
+        results = [_video(item["id"]["videoId"], t) for item in items
+                   for t in [_unescape(item["snippet"]["title"])] if _keep(t)]
 
     # דירוג: כותרת עם מילת תקציר מפורשת גוברת על התאמה גנרית
     # (מונע bench cam / סרטוני צבע כשקיים תקציר אמיתי)
@@ -1584,6 +1654,28 @@ def health_db():
     return {"turso": bool(TURSO_DATABASE_URL and libsql is not None),
             "connect_ms": round((t1 - t0) * 1000),
             "query_ms": round((t2 - t1) * 1000)}
+
+
+@app.get("/health/rss")
+def health_rss():
+    """האם ה-RSS של יוטיוב נגיש מהשרת (Render) — בלי נתוני משתמש."""
+    t0 = time.perf_counter()
+    _rss_cache.pop("UC9LQwHZoucFT94I2h6JOcjw", None)
+    feed = _rss_feed("UC9LQwHZoucFT94I2h6JOcjw")   # ערוץ ליברפול
+    return {"ok": feed is not None, "items": len(feed or []),
+            "ms": round((time.perf_counter() - t0) * 1000)}
+
+
+@app.get("/debug/quota")
+def debug_quota(request: Request):
+    """צריכת quota של יוטיוב ב-7 הימים האחרונים (לפי מונה פנימי)."""
+    require_auth(request)
+    conn = get_db()
+    rows = conn.execute("SELECT key, value FROM meta WHERE key LIKE 'yt_units:%' "
+                        "ORDER BY key DESC LIMIT 7").fetchall()
+    conn.close()
+    return {"limit_per_day": 10000,
+            "days": {r["key"][len("yt_units:"):]: int(r["value"]) for r in rows}}
 
 
 @app.post("/login")
@@ -1919,8 +2011,12 @@ def get_highlights(request: Request, match_id: str):
 def clear_cache(request: Request, match_id: str):
     """Clear highlight cache for a match — forces re-search on next request."""
     require_auth(request)
+    # מגן מכסה: מוחק רק קאש בן 15 דקות ומעלה — לחיצות חוזרות (או כמה
+    # חברים על אותו משחק) לא מריצות חיפוש חדש בכל פעם
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
     conn = get_db()
-    conn.execute("DELETE FROM highlight_cache WHERE match_id=?", (match_id,))
+    conn.execute("DELETE FROM highlight_cache WHERE match_id=? AND found_at<?",
+                 (match_id, cutoff))
     conn.commit()
     conn.close()
     return {"ok": True, "match_id": match_id}
