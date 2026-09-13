@@ -71,6 +71,48 @@ def test_sport5_backtick_geresh_and_display_names(monkeypatch):
     assert url == "https://vod.sport5.co.il/?Vc=893&Vi=560293"
 
 
+def test_short_hebrew_names_match_whole_words_only():
+    assert main._he_contains("ניס", "ניצחון ענק לניס על מונאקו")
+    assert not main._he_contains("ניס", "ניסיון ראשון של המאמן")
+    assert not main._he_contains("ליל", "ערב מטורף בלילה של האלופות")
+    assert main._he_contains("ליל", "תיקו בליל, 1:1")
+    assert main._he_contains("ראן", "0:1 קשה לראן על מארסיי")
+    assert main._he_contains("מארסיי", "0:1 קשה לראן על מארסיי")      # ארוך — הכלה רגילה
+
+
+def test_paris_fc_is_not_psg():
+    assert main.display_team("Paris FC", "he") == "פריז FC"
+    assert main.to_hebrew_team("Paris FC") == "פריז FC"
+    assert main._he_names("Paris FC") == ["פריז FC"]
+    assert "פריז FC" not in main._he_names("Paris Saint-Germain")
+
+
+def test_ligue1_sport5_article_link(monkeypatch):
+    _pages(monkeypatch, {"sport5": '<a href="https://www.sport5.co.il/articles.aspx?FolderID=496&amp;docID=560450">'
+                                   'עלתה זמנית לפסגה: 0:1 קשה לראן על מארסיי</a>'
+                                   '<a href="/articles.aspx?FolderID=1&amp;docID=2">כתבה אחרת על ליון</a>'})
+    cfg = main.LEAGUES["ligue1"]["web_sources"][0]
+    url = main.find_web_highlight(cfg["scrape_pages"], cfg["link_pattern"],
+                                  main._he_names("Rennes"), main._he_names("Marseille"), base=cfg["base"])
+    assert url == "https://www.sport5.co.il/articles.aspx?FolderID=496&docID=560450"
+
+
+def test_page_without_charset_is_read_as_utf8(monkeypatch):
+    """דף הבית של ספורט 5: בלי charset — requests מפענח latin-1 (ג'יבריש)."""
+    html = '<a href="https://vod.sport5.co.il/?Vc=1&amp;Vi=9">מנצ`סטר יונייטד חזרה לאלופות עם 0:4 על סבאח</a>'
+
+    class Latin1Resp:
+        status_code = 200
+        content = html.encode("utf-8")
+        text = content.decode("latin-1")          # מה ש-requests היה נותן
+
+    main._site_cache.clear()
+    monkeypatch.setattr(main.requests, "get", lambda url, **k: Latin1Resp())
+    url = main.find_web_highlight(["https://www.sport5.co.il/"], main.SPORT5_LINK,
+                                  main._he_names("Manchester United"), main._he_names("Sabah Baku"))
+    assert url == "https://vod.sport5.co.il/?Vc=1&Vi=9"
+
+
 def test_no_direct_link_means_no_button(monkeypatch, db):
     _pages(monkeypatch, {})
     monkeypatch.setattr(main, "search_youtube", lambda *a, **k: [])

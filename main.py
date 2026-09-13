@@ -68,6 +68,8 @@ SPORT1_PAGES = ["https://sport1.maariv.co.il/israeli-soccer/ligat-haal/video/",
                 "https://sport1.maariv.co.il/vod/"]
 SPORT1_LINK  = r"/video/\d+"
 SPORT5_LINK  = r"vod\.sport5\.co\.il/\?[^'\"]*Vi=\d+"
+# ליגות בלי VOD ייעודי באתר (ליג 1) — גם כתבות סיכום המחזור
+SPORT5_LINK_OR_ARTICLE = SPORT5_LINK + r"|articles\.aspx\?FolderID=\d+&docID=\d+"
 
 LEAGUES = {
     "premier": {
@@ -229,6 +231,16 @@ LEAGUES = {
              "channel_id": "UCQsH5XtIc9hONE1BQjucM0g",
              "search_template": "{home} {away} highlights",
              "allow_embed": False},
+        ],
+        # תקצירי יוטיוב של ליג 1 עולים מאוחר — ספורט 5 (משדרת בישראל) כגיבוי.
+        # אין להם VOD ייעודי לליגה, אז גם כתבות סיכום המחזור (עם וידאו).
+        "web_sources": [
+            {"name": "ספורט 5", "domain": "sport5.co.il",
+             "scrape_pages": ["https://www.sport5.co.il/",
+                              "https://www.sport5.co.il/liga.aspx?FolderID=495"],
+             "link_pattern": SPORT5_LINK_OR_ARTICLE,
+             "base": "https://www.sport5.co.il",
+             "query": "תקציר {home} {away}"},
         ],
     },
     "ucl": {
@@ -1578,6 +1590,8 @@ HEB_TEAMS = [
     # sportsdb כותב "Tel-Aviv" עם מקף; מכבי פ"ת חסרה — חיפושים בעברית נכשלו
     ("hapoel tel-aviv",     "הפועל תל אביב"),
     ("maccabi petah tikva", "מכבי פתח תקווה"),
+    # לפני "paris" — אחרת פריז FC הפכה ל"פאריס סן ז'רמן"
+    ("paris fc",            "פריז FC"),
     ("maccabi tel aviv",  "מכבי תל אביב"),
     ("maccabi haifa",     "מכבי חיפה"),
     ("maccabi netanya",   "מכבי נתניה"),
@@ -1715,7 +1729,7 @@ TEAM_NAMES = {
         "Werder Bremen": "ורדר ברמן",
         # ליג 1
         "Angers": "אנז'ה", "Auxerre": "אוקסר", "Brest": "ברסט", "Le Havre": "לה האבר", "Le Mans": "לה מאן",
-        "Lens": "לאנס", "Lorient": "לוריין", "Lyon": "ליון", "Nice": "ניס", "Rennes": "רן",
+        "Lens": "לאנס", "Lorient": "לוריין", "Paris FC": "פריז FC", "Lyon": "ליון", "Nice": "ניס", "Rennes": "ראן",
         "Strasbourg": "שטרסבורג", "Toulouse": "טולוז", "Troyes": "טרואה",
         # צ'מפיונס (שלב הליגה)
         "AEK Athens": "א.א.ק אתונה", "Bodø/Glimt": "בודו/גלימט", "Fenerbahçe": "פנרבחצ'ה", "LASK": "לאסק",
@@ -1852,7 +1866,11 @@ def _site_anchors(url: str) -> list:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Accept-Language": "he-IL,he"})
         if r.status_code == 200:
-            for m in re.finditer(r"<a([^>]+)>(.*?)</a>", r.text, re.S):
+            # תמיד UTF-8: דף הבית של ספורט 5 לא מצהיר charset, ו-requests
+            # פענח אותו כ-latin-1 — הכותרות יצאו ג'יבריש ואף משחק לא זוהה
+            content = getattr(r, "content", None)
+            body = content.decode("utf-8", "ignore") if isinstance(content, bytes) else r.text
+            for m in re.finditer(r"<a([^>]+)>(.*?)</a>", body, re.S):
                 href = re.search(r"href=['\"]([^'\"]+)['\"]", m.group(1))
                 if not href:
                     continue
@@ -1867,9 +1885,19 @@ def _site_anchors(url: str) -> list:
     return out
 
 
+# כתיבים חלופיים שראינו באתרים ישראליים (ספורט 5)
+HE_SPELLINGS = {
+    "Strasbourg": ["שטראסבורג"],
+    "Paris Saint-Germain": ["פ.ס.ז'", "פריז סן ז'רמן"],
+    "Bodø/Glimt": ["בודה גלימט"],
+}
+
+
 def _he_names(team: str) -> list:
-    """שמות עבריים לחיפוש בכותרות אתרים: שם החיפוש + שם התצוגה."""
-    names = [to_hebrew_team(team), TEAM_NAMES["he"].get(team)]
+    """שמות עבריים לחיפוש בכותרות אתרים. שם מדויק מהמילון גובר — ההתאמה
+    החלקית של HEB_TEAMS רק כשאין (אחרת Paris FC חיפשה את PSG)."""
+    exact = TEAM_NAMES["he"].get(team)
+    names = ([exact] if exact else [to_hebrew_team(team)]) + HE_SPELLINGS.get(team, [])
     return [n for n in dict.fromkeys(names) if n]
 
 
@@ -2103,11 +2131,20 @@ HEADLINE_WINDOW_DAYS = 2   # כותרת עם קבוצה אחת — רק עד י�
 def _he_team_in(team_he: str, title: str) -> bool:
     """שם מלא / גרסה מקובלת, או מילה מזהה מהשם ("ראיו", "בילבאו").
     תחיליות עבריות (ל/ב/ו) מכוסות — בדיקת הכלה ("למילאן" מכיל "מילאן")."""
-    if any(v in title for v in he_team_variants(team_he)):
+    if any(_he_contains(v, title) for v in he_team_variants(team_he)):
         return True
     # גם "/" מפריד מילים: "בודו/גלימט" → "גלימט" (ספורט 5: "בודה גלימט")
-    return any(w in title for w in re.split(r"[\s/]+", team_he)
+    return any(_he_contains(w, title) for w in re.split(r"[\s/]+", team_he)
                if len(w) >= 3 and w not in HE_GENERIC_WORDS)
+
+
+def _he_contains(needle: str, text: str) -> bool:
+    """שם קצר (עד 3 אותיות) — רק כמילה שלמה, עם אות תחילית אחת מותרת
+    (ב/ו/ל/מ/ש/ה): "לניס" ✓, "ניסיון" ✗, "לילה" ✗ עבור ליל. ארוך — הכלה."""
+    if len(needle) > 3:
+        return needle in text
+    return re.search(r"(?:^|[^֐-׿])[בולמשה]?" + re.escape(needle)
+                     + r"(?:$|[^֐-׿])", text) is not None
 
 
 def is_headline_highlight(title: str, home_he: str, away_he: str,
