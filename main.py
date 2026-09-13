@@ -297,6 +297,10 @@ LEAGUES = {
             "Club Brugge":        "UCr4sbmZGQY9T4p4KcknxSNw",
             "Feyenoord":          "UCg_DGzRRIQlXpHxCrMMiAIQ",
             "PSV Eindhoven":      "UC_2ynsXrRrKP8zYrU7Hc06A",
+            # מהמשתמש (13.9.26): PSG — "... I PSG 6-1 BRATISLAVA" (תוצאה בכותרת);
+            # שחטאר — אוקראינית, עם תאריך המשחק (CLUB_TITLE_RULES), לפעמים באיחור
+            "Paris Saint-Germain": "UCt9a_qP9CqHCNwilf-iULag",
+            "Shakhtar Donetsk":   "UCmPCqUih--EyT2oxUn72MtA",
             "Sporting CP":        "UCnJj6L93JX3Jrhzv81ayywA",
             "Fenerbahçe":         "UCgqlho3-8a6FmDqQm7Q6gJw",
             "Slovan Bratislava":  "UC7ldMqVVX6CD6NMZaqsihTw",
@@ -738,6 +742,17 @@ button.no{border-color:#ff4757;color:#ff4757}
 <th>ליגות מובילות</th><th>פעילות אחרונה</th><th></th></tr></thead>
 <tbody id="rows"><tr><td colspan="11" class="muted">טוען...</td></tr></tbody>
 </table></div>
+<h1 style="margin-top:2rem">מי מעלה ראשון — ליגת העל (21 ימים)</h1>
+<div class="sub muted">דקות מסיום המשחק (משוער: פתיחה + 115 דק') עד שהתקציר עלה.
+יוטיוב — שעת ההעלאה בפועל; אתרים — מתי מצאנו את הקישור (דיוק של כחצי שעה).</div>
+<div class="wrap"><table style="min-width:0">
+<thead><tr><th>מקור</th><th>ראשון (פעמים)</th><th>נמצא</th><th>חציון (דק')</th></tr></thead>
+<tbody id="timing"><tr><td colspan="4" class="muted">טוען...</td></tr></tbody>
+</table></div>
+<div class="wrap" style="margin-top:1rem"><table style="min-width:0">
+<thead><tr><th>משחק</th><th>תאריך</th><th>ראשון</th><th>כל המקורות (דק' מהסיום)</th></tr></thead>
+<tbody id="timing_m"></tbody>
+</table></div>
 <script>
 const LEAGUES = {premier:'פרמייר', championship:"צ'מפיונשיפ", israel:'ליגת העל', bundesliga:'בונדסליגה', laliga:'לה ליגה',
   seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", uel:'ליגה אירופית', mls:'MLS', argentina:'ארגנטינה'};
@@ -777,7 +792,19 @@ async function setStatus(email, status) {
     method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})});
   if (!r.ok) alert('נכשל'); load();
 }
+async function loadTiming() {
+  const r = await fetch('/admin/api/timing?league=israel&days=21');
+  if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById('timing').innerHTML = d.summary.map(s =>
+    `<tr><td>${esc(s.source)}</td><td>${s.first}</td><td>${s.found} / ${d.matches_over}</td><td>${s.median_min}</td></tr>`
+  ).join('') || '<tr><td colspan="4" class="muted">אין נתונים עדיין — נאסף מהמחזור הבא</td></tr>';
+  document.getElementById('timing_m').innerHTML = d.matches.map(m =>
+    `<tr><td>${esc(m.match)}</td><td>${esc(m.date)}</td><td>${esc(m.first)}</td><td>` +
+    Object.entries(m.delays).map(([k, v]) => esc(k) + ': ' + v).join(' · ') + '</td></tr>').join('');
+}
 load();
+loadTiming();
 </script></body></html>"""
 
 # ── DB ─────────────────────────────────────────────────
@@ -901,6 +928,17 @@ def init_db():
             source_id  TEXT,
             videos_json TEXT,
             found_at   TEXT,
+            PRIMARY KEY (match_id, source_id)
+        )
+    """)
+
+    # מי העלה ראשון (#10): הפעם הראשונה שכל מקור נמצא — לא נדרס ברענון
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS highlight_first_seen (
+            match_id   TEXT,
+            source_id  TEXT,
+            first_seen TEXT,
+            published  TEXT,
             PRIMARY KEY (match_id, source_id)
         )
     """)
@@ -2186,6 +2224,9 @@ def is_match_highlight(title: str, home: str, away: str,
                      "resumo", "melhores momentos",
                      # סלובקית (Slovan Bratislava: "ZOSTRIH | PSG – ŠK Slovan")
                      "zostrih"])
+    # ערוץ מועדון: תוצאה בכותרת = תקציר ("RETOUR EN FORCE ... I PSG 6-1 BRATISLAVA")
+    if implicit_team and re.search(r"\d{1,2}\s*[-–:]\s*\d{1,2}", t):
+        highlight = True
     return has_both and highlight and not exclude
 
 
@@ -2375,7 +2416,8 @@ def search_youtube(home: str, away: str, match_date: str,
                    require_team: bool = False,
                    implicit_team: str = None,
                    headline: bool = False,
-                   il_both: bool = False) -> list:
+                   il_both: bool = False,
+                   date_in_title: bool = False) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not channel_id:
         return []
@@ -2387,6 +2429,8 @@ def search_youtube(home: str, away: str, match_date: str,
             return False
         if title_include and not any(x.lower() in tl for x in title_include):
             return False
+        if date_in_title:  # ערוץ מועדון שכותב את תאריך המשחק (שחטאר: "(10.09.2026)")
+            return datetime.fromisoformat(match_date).strftime("%d.%m.%Y") in title
         if il_both:    # ערוצים ישראליים לא רשמיים — כלל מחמיר
             return is_il_both_teams(title, home_alt or home, away_alt or away,
                                     published, match_date)
@@ -2396,10 +2440,11 @@ def search_youtube(home: str, away: str, match_date: str,
         return is_match_highlight(title, home, away, home_alt, away_alt,
                                   require_team, implicit_team)
 
-    def _video(video_id: str, title: str) -> dict:
+    def _video(video_id: str, title: str, published: str = "") -> dict:
         tl = title.lower()
         return {"video_id": video_id,
                 "extended": "extended" in tl or "מורחב" in title,
+                "published": published,   # #10 — מתי המקור העלה
                 "_title":   tl}
 
     # 1. RSS (חינם). אם הפיד מגיע אחורה עד יום המשחק ואין בו תקציר —
@@ -2407,7 +2452,7 @@ def search_youtube(home: str, away: str, match_date: str,
     results = None
     feed = _rss_feed(channel_id)
     if feed is not None:
-        results = [_video(v, t) for v, t, p in feed
+        results = [_video(v, t, p) for v, t, p in feed
                    if p[:10] >= match_date and _keep(t, p)]
         covers = len(feed) < 15 or min(p for _, _, p in feed)[:10] < match_date
         if results:
@@ -2431,7 +2476,7 @@ def search_youtube(home: str, away: str, match_date: str,
         uploads = _uploads_since(channel_id, match_date)
         if uploads is not None:
             items_u, complete = uploads
-            results = [_video(v, t) for v, t, p in items_u if v and _keep(t, p)]
+            results = [_video(v, t, p) for v, t, p in items_u if v and _keep(t, p)]
             if not results and not complete:
                 # הרשימה לא הגיעה עד יום המשחק — אחרת היה נקבע "לא נמצא" בטעות
                 print(f"[yt] uploads cap before {match_date} — falling back to search")
@@ -2464,7 +2509,8 @@ def search_youtube(home: str, away: str, match_date: str,
                 return None
             _yt_units(100)
             print(f"[yt] api search {channel_id} (100 units)")
-            results = [_video(item["id"]["videoId"], t) for item in items
+            results = [_video(item["id"]["videoId"], t, item["snippet"].get("publishedAt", ""))
+                       for item in items
                        for t in [_unescape(item["snippet"]["title"])]
                        if _keep(t, item["snippet"].get("publishedAt", ""))]
 
@@ -2505,7 +2551,20 @@ def search_youtube(home: str, away: str, match_date: str,
                 final.append({"video_id": v["video_id"],
                               "label": "תקציר מורחב" if v["extended"] else "תקציר",
                               "extended": v["extended"]})
+    pub = {v["video_id"]: v.get("published", "") for v in pool}
+    for f in final:
+        f["published"] = pub.get(f["video_id"], "")
     return final
+
+
+# ערוצי מועדונים עם פורמט כותרת משלהם (מתמזג למקור של המועדון)
+CLUB_TITLE_RULES = {
+    # שחטאר: כותרות באוקראינית — "ПСВ – Шахтар – 1:1 ... Голи та огляд матчу (10.09.2026)".
+    # תאריך המשחק בכותרת = התאמה מדויקת; בלי נוער (U14/U21/НЛМ) ובלי משחק מלא
+    "Shakhtar Donetsk": {"title_include": ["огляд"],
+                         "title_exclude": ["U1", "U2", "НЛМ", "Повна версія", "LIVE"],
+                         "title_date": True},
+}
 
 
 def get_sources_for_match(row) -> list:
@@ -2520,7 +2579,7 @@ def get_sources_for_match(row) -> list:
         club_sources = [
             {"id": f"club_{_fixture_slug(team)}", "name": to_hebrew_team(team),
              "channel_id": cc[team], "allow_embed": False,
-             "query_override": q, "club_team": team}
+             "query_override": q, "club_team": team, **CLUB_TITLE_RULES.get(team, {})}
             for team in (row["home_team"], row["away_team"]) if team in cc]
         return club_sources + league.get("sources", [])
 
@@ -2866,6 +2925,13 @@ def _not_found_retry(row):
     return None
 
 
+def _mark_first_seen(conn, match_id, source_id, seen, published=None):
+    """#10 מי העלה ראשון: רק הפעם הראשונה נשמרת (INSERT OR IGNORE)."""
+    conn.execute("INSERT OR IGNORE INTO highlight_first_seen "
+                 "(match_id, source_id, first_seen, published) VALUES (?,?,?,?)",
+                 (match_id, source_id, seen, published))
+
+
 def _source_highlights(row, source) -> dict:
     """תקציר ממקור אחד למשחק: מהקאש, או חיפוש ושמירה בקאש.
     משותף ל-/highlights ולחיפוש-מראש ברקע."""
@@ -2922,18 +2988,22 @@ def _source_highlights(row, source) -> dict:
         implicit_team=source.get("club_team"),
         headline=source.get("headline_titles", False),
         il_both=source.get("il_both_teams", False),
+        date_in_title=source.get("title_date", False),
     )
     if videos is None:
         # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך
         return {**base, "videos": [], "status": "api_error"}
 
+    now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
     conn.execute("""
         INSERT OR REPLACE INTO highlight_cache
         (match_id, source_id, videos_json, found_at)
         VALUES (?,?,?,?)
-    """, (match_id, source_id, json.dumps(videos),
-          datetime.now(timezone.utc).isoformat()))
+    """, (match_id, source_id, json.dumps(videos), now))
+    if videos:
+        pubs = [v["published"] for v in videos if v.get("published")]
+        _mark_first_seen(conn, match_id, source_id, now, min(pubs) if pubs else None)
     conn.commit()
     conn.close()
     return {**base, "videos": videos, "status": "found" if videos else "not_found"}
@@ -2942,16 +3012,62 @@ def _source_highlights(row, source) -> dict:
 # ── חיפוש מראש ברקע ────────────────────────────────────
 # משחקים שהסתיימו ב-48 השעות האחרונות ועוד אין להם קאש — השרת מחפש לבד.
 # התקציר מוכן לפני שמישהו פותח, והעלות תלויה במספר המשחקים — לא במשתמשים.
+def _web_link(row, w):
+    """קישור ישיר לכתבת התקציר באתר (ספורט 1/5) — מהקאש, או מעמודי האתר
+    ושמירה בקאש. משותף ל-/highlights ולחיפוש-מראש ברקע."""
+    match_id  = row["id"]
+    cache_key = f"web_{w['name']}"
+    conn = get_db()
+    cached = conn.execute(
+        "SELECT videos_json FROM highlight_cache WHERE match_id=? AND source_id=?",
+        (match_id, cache_key)
+    ).fetchone()
+    conn.close()
+    if cached:
+        return json.loads(cached["videos_json"])["url"]
+
+    # 1. עמודי האתר עצמו (VOD/ליגה) — קישור ישיר, בלי מנוע חיפוש
+    url = None
+    if w.get("scrape_pages"):
+        url = find_web_highlight(w["scrape_pages"], w["link_pattern"],
+                                 _he_names(row["home_team"]),
+                                 _he_names(row["away_team"]),
+                                 base=w.get("base", ""))
+    # 2. Google CSE — רק אם הוגדר מפתח
+    if not url:
+        wq = w["query"].format(home=to_hebrew_team(row["home_team"]),
+                               away=to_hebrew_team(row["away_team"]))
+        url = resolve_web_link(wq, w["domain"])
+    if url:
+        # קאש רק לקישור ישיר — כישלון ינוסה שוב בפתיחה הבאה
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        conn.execute("""
+            INSERT OR REPLACE INTO highlight_cache
+            (match_id, source_id, videos_json, found_at)
+            VALUES (?,?,?,?)
+        """, (match_id, cache_key, json.dumps({"url": url}), now))
+        _mark_first_seen(conn, match_id, cache_key, now)
+        conn.commit()
+        conn.close()
+    return url
+
+
 PREFETCH_EVERY_MIN   = 30
 PREFETCH_MAX_MATCHES = 20
+# #10 מי מעלה ראשון: בליגות האלה גם "לא נמצא" נבדק שוב בכל סבב (לפי
+# _not_found_retry — כל 30 דק' ביומיים הראשונים), כדי למדוד מתי כל מקור עלה
+TIMING_LEAGUES = {"israel"}
 
 
 def prefetch_highlights_once() -> int:
     since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%d")
     conn = get_db()
     rows = conn.execute("SELECT * FROM matches WHERE date_utc >= ?", (since,)).fetchall()
-    have = {(r["match_id"], r["source_id"]) for r in
-            conn.execute("SELECT match_id, source_id FROM highlight_cache").fetchall()}
+    # (משחק, מקור) → האם נמצא משהו
+    have = {(r["match_id"], r["source_id"]): r["videos_json"] not in ("[]", "")
+            for r in conn.execute(
+                "SELECT match_id, source_id, videos_json FROM highlight_cache").fetchall()}
     conn.close()
     done = 0
     for row in rows:
@@ -2959,14 +3075,21 @@ def prefetch_highlights_once() -> int:
             break
         if not likely_over(row) or kickoff_passed(row, hours=48):
             continue
+        recheck = row["league_key"] in TIMING_LEAGUES
         todo = [s for s in get_sources_for_match(row)
-                if s.get("channel_id") and (row["id"], s["id"]) not in have]
-        if not todo:
-            continue
+                if s.get("channel_id") and ((row["id"], s["id"]) not in have
+                                            or (recheck and not have[(row["id"], s["id"])]))]
         if _yt_units_today() >= YT_DAILY_BRAKE:
-            break
+            todo = []
+        # אתרים (ספורט 1/5): בלי מכסה — נבדקים בכל סבב עד שנמצא קישור
+        webs = [w for w in LEAGUES.get(row["league_key"], {}).get("web_sources", [])
+                if (row["id"], f"web_{w['name']}") not in have]
+        if not todo and not webs:
+            continue
         for s in todo:
             _source_highlights(row, s)
+        for w in webs:
+            _web_link(row, w)
         done += 1
     print(f"[prefetch] searched {done} match(es)")
     return done
@@ -3036,40 +3159,7 @@ def get_highlights(request: Request, match_id: str, lang: str = "he"):
     league = LEAGUES.get(row["league_key"], {})
     web_links = []
     for w in league.get("web_sources", []):
-        wq = w["query"].format(home=to_hebrew_team(row["home_team"]),
-                               away=to_hebrew_team(row["away_team"]))
-        cache_key = f"web_{w['name']}"
-
-        conn = get_db()
-        cached = conn.execute(
-            "SELECT videos_json FROM highlight_cache WHERE match_id=? AND source_id=?",
-            (match_id, cache_key)
-        ).fetchone()
-        conn.close()
-
-        if cached:
-            url = json.loads(cached["videos_json"])["url"]
-        else:
-            # 1. עמודי האתר עצמו (VOD/ליגה) — קישור ישיר, בלי מנוע חיפוש
-            url = None
-            if w.get("scrape_pages"):
-                url = find_web_highlight(w["scrape_pages"], w["link_pattern"],
-                                         _he_names(row["home_team"]),
-                                         _he_names(row["away_team"]),
-                                         base=w.get("base", ""))
-            # 2. Google CSE — רק אם הוגדר מפתח
-            url = url or resolve_web_link(wq, w["domain"])
-            if url:
-                # קאש רק לקישור ישיר — כישלון ינוסה שוב בפתיחה הבאה
-                conn = get_db()
-                conn.execute("""
-                    INSERT OR REPLACE INTO highlight_cache
-                    (match_id, source_id, videos_json, found_at)
-                    VALUES (?,?,?,?)
-                """, (match_id, cache_key, json.dumps({"url": url}),
-                      datetime.now(timezone.utc).isoformat()))
-                conn.commit()
-                conn.close()
+        url = _web_link(row, w)
         # אין קישור ישיר — אין כפתור (עמוד תוצאות חיפוש = ספוילרים בכותרות)
         if url:
             web_links.append({"name": w["name"], "url": url})
@@ -3784,6 +3874,66 @@ def admin_api_users(request: Request):
             "plays": sum(u.get("highlight_play", 0) for u in users),
             "yt_units_today": int(yt_row["value"]) if yt_row else 0}
     return {"users": users, "kpis": kpis}
+
+
+MATCH_LENGTH_MIN = 115   # פתיחה → שריקת סיום (משוער: הפסקה + תוספות)
+
+
+@app.get("/admin/api/timing")
+def admin_api_timing(request: Request, league: str = "israel", days: int = 21):
+    """#10 מי מעלה ראשון: לכל משחק — דקות מהסיום (משוער) עד שכל מקור עלה.
+    יוטיוב: שעת ההעלאה בפועל; אתרים: הפעם הראשונה שמצאנו (דיוק ~30 דק')."""
+    require_admin(request)
+    since = (_now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM matches WHERE league_key=? AND date_utc>=? "
+                        "ORDER BY date_utc DESC, time_utc DESC", (league, since)).fetchall()
+    seen = conn.execute("SELECT f.* FROM highlight_first_seen f JOIN matches m ON m.id=f.match_id "
+                        "WHERE m.league_key=? AND m.date_utc>=?", (league, since)).fetchall()
+    conn.close()
+
+    cfg = LEAGUES.get(league, {})
+    names = {s["id"]: s["name"] for s in cfg.get("sources", [])}
+    names.update({f"web_{w['name']}": f"{w['name']} (אתר)" for w in cfg.get("web_sources", [])})
+    by_match = {}
+    for s in seen:
+        by_match.setdefault(s["match_id"], []).append(s)
+
+    matches, stats = [], {}
+    for r in rows:
+        try:
+            end = (datetime.fromisoformat(f"{r['date_utc']}T{r['time_utc']}+00:00")
+                   + timedelta(minutes=MATCH_LENGTH_MIN))
+        except (ValueError, TypeError):
+            continue
+        delays = {}
+        for s in by_match.get(r["id"], []):
+            at = (s["published"] or s["first_seen"] or "").replace("Z", "+00:00")
+            try:
+                delays[s["source_id"]] = max(0, int((datetime.fromisoformat(at) - end)
+                                                    .total_seconds() // 60))
+            except ValueError:
+                pass
+        if not delays:
+            continue
+        first = min(delays, key=delays.get)
+        for sid, d in delays.items():
+            st = stats.setdefault(sid, {"found": 0, "first": 0, "delays": []})
+            st["found"] += 1
+            st["delays"].append(d)
+        stats[first]["first"] += 1
+        matches.append({
+            "match": f"{display_team(r['home_team'], 'he')} – {display_team(r['away_team'], 'he')}",
+            "date": r["date_utc"], "first": names.get(first, first),
+            "delays": {names.get(k, k): v for k, v in sorted(delays.items(), key=lambda x: x[1])}})
+
+    summary = sorted(({"source": names.get(k, k), "found": v["found"], "first": v["first"],
+                       "median_min": sorted(v["delays"])[len(v["delays"]) // 2]}
+                      for k, v in stats.items()),
+                     key=lambda x: (-x["first"], x["median_min"]))
+    return {"league": league, "days": days,
+            "matches_over": sum(1 for r in rows if likely_over(r)),
+            "summary": summary, "matches": matches}
 
 
 @app.post("/admin/api/users/{email}")
