@@ -730,7 +730,7 @@ function show(id) {
   $('err').textContent = '';
 }
 function back() { show('step-login'); $('email').focus(); }
-function go() { location.href = '/?fresh=1'; }
+function go() { location.href = '/?fresh=' + Date.now(); }
 function codeMode(m) {
   MODE = m;
   $('code-email').value = $('email').value.trim();
@@ -782,7 +782,7 @@ async function verify() {
   finally { $('verify-btn').disabled = false; }
 }
 async function legacy() {
-  try { await post('/login', {password: $('pw').value}); location.href = '/?fresh=1'; }
+  try { await post('/login', {password: $('pw').value}); location.href = '/?fresh=' + Date.now(); }
   catch (e) { $('err').textContent = t('wrong_password'); }
 }
 async function openCookies() {
@@ -4150,10 +4150,14 @@ def admin_api_update_user(request: Request, email: str, payload: dict = Body(...
 
 @app.get("/app")
 def serve_frontend(request: Request):
+    # no-store: אותה כתובת מחזירה דף אחר לפי ה-cookie. בלי זה הדפדפן שמר את
+    # האפליקציה בקאש ל"/?fresh=1", ואחרי יציאה/401 טען אותה שוב — לולאה.
+    # (הקאש של ה-service worker נפרד ולא מושפע.)
+    no_store = {"Cache-Control": "no-store"}
     if not is_authed(request):
-        return HTMLResponse(render_login_page())
+        return HTMLResponse(render_login_page(), headers=no_store)
     # X-SF-App: ה-service worker שומר בקאש רק את הדף הזה, לא את מסך הכניסה
-    return FileResponse("index.html", headers={"X-SF-App": "1"})
+    return FileResponse("index.html", headers={"X-SF-App": "1", **no_store})
 
 
 # ── PWA ────────────────────────────────────────────────

@@ -462,7 +462,7 @@
   async function apiFetch(url, opts) {
     const r = await fetch(url, opts);
     // fresh=1 עוקף את קאש ה-service worker — אחרת היה מוגש שוב הדף השמור
-    if (r.status === 401) { location.href = '/?fresh=1'; throw new Error('auth'); }
+    if (r.status === 401) { location.href = '/?fresh=' + Date.now(); throw new Error('auth'); }
     return r;
   }
 
@@ -602,14 +602,14 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirm: document.getElementById('del-confirm').value }),
     });
-    if (r.ok) { location.href = '/?fresh=1'; return; }
+    if (r.ok) { location.href = '/?fresh=' + Date.now(); return; }
     let j = {}; try { j = await r.json(); } catch (e) {}
     document.getElementById('del-err').textContent = j.detail || t('delete_failed');
   }
 
   async function logout() {
     try { await fetch(`${API}/auth/logout`, { method: 'POST' }); } catch (e) {}
-    location.href = '/?fresh=1';
+    location.href = '/?fresh=' + Date.now();
   }
 
   // ── Matchday nav ───────────────────────────────────

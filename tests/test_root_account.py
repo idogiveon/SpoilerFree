@@ -23,6 +23,15 @@ def test_root_serves_app_when_logged_in_and_app_path_still_works(auth_on):
     assert admin.get("/app").headers.get("X-SF-App") == "1"
 
 
+def test_pages_are_never_http_cached(auth_on):
+    """אותה כתובת = כניסה או אפליקציה לפי ה-cookie. אם הדפדפן שומר אותה,
+    אחרי יציאה נטענת האפליקציה השמורה → 401 → שוב אותה כתובת → לולאה."""
+    assert client().get("/?fresh=1").headers["cache-control"] == "no-store"
+    admin = login(auth_on, ADMIN)
+    assert admin.get("/?fresh=1").headers["cache-control"] == "no-store"
+    assert "'/?fresh=' + Date.now()" in open("index.html", encoding="utf-8").read()
+
+
 def test_health_is_public_json():
     assert client().get("/health").json()["status"].startswith("SpoilerFree")
 
