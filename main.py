@@ -292,6 +292,34 @@ LEAGUES = {
              "query": "תקציר {home} {away}"},
         ],
     },
+    "uel": {
+        "name": "ליגה אירופית",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4481"],
+        "sportsdb_season": "2026-2027",
+        # שלב הליגה מ-16.9 (באר שבע–דינמו זאגרב). מוקדמות — לא מוצגות.
+        "min_date": "2026-09-01",
+        "sources": [],
+        # ערוצי מועדונים עם תקצירים בפורמט הרגיל (אומתו 13.9.26 מול ה-RSS —
+        # תקצירי ליגה מקומית; שלב הליגה עוד לא התחיל). לרוב הקבוצות, כולל
+        # הפועל באר שבע, לא נמצא ערוץ רשמי — ספורט 5 (משדרת) + ערוץ היריבה.
+        "club_channels": {
+            "Sunderland":     "UCrw-7k6yJc0EMJdf-0BAkoQ",
+            "Crystal Palace": "UCWB9N0012fG6bGyj486Qxmg",
+            "Bournemouth":    "UCeOCuVSSweaEj6oVtJZEKQw",
+            "Benfica":        "UC8zrah5cNf2c3jKKeD_Z3fw",
+            "Celtic":         "UCBN-bb-hE7jYlcp4exwXRsQ",
+            "AC Milan":       "UCKcx1uK38H4AOkmfv4ywlrg",
+        },
+        "web_sources": [
+            {"name": "ספורט 5", "domain": "sport5.co.il",
+             "scrape_pages": ["https://www.sport5.co.il/",
+                              "https://www.sport5.co.il/liga.aspx?FolderID=400"],
+             "link_pattern": SPORT5_LINK_OR_ARTICLE,
+             "base": "https://www.sport5.co.il",
+             "query": "תקציר {home} {away}"},
+        ],
+    },
     "mls": {
         "name": "MLS",
         "source": "sportsdb",
@@ -702,7 +730,7 @@ button.no{border-color:#ff4757;color:#ff4757}
 </table></div>
 <script>
 const LEAGUES = {premier:'פרמייר', championship:"צ'מפיונשיפ", israel:'ליגת העל', bundesliga:'בונדסליגה', laliga:'לה ליגה',
-  seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", mls:'MLS', argentina:'ארגנטינה'};
+  seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", uel:'ליגה אירופית', mls:'MLS', argentina:'ארגנטינה'};
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function when(iso) {
   if (!iso) return '<span class="muted">—</span>';
@@ -1735,6 +1763,14 @@ TEAM_NAMES = {
         "AEK Athens": "א.א.ק אתונה", "Bodø/Glimt": "בודו/גלימט", "Fenerbahçe": "פנרבחצ'ה", "LASK": "לאסק",
         "Sabah Baku": "סבאח באקו", "Shakhtar Donetsk": "שחטאר דונייצק", "Slavia Prague": "סלביה פראג",
         "Slovan Bratislava": "סלובאן ברטיסלבה", "Viking": "ויקינג",
+        # ליגה אירופית
+        "AZ Alkmaar": "א.ז. אלקמאר", "Anderlecht": "אנדרלכט", "Ararat-Armenia": "ארארט ארמניה",
+        "Beşiktaş": "בשיקטאש", "Bournemouth": "בורנמות'", "Celje": "צליה", "Crystal Palace": "קריסטל פאלאס",
+        "Dinamo Zagreb": "דינמו זאגרב", "Ferencváros": "פרנצווארוש", "Jagiellonia Białystok": "יאגיילוניה ביאליסטוק",
+        "Lech Poznań": "לך פוזנן", "Levski Sofia": "לבסקי סופיה", "Lillestrøm": "לילסטרום",
+        "NEC Nijmegen": "NEC ניימכן", "OFI": "אופי כרתים", "Omonia Nicosia": "אומוניה ניקוסיה",
+        "Sparta Prague": "ספרטה פראג", "Sturm Graz": "שטורם גראץ", "Sunderland": "סנדרלנד",
+        "Torreense": "טוריינסה", "Union Saint-Gilloise": "יוניון סן ז'ילואז", "Viktoria Plzeň": "ויקטוריה פלזן",
         # MLS
         "Atlanta United": "אטלנטה יונייטד", "Austin FC": "אוסטין", "CF Montréal": "מונטריאול",
         "Charlotte FC": "שארלוט", "Chicago Fire": "שיקגו פייר", "Colorado Rapids": "קולורדו ראפידס",
