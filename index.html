@@ -76,19 +76,22 @@
     .date-label .is-today { background:var(--accent); color:#000; font-size:0.65rem; padding:0.1rem 0.5rem; border-radius:100px; font-weight:900; }
 
     .match-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:0.9rem 1.25rem; margin-bottom:0.5rem; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:1rem; cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden; }
-    .match-card::before { content:''; position:absolute; right:0; top:0; bottom:0; width:3px; background:var(--border); transition:background 0.2s; }
+    .match-card::before { content:''; position:absolute; inset-inline-start:0; top:0; bottom:0; width:3px; background:var(--border); transition:background 0.2s; }
     .match-card:hover { background:var(--card-hover); border-color:rgba(0,229,160,0.3); transform:translateX(-2px); }
     .match-card:hover::before { background:var(--accent); }
     .match-card.is-over { border-color:rgba(0,229,160,0.12); }
     .match-card.is-live { border-color:rgba(255,107,107,0.4); }
     .match-card.is-live::before { background:var(--live); }
-    .highlight-badge { position:absolute; left:1rem; top:50%; transform:translateY(-50%); font-size:0.68rem; color:var(--accent); letter-spacing:1px; background:rgba(0,229,160,0.08); padding:0.2rem 0.6rem; border-radius:100px; border:1px solid rgba(0,229,160,0.25); }
-    .live-badge { position:absolute; left:1rem; top:50%; transform:translateY(-50%); font-size:0.68rem; color:var(--live); letter-spacing:1px; background:rgba(255,107,107,0.08); padding:0.2rem 0.6rem; border-radius:100px; border:1px solid rgba(255,107,107,0.25); animation: pulse 2s infinite; }
+    .highlight-badge { position:absolute; inset-inline-end:1rem; top:50%; transform:translateY(-50%); font-size:0.68rem; color:var(--accent); letter-spacing:1px; background:rgba(0,229,160,0.08); padding:0.2rem 0.6rem; border-radius:100px; border:1px solid rgba(0,229,160,0.25); }
+    .live-badge { position:absolute; inset-inline-end:1rem; top:50%; transform:translateY(-50%); font-size:0.68rem; color:var(--live); letter-spacing:1px; background:rgba(255,107,107,0.08); padding:0.2rem 0.6rem; border-radius:100px; border:1px solid rgba(255,107,107,0.25); animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 
     .team { display:flex; flex-direction:column; gap:0.1rem; }
-    .team.home { text-align:right; }
-    .team.away { text-align:left; }
+    /* הבית ראשון בכיוון הקריאה; הטקסט מיושר כלפי המרכז — עובד גם RTL וגם LTR */
+    .team.home { text-align:end; }
+    .team.away { text-align:start; }
+    .header-tools { display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; }
+    .lang-select { background:var(--surface); border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.75rem; padding:0.2rem 0.4rem; border-radius:6px; cursor:pointer; }
     .team-name { font-size:0.95rem; font-weight:700; line-height:1.2; }
     .match-meta { text-align:center; display:flex; flex-direction:column; align-items:center; gap:0.25rem; min-width:65px; }
     .match-time { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; color:var(--accent); letter-spacing:1px; line-height:1; }
@@ -141,37 +144,45 @@
 
 <header>
   <div class="header-inner">
-    <div class="logo">SPOILERFREE<span>לוח משחקים ותקצירים</span></div>
-    <div class="user-bar" id="user-bar"></div>
+    <div class="logo">SPOILERFREE<span data-i18n="tagline">לוח משחקים ותקצירים</span></div>
+    <div class="header-tools">
+      <select class="lang-select" id="lang-select" aria-label="Language">
+        <option value="he">🌐 עברית</option>
+        <option value="en">🌐 English</option>
+        <option value="es">🌐 Español</option>
+        <option value="fr">🌐 Français</option>
+      </select>
+      <div class="user-bar" id="user-bar"></div>
+    </div>
   </div>
 </header>
 
 <div class="league-tabs">
-  <button class="tab" data-league="premier">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
-  <button class="tab" data-league="championship">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
-  <button class="tab" data-league="israel">🇮🇱 ליגת העל</button>
-  <button class="tab" data-league="bundesliga">🇩🇪 בונדסליגה</button>
-  <button class="tab" data-league="laliga">🇪🇸 לה ליגה</button>
-  <button class="tab" data-league="seriea">🇮🇹 סריה A</button>
-  <button class="tab" data-league="ligue1">🇫🇷 ליג 1</button>
-  <button class="tab" data-league="ucl">⭐ צ'מפיונס ליג</button>
-  <button class="tab" data-league="mls">🇺🇸 MLS</button>
-  <button class="tab" data-league="argentina">🇦🇷 ארגנטינה</button>
-  <button class="tab active" data-league="__byday" style="margin-right:auto; border-style:dashed">📅 לפי יום</button>
+  <button class="tab" data-league="premier" data-i18n="lg_premier" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
+  <button class="tab" data-league="championship" data-i18n="lg_championship" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
+  <button class="tab" data-league="israel" data-i18n="lg_israel" data-prefix="🇮🇱 ">🇮🇱 ליגת העל</button>
+  <button class="tab" data-league="bundesliga" data-i18n="lg_bundesliga" data-prefix="🇩🇪 ">🇩🇪 בונדסליגה</button>
+  <button class="tab" data-league="laliga" data-i18n="lg_laliga" data-prefix="🇪🇸 ">🇪🇸 לה ליגה</button>
+  <button class="tab" data-league="seriea" data-i18n="lg_seriea" data-prefix="🇮🇹 ">🇮🇹 סריה A</button>
+  <button class="tab" data-league="ligue1" data-i18n="lg_ligue1" data-prefix="🇫🇷 ">🇫🇷 ליג 1</button>
+  <button class="tab" data-league="ucl" data-i18n="lg_ucl" data-prefix="⭐ ">⭐ צ'מפיונס ליג</button>
+  <button class="tab" data-league="mls" data-i18n="lg_mls" data-prefix="🇺🇸 ">🇺🇸 MLS</button>
+  <button class="tab" data-league="argentina" data-i18n="lg_argentina" data-prefix="🇦🇷 ">🇦🇷 ארגנטינה</button>
+  <button class="tab active" data-league="__byday" data-i18n="byday" data-prefix="📅 " style="margin-inline-start:auto; border-style:dashed">📅 לפי יום</button>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
-  <button class="md-btn" id="md-prev">→</button>
+  <button class="md-btn" id="md-prev" data-i18n="arrow_prev">→</button>
   <div class="md-label" id="md-label">מחזור 1</div>
-  <button class="md-btn" id="md-next">←</button>
+  <button class="md-btn" id="md-next" data-i18n="arrow_next">←</button>
   <select class="md-select" id="md-select"></select>
 </div>
 
 <div class="matchday-nav hidden" id="day-nav">
-  <button class="md-btn" id="day-prev">→</button>
+  <button class="md-btn" id="day-prev" data-i18n="arrow_prev">→</button>
   <div class="md-label" id="day-label" style="min-width:160px"></div>
-  <button class="md-btn" id="day-next">←</button>
-  <button class="md-btn" id="day-today">חזרה להיום</button>
+  <button class="md-btn" id="day-next" data-i18n="arrow_next">←</button>
+  <button class="md-btn" id="day-today" data-i18n="back_today">חזרה להיום</button>
 </div>
 
 <main>
@@ -190,7 +201,7 @@
 <div class="sheet-overlay" id="sheet" hidden>
   <div class="sheet">
     <div id="sheet-body"></div>
-    <button class="sheet-close" id="sheet-close">סגור</button>
+    <button class="sheet-close" id="sheet-close" data-i18n="close">סגור</button>
   </div>
 </div>
 
@@ -204,9 +215,182 @@
   </div>
 </div>
 
+<!-- תרגומים: he/en/es/fr (בדיקה אוטומטית: לכל שפה אותם מפתחות) -->
+<script type="application/json" id="i18n">
+{
+ "he": {
+  "tagline": "לוח משחקים ותקצירים",
+  "lg_premier": "פרמייר ליג", "lg_championship": "צ'מפיונשיפ", "lg_israel": "ליגת העל",
+  "lg_bundesliga": "בונדסליגה", "lg_laliga": "לה ליגה", "lg_seriea": "סריה A", "lg_ligue1": "ליג 1",
+  "lg_ucl": "צ'מפיונס ליג", "lg_mls": "MLS", "lg_argentina": "ארגנטינה",
+  "byday": "לפי יום", "matchday": "מחזור {n}", "back_today": "חזרה להיום",
+  "arrow_prev": "→", "arrow_next": "←",
+  "refresh": "↻ רענן מ-API", "refreshing": "⏳ מתעדכן...",
+  "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
+  "password_login": "כניסה בסיסמה", "account": "חשבון", "admin": "ניהול", "logout": "יציאה",
+  "my_account": "החשבון שלי", "email": "מייל", "joined": "הצטרפת", "last_login": "כניסה אחרונה", "logins": "כניסות",
+  "delete_account": "מחיקת החשבון",
+  "delete_warning": "המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.",
+  "delete_btn": "מחק את החשבון לצמיתות", "account_error": "שגיאה בטעינת החשבון", "delete_failed": "המחיקה נכשלה",
+  "badge": "▶ תקציר", "no_matches": "אין משחקים להצגה", "no_matches_hint": "לחץ \"רענן\" כדי לטעון",
+  "n_matches": "{n} משחקים", "today": "היום", "yesterday": "אתמול",
+  "offline_cached": "⚠ אין חיבור לשרת — מוצגים נתונים שמורים", "error": "שגיאה",
+  "updating_bg": "⏳ מתעדכן ברקע...", "refreshed": "רענון — {d}",
+  "refresh_empty": "הרענון לא החזיר נתונים עדכניים — נסה שוב",
+  "refresh_failed": "⚠ הרענון נכשל — מוצגים הנתונים הקיימים",
+  "diag_past": "אחרונים", "diag_next": "הבאים", "diag_rounds": "מחזורים",
+  "vs": "נגד", "searching": "מחפש תקצירים", "updating_results": "מעדכן תוצאות",
+  "web_note": "🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד",
+  "no_source": "🎬 מקור תקצירים לליגה זו עדיין לא הוגדר", "no_source_hint": "בקרוב — צריך למצוא את הערוץ הרשמי ביוטיוב",
+  "not_uploaded": "התקציר עדיין לא הועלה ליוטיוב", "try_again": "↻ נסה שוב",
+  "choose_version": "בחר גרסה לצפייה", "opens_youtube": "↗ = נפתח ביוטיוב בטאב חדש",
+  "search_again": "↻ חפש שוב (מנקה קאש)", "search_error": "שגיאה בחיפוש תקציר",
+  "no_matches_day": "אין משחקים בתאריך זה", "no_matches_day_hint": "מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה",
+  "kind_short": "תקציר קצר", "kind_full": "תקציר מלא", "kind_extended": "תקציר מורחב", "kind_regular": "תקציר",
+  "reason_not_over": "המשחק עדיין לא נגמר",
+  "reason_stale": "עדיין לא התקבל עדכון שהמשחק הסתיים — נסה שוב בעוד כמה דקות",
+  "days": ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"]
+ },
+ "en": {
+  "tagline": "Fixtures & highlights",
+  "lg_premier": "Premier League", "lg_championship": "Championship", "lg_israel": "Israeli League",
+  "lg_bundesliga": "Bundesliga", "lg_laliga": "LaLiga", "lg_seriea": "Serie A", "lg_ligue1": "Ligue 1",
+  "lg_ucl": "Champions League", "lg_mls": "MLS", "lg_argentina": "Argentina",
+  "byday": "By day", "matchday": "Matchday {n}", "back_today": "Back to today",
+  "arrow_prev": "←", "arrow_next": "→",
+  "refresh": "↻ Refresh", "refreshing": "⏳ Updating...",
+  "loading": "Loading", "loading_matches": "Loading matches", "close": "Close",
+  "password_login": "Password login", "account": "Account", "admin": "Admin", "logout": "Log out",
+  "my_account": "My account", "email": "Email", "joined": "Joined", "last_login": "Last login", "logins": "Logins",
+  "delete_account": "Delete account",
+  "delete_warning": "Deletion is permanent: your account and all usage data will be removed. To continue, type your email address.",
+  "delete_btn": "Delete my account permanently", "account_error": "Couldn't load your account", "delete_failed": "Deletion failed",
+  "badge": "▶ Highlights", "no_matches": "No matches to show", "no_matches_hint": "Press \"Refresh\" to load",
+  "n_matches": "{n} matches", "today": "Today", "yesterday": "Yesterday",
+  "offline_cached": "⚠ No connection — showing saved data", "error": "Error",
+  "updating_bg": "⏳ Updating in the background...", "refreshed": "Refreshed — {d}",
+  "refresh_empty": "The refresh returned no new data — try again",
+  "refresh_failed": "⚠ Refresh failed — showing current data",
+  "diag_past": "recent", "diag_next": "upcoming", "diag_rounds": "rounds",
+  "vs": "vs", "searching": "Looking for highlights", "updating_results": "Updating results",
+  "web_note": "🔗 Website links — open the first result; the page title may contain spoilers",
+  "no_source": "🎬 No highlights source for this league yet", "no_source_hint": "Coming soon",
+  "not_uploaded": "The highlights aren't on YouTube yet", "try_again": "↻ Try again",
+  "choose_version": "Choose a version to watch", "opens_youtube": "↗ = opens on YouTube in a new tab",
+  "search_again": "↻ Search again", "search_error": "Couldn't search for highlights",
+  "no_matches_day": "No matches on this date", "no_matches_day_hint": "From the leagues we follow",
+  "kind_short": "Short highlights", "kind_full": "Full highlights", "kind_extended": "Extended highlights", "kind_regular": "Highlights",
+  "reason_not_over": "The match hasn't finished yet",
+  "reason_stale": "We haven't received confirmation that the match has finished — try again in a few minutes",
+  "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+ },
+ "es": {
+  "tagline": "Partidos y resúmenes",
+  "lg_premier": "Premier League", "lg_championship": "Championship", "lg_israel": "Liga israelí",
+  "lg_bundesliga": "Bundesliga", "lg_laliga": "LaLiga", "lg_seriea": "Serie A", "lg_ligue1": "Ligue 1",
+  "lg_ucl": "Champions League", "lg_mls": "MLS", "lg_argentina": "Argentina",
+  "byday": "Por día", "matchday": "Jornada {n}", "back_today": "Volver a hoy",
+  "arrow_prev": "←", "arrow_next": "→",
+  "refresh": "↻ Actualizar", "refreshing": "⏳ Actualizando...",
+  "loading": "Cargando", "loading_matches": "Cargando partidos", "close": "Cerrar",
+  "password_login": "Acceso con contraseña", "account": "Cuenta", "admin": "Admin", "logout": "Salir",
+  "my_account": "Mi cuenta", "email": "Correo", "joined": "Alta", "last_login": "Último acceso", "logins": "Accesos",
+  "delete_account": "Eliminar cuenta",
+  "delete_warning": "La eliminación es definitiva: se borrarán tu cuenta y todos los datos de uso. Para continuar, escribe tu correo.",
+  "delete_btn": "Eliminar mi cuenta definitivamente", "account_error": "No se pudo cargar la cuenta", "delete_failed": "No se pudo eliminar",
+  "badge": "▶ Resumen", "no_matches": "No hay partidos", "no_matches_hint": "Pulsa \"Actualizar\" para cargar",
+  "n_matches": "{n} partidos", "today": "Hoy", "yesterday": "Ayer",
+  "offline_cached": "⚠ Sin conexión — mostrando datos guardados", "error": "Error",
+  "updating_bg": "⏳ Actualizando en segundo plano...", "refreshed": "Actualizado — {d}",
+  "refresh_empty": "La actualización no trajo datos nuevos — inténtalo de nuevo",
+  "refresh_failed": "⚠ Error al actualizar — mostrando los datos actuales",
+  "diag_past": "recientes", "diag_next": "próximos", "diag_rounds": "jornadas",
+  "vs": "vs", "searching": "Buscando resúmenes", "updating_results": "Actualizando resultados",
+  "web_note": "🔗 Enlaces web — abren el primer resultado; el título de la página puede contener spoilers",
+  "no_source": "🎬 Todavía no hay fuente de resúmenes para esta liga", "no_source_hint": "Próximamente",
+  "not_uploaded": "El resumen aún no está en YouTube", "try_again": "↻ Reintentar",
+  "choose_version": "Elige una versión", "opens_youtube": "↗ = se abre en YouTube en otra pestaña",
+  "search_again": "↻ Buscar de nuevo", "search_error": "Error al buscar el resumen",
+  "no_matches_day": "No hay partidos en esta fecha", "no_matches_day_hint": "De las ligas que seguimos",
+  "kind_short": "Resumen corto", "kind_full": "Resumen completo", "kind_extended": "Resumen extendido", "kind_regular": "Resumen",
+  "reason_not_over": "El partido aún no ha terminado",
+  "reason_stale": "Aún no hemos recibido la confirmación de que el partido terminó — inténtalo en unos minutos",
+  "days": ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
+ },
+ "fr": {
+  "tagline": "Matchs et résumés",
+  "lg_premier": "Premier League", "lg_championship": "Championship", "lg_israel": "Ligue israélienne",
+  "lg_bundesliga": "Bundesliga", "lg_laliga": "LaLiga", "lg_seriea": "Serie A", "lg_ligue1": "Ligue 1",
+  "lg_ucl": "Ligue des champions", "lg_mls": "MLS", "lg_argentina": "Argentine",
+  "byday": "Par jour", "matchday": "Journée {n}", "back_today": "Revenir à aujourd'hui",
+  "arrow_prev": "←", "arrow_next": "→",
+  "refresh": "↻ Actualiser", "refreshing": "⏳ Mise à jour...",
+  "loading": "Chargement", "loading_matches": "Chargement des matchs", "close": "Fermer",
+  "password_login": "Connexion par mot de passe", "account": "Compte", "admin": "Admin", "logout": "Déconnexion",
+  "my_account": "Mon compte", "email": "E-mail", "joined": "Inscription", "last_login": "Dernière connexion", "logins": "Connexions",
+  "delete_account": "Supprimer le compte",
+  "delete_warning": "La suppression est définitive : votre compte et toutes les données d'utilisation seront effacés. Pour continuer, saisissez votre e-mail.",
+  "delete_btn": "Supprimer définitivement mon compte", "account_error": "Impossible de charger le compte", "delete_failed": "Échec de la suppression",
+  "badge": "▶ Résumé", "no_matches": "Aucun match à afficher", "no_matches_hint": "Appuyez sur « Actualiser » pour charger",
+  "n_matches": "{n} matchs", "today": "Aujourd'hui", "yesterday": "Hier",
+  "offline_cached": "⚠ Pas de connexion — données enregistrées affichées", "error": "Erreur",
+  "updating_bg": "⏳ Mise à jour en arrière-plan...", "refreshed": "Actualisé — {d}",
+  "refresh_empty": "L'actualisation n'a rien apporté de nouveau — réessayez",
+  "refresh_failed": "⚠ Échec de l'actualisation — données actuelles affichées",
+  "diag_past": "récents", "diag_next": "à venir", "diag_rounds": "journées",
+  "vs": "contre", "searching": "Recherche des résumés", "updating_results": "Mise à jour des résultats",
+  "web_note": "🔗 Liens web — ouvrent le premier résultat ; le titre de la page peut contenir des spoilers",
+  "no_source": "🎬 Pas encore de source de résumés pour cette ligue", "no_source_hint": "Bientôt",
+  "not_uploaded": "Le résumé n'est pas encore sur YouTube", "try_again": "↻ Réessayer",
+  "choose_version": "Choisissez une version", "opens_youtube": "↗ = s'ouvre sur YouTube dans un nouvel onglet",
+  "search_again": "↻ Rechercher à nouveau", "search_error": "Erreur lors de la recherche du résumé",
+  "no_matches_day": "Aucun match à cette date", "no_matches_day_hint": "Parmi les ligues suivies",
+  "kind_short": "Résumé court", "kind_full": "Résumé complet", "kind_extended": "Résumé long", "kind_regular": "Résumé",
+  "reason_not_over": "Le match n'est pas encore terminé",
+  "reason_stale": "Nous n'avons pas encore la confirmation que le match est terminé — réessayez dans quelques minutes",
+  "days": ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+ }
+}
+</script>
+
 <script>
   // אותו origin — עובד גם מקומית (localhost:8000/app) וגם ב-Render
   const API = '';
+
+  // ── שפה ────────────────────────────────────────────
+  const I18N = JSON.parse(document.getElementById('i18n').textContent);
+  const LOCALES = { he: 'he-IL', en: 'en-GB', es: 'es-ES', fr: 'fr-FR' };
+  let LANG = 'he';
+  try { LANG = localStorage.getItem('sf:lang') || 'he'; } catch (e) {}
+  if (!I18N[LANG]) LANG = 'he';
+
+  function t(key, vars = {}) {
+    let s = (I18N[LANG] || {})[key] ?? I18N.he[key] ?? key;
+    for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
+    return s;
+  }
+  const dayName = d => (I18N[LANG].days || I18N.he.days)[d.getDay()];
+
+  // טקסטים קבועים בדף (data-i18n) + כיוון הדף
+  function applyStatic() {
+    document.documentElement.lang = LANG;
+    document.documentElement.dir = LANG === 'he' ? 'rtl' : 'ltr';
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      el.textContent = (el.dataset.prefix || '') + t(el.dataset.i18n);
+    });
+    document.getElementById('lang-select').value = LANG;
+  }
+
+  // השרת מחזיר את סוג התקציר בעברית — מתורגם כאן
+  const HE_LABEL_KIND = { 'תקציר קצר': 'kind_short', 'תקציר מלא': 'kind_full',
+                          'תקציר מורחב': 'kind_extended', 'תקציר': 'kind_regular' };
+  const kindLabel = v => HE_LABEL_KIND[v.label] ? t(HE_LABEL_KIND[v.label]) : v.label;
+  // שמות מקורות: אתרים ישראליים באנגלית, ערוץ מועדון — שם הקבוצה
+  const SRC_NAMES = { 'ספורט 1': 'Sport 1', 'ספורט 5': 'Sport 5', 'וואלה': 'Walla' };
+  function srcName(s) {
+    if (LANG === 'he') return s.name;
+    return s.club_team || SRC_NAMES[s.name] || s.name;
+  }
 
   // קונפיג לרענון client-side (TheSportsDB חסום מ-Render — הדפדפן שולף)
   // חייב להיות תואם ל-LEAGUES ב-main.py
@@ -288,11 +472,11 @@
       const bar = document.getElementById('user-bar');
       const who = document.createElement('span');
       who.dir = 'ltr';
-      who.textContent = me.email || 'כניסה בסיסמה';
+      who.textContent = me.email || t('password_login');
       bar.replaceChildren(who);
-      if (me.email) bar.insertAdjacentHTML('beforeend', '<button onclick="openAccount()">חשבון</button>');
-      if (me.is_admin) bar.insertAdjacentHTML('beforeend', '<a href="/admin/users">ניהול</a>');
-      bar.insertAdjacentHTML('beforeend', '<button onclick="logout()">יציאה</button>');
+      if (me.email) bar.insertAdjacentHTML('beforeend', `<button onclick="openAccount()">${t('account')}</button>`);
+      if (me.is_admin) bar.insertAdjacentHTML('beforeend', `<a href="/admin/users">${t('admin')}</a>`);
+      bar.insertAdjacentHTML('beforeend', `<button onclick="logout()">${t('logout')}</button>`);
     } catch (e) {}
   }
 
@@ -307,27 +491,27 @@
   function closeSheet() { document.getElementById('sheet').hidden = true; }
 
   async function openCookies() {
-    openSheet('<div class="loading">טוען</div>');
-    try { openSheet(await (await fetch(`${API}/cookies`)).text()); }
+    openSheet(`<div class="loading">${t('loading')}</div>`);
+    try { openSheet(await (await fetch(`${API}/cookies?lang=${LANG}`)).text()); }
     catch (e) { closeSheet(); }
   }
 
   async function openAccount() {
-    openSheet('<div class="loading">טוען</div>');
+    openSheet(`<div class="loading">${t('loading')}</div>`);
     try {
       const a = await apiFetch(`${API}/auth/account`).then(r => r.json());
-      const d = iso => iso ? new Date(iso).toLocaleDateString('he-IL') : '—';
-      openSheet(`<h2>החשבון שלי</h2>
-        <p>מייל: <b dir="ltr">${esc(a.email)}</b></p>
-        <p>הצטרפת: ${d(a.created_at)} · כניסה אחרונה: ${d(a.last_login)} · כניסות: ${a.login_count || 0}</p>
-        <details class="danger-zone"><summary>מחיקת החשבון</summary>
-          <p>המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.</p>
+      const d = iso => iso ? new Date(iso).toLocaleDateString(LOCALES[LANG]) : '—';
+      openSheet(`<h2>${t('my_account')}</h2>
+        <p>${t('email')}: <b dir="ltr">${esc(a.email)}</b></p>
+        <p>${t('joined')}: ${d(a.created_at)} · ${t('last_login')}: ${d(a.last_login)} · ${t('logins')}: ${a.login_count || 0}</p>
+        <details class="danger-zone"><summary>${t('delete_account')}</summary>
+          <p>${t('delete_warning')}</p>
           <input id="del-confirm" dir="ltr" autocomplete="off" placeholder="${esc(a.email)}">
-          <button class="danger-btn" onclick="deleteAccount()">מחק את החשבון לצמיתות</button>
+          <button class="danger-btn" onclick="deleteAccount()">${t('delete_btn')}</button>
           <div class="del-err" id="del-err"></div>
         </details>`);
     } catch (e) {
-      if (e.message !== 'auth') openSheet('<p>שגיאה בטעינת החשבון</p>');
+      if (e.message !== 'auth') openSheet(`<p>${t('account_error')}</p>`);
     }
   }
 
@@ -338,7 +522,7 @@
     });
     if (r.ok) { location.href = '/?fresh=1'; return; }
     let j = {}; try { j = await r.json(); } catch (e) {}
-    document.getElementById('del-err').textContent = j.detail || 'המחיקה נכשלה';
+    document.getElementById('del-err').textContent = j.detail || t('delete_failed');
   }
 
   async function logout() {
@@ -354,7 +538,7 @@
     for (const md of matchdayList) {
       const opt = document.createElement('option');
       opt.value = md;
-      opt.textContent = `מחזור ${md}`;
+      opt.textContent = t('matchday', { n: md });
       sel.appendChild(opt);
     }
     sel.value = currentMatchday;
@@ -362,7 +546,7 @@
 
   function updateMatchdayUI() {
     const idx = matchdayList.indexOf(currentMatchday);
-    document.getElementById('md-label').textContent = `מחזור ${currentMatchday}`;
+    document.getElementById('md-label').textContent = t('matchday', { n: currentMatchday });
     document.getElementById('md-select').value = currentMatchday;
     document.getElementById('md-prev').disabled = idx <= 0;
     document.getElementById('md-next').disabled = idx < 0 || idx >= matchdayList.length - 1;
@@ -378,20 +562,21 @@
     const isLive = m.status === 'LIVE';
     const badge = isLive
       ? '<span class="live-badge">🔴 LIVE</span>'
-      : (m.is_over ? '<span class="highlight-badge">▶ תקציר</span>' : '');
+      : (m.is_over ? `<span class="highlight-badge">${t('badge')}</span>` : '');
     const timeClass = isLive ? 'live' : (m.is_over ? 'past' : '');
     const cardClass = isLive ? 'is-live' : (m.is_over ? 'is-over' : '');
+    // הבית ראשון בכיוון הקריאה — בכל שפה (RTL: מימין, LTR: משמאל)
     return `
       <div class="match-card ${cardClass}"
            data-id="${m.id}" data-home="${m.home}"
            data-away="${m.away}" data-is-over="${m.is_over}">
-        <div class="team away"><div class="team-name">${m.away}</div></div>
+        <div class="team home"><div class="team-name">${m.home}</div></div>
         <div class="match-meta">
           <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
           <div class="match-vs">VS</div>
           <div class="venue">${m.venue||''}</div>
         </div>
-        <div class="team home"><div class="team-name">${m.home}</div></div>
+        <div class="team away"><div class="team-name">${m.away}</div></div>
         ${badge}
       </div>`;
   }
@@ -410,12 +595,12 @@
     const countEl   = document.getElementById('match-count');
 
     if (!matches.length) {
-      container.innerHTML = '<div class="empty">אין משחקים להצגה<br><small style="opacity:0.6">לחץ "רענן מ-API" כדי לטעון</small></div>';
+      container.innerHTML = `<div class="empty">${t('no_matches')}<br><small style="opacity:0.6">${t('no_matches_hint')}</small></div>`;
       countEl.textContent = '';
       return;
     }
 
-    countEl.textContent = `${matches.length} משחקים`;
+    countEl.textContent = t('n_matches', { n: matches.length });
     const groups = groupByDate(matches);
     let html = '';
     let todayGroupId = null;
@@ -423,7 +608,7 @@
     for (const [date, dayMatches] of Object.entries(groups)) {
       const today     = isToday(date);
       const yesterday = isYesterday(date);
-      const weekday   = dayMatches[0].weekday;
+      const weekday   = dayName(parseDateStr(date));
       const groupId   = `date-${date.replace(/\//g,'-')}`;
       if (today) todayGroupId = groupId;
 
@@ -431,8 +616,8 @@
         <div class="date-label">
           <span class="weekday">${weekday}</span>
           <span>${date}</span>
-          ${today ? '<span class="is-today">היום</span>' : ''}
-          ${yesterday ? '<span class="is-today" style="background:var(--muted)">אתמול</span>' : ''}
+          ${today ? `<span class="is-today">${t('today')}</span>` : ''}
+          ${yesterday ? `<span class="is-today" style="background:var(--muted)">${t('yesterday')}</span>` : ''}
         </div>`;
 
       for (const m of dayMatches) {
@@ -514,16 +699,16 @@
     updateRefreshBtn();
     const cached = cacheGet(league);
     if (cached && cached.matches) showLeague(league, cached.matches);
-    else document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
+    else document.getElementById('matches-container').innerHTML = `<div class="loading">${t('loading_matches')}</div>`;
 
     let data;
     try {
       data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
     } catch (err) {
       if (err.message === 'auth' || league !== currentLeague) return;
-      if (cached) setSyncNote('⚠ אין חיבור לשרת — מוצגים נתונים שמורים');
+      if (cached) setSyncNote(t('offline_cached'));
       else document.getElementById('matches-container').innerHTML =
-        `<div class="error">שגיאה: ${err.message}<br><small>אם אתה מריץ מקומית — וודא שהבקנד רץ (localhost:8000/app)</small></div>`;
+        `<div class="error">${t('error')}: ${err.message}</div>`;
       return;
     }
     cachePut(league, data);
@@ -545,7 +730,7 @@
     const btn = document.getElementById('refresh-btn');
     const busy = refreshing.has(currentLeague);
     btn.disabled = busy;
-    btn.textContent = busy ? '⏳ מתעדכן...' : '↻ רענן מ-API';
+    btn.textContent = busy ? t('refreshing') : t('refresh');
   }
 
   // מחזיר promise — מי שקורא בזמן שרענון כבר רץ מחכה לאותו רענון
@@ -560,14 +745,14 @@
   }
 
   async function runLeagueRefresh(league) {
-    if (league === currentLeague) setSyncNote('⏳ מתעדכן ברקע...');
+    if (league === currentLeague) setSyncNote(t('updating_bg'));
     let note = '';
     try {
       let data;
       if (SPORTSDB_LEAGUES[league]) {
         // sportsdb חסום מ-Render — הדפדפן שולף ושולח לשרת
         const res = await clientRefreshSportsdb(league);
-        note = res.fresh ? `רענון — ${res.diag}` : 'הרענון לא החזיר נתונים עדכניים — נסה שוב';
+        note = res.fresh ? t('refreshed', { d: res.diag }) : t('refresh_empty');
         data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
       } else {
         // football-data — שליפה מצד השרת (לא חסום); התשובה כבר מכילה הכל
@@ -576,7 +761,7 @@
       cachePut(league, data);
       showLeague(league, data.matches, true);
     } catch (e) {
-      note = e.message === 'auth' ? '' : '⚠ הרענון נכשל — מוצגים הנתונים הקיימים';
+      note = e.message === 'auth' ? '' : t('refresh_failed');
     }
     if (league === currentLeague) setSyncNote(note);
   }
@@ -592,7 +777,7 @@
     // מפתח "123" מחזיר יותר נתונים מ-"3" (15 מול 5 ב-eventsseason)
     const BASE = 'https://www.thesportsdb.com/api/v1/json/123/';
     const events = [];
-    const counts = { 'אחרונים': 0, 'הבאים': 0, 'מחזורים': 0 };
+    const counts = { past: 0, next: 0, rounds: 0 };
 
     async function grab(ep, label) {
       try {
@@ -609,8 +794,8 @@
     await Promise.all(cfg.ids.map(async id => {
       // 1. אחרונים — גם נתונים וגם זיהוי המחזור הנוכחי; 2. הבאים
       const [past] = await Promise.all([
-        grab(`eventspastleague.php?id=${id}`, 'אחרונים'),
-        grab(`eventsnextleague.php?id=${id}`, 'הבאים'),
+        grab(`eventspastleague.php?id=${id}`, 'past'),
+        grab(`eventsnextleague.php?id=${id}`, 'next'),
       ]);
       // 3. חלון מחזורים: eventsround עוקף את תקרת eventsseason —
       //    מחזור שלם (~10 משחקים) נכנס מתחת לתקרה
@@ -622,7 +807,7 @@
       const rounds = [];
       for (let r = Math.max(1, maxRound - 1); r <= maxRound + 3; r++) rounds.push(r);
       await Promise.all(rounds.map(r =>
-        grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'מחזורים')));
+        grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'rounds')));
     }));
 
     // סינון משחקים ישנים מ-14 יום — מנקה שאריות מסבבים קודמים
@@ -639,7 +824,7 @@
       });
     }
     // דיאגנוסטיקה: כמה החזיר כל endpoint של TheSportsDB
-    const diag = Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    const diag = Object.entries(counts).map(([k, v]) => `${t('diag_' + k)}: ${v}`).join(' · ');
     return { fresh: fresh.length, diag };
   }
 
@@ -655,12 +840,12 @@
     const title = document.getElementById('modal-title');
     const body  = document.getElementById('modal-body');
 
-    title.textContent = `${home} נגד ${away}`;
+    title.textContent = `${home} ${t('vs')} ${away}`;
 
     // תמיד פונים לשרת — גם אם הרשימה חושבת שהמשחק לא נגמר.
     // הסטטוס ברשימה עלול להיות מיושן; השרת יודע לרענן אוטומטית
     // (football-data) או להחזיר הודעה מדויקת עם הנחיה.
-    body.innerHTML = '<div class="loading">מחפש תקצירים</div>';
+    body.innerHTML = `<div class="loading">${t('searching')}</div>`;
     modal.classList.add('open');
 
     apiFetch(`${API}/highlights/${matchId}`)
@@ -670,7 +855,7 @@
           if (data.needs_refresh && !retried) {
             // הסטטוס ב-DB מיושן — מרעננים את הליגה מכאן ופותחים שוב.
             // עובד מכל עמוד (גם "לפי יום"), בלי לשלוח את המשתמש לטאב הליגה.
-            body.innerHTML = '<div class="loading">מעדכן תוצאות</div>';
+            body.innerHTML = `<div class="loading">${t('updating_results')}</div>`;
             refreshLeague(data.league_key).then(() => {
               const stillOpen = currentMatchId === matchId &&
                 document.getElementById('modal').classList.contains('open');
@@ -679,7 +864,8 @@
             });
             return;
           }
-          body.innerHTML = `<div class="no-highlight-msg">⏳ ${data.reason}</div>`;
+          const reason = data.reason_code ? t('reason_' + data.reason_code) : data.reason;
+          body.innerHTML = `<div class="no-highlight-msg">⏳ ${reason}</div>`;
           return;
         }
 
@@ -690,7 +876,7 @@
           if (!source.videos || !source.videos.length) continue;
           for (const v of source.videos) {
             // תמיד מציגים את סוג התקציר — שקיפות מלאה על מה לוחצים
-            const label = `${source.name} — ${v.label}`;
+            const label = `${srcName(source)} — ${kindLabel(v)}`;
             if (source.allow_embed) {
               allBtns.push(
                 `<button class="play-btn ${v.extended ? 'extended' : ''}"
@@ -706,17 +892,17 @@
 
         // כפתורי אתר (ספורט1/וואלה/ספורט5) — קפיצה לתוצאה ראשונה
         const webBtns = (data.web_links || []).map(l =>
-          `<button class="retry-btn" onclick="openWeb('${l.url}','${l.name}')">🔗 ${l.name} ↗</button>`);
+          `<button class="retry-btn" onclick="openWeb('${l.url}','${l.name}')">🔗 ${srcName(l)} ↗</button>`);
         const webRow = webBtns.length
           ? `<div class="sources-row">${webBtns.join('')}</div>
-             <div class="shield-note">🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד</div>`
+             <div class="shield-note">${t('web_note')}</div>`
           : '';
 
         if (!hasChannel && !webBtns.length) {
           body.innerHTML = `
             <div class="no-highlight-msg">
-              🎬 מקור תקצירים לליגה זו עדיין לא הוגדר
-              <br><small style="opacity:0.5">בקרוב — צריך למצוא את הערוץ הרשמי ביוטיוב</small>
+              ${t('no_source')}
+              <br><small style="opacity:0.5">${t('no_source_hint')}</small>
             </div>`;
           return;
         }
@@ -726,9 +912,9 @@
             <div class="video-container">
               <div class="spoiler-shield">
                 <div class="shield-icon">🔍</div>
-                <div class="shield-text">התקציר עדיין לא הועלה ליוטיוב</div>
+                <div class="shield-text">${t('not_uploaded')}</div>
                 ${webRow}
-                <button class="retry-btn" onclick="retryHighlights('${matchId}', '${home}', '${away}')">↻ נסה שוב</button>
+                <button class="retry-btn" onclick="retryHighlights('${matchId}', '${home}', '${away}')">${t('try_again')}</button>
               </div>
             </div>`;
           return;
@@ -738,19 +924,19 @@
           <div class="video-container">
             <div class="spoiler-shield" id="shield">
               <div class="shield-icon">🛡️</div>
-              <div class="shield-text">בחר גרסה לצפייה</div>
+              <div class="shield-text">${t('choose_version')}</div>
               <div class="sources-row">${allBtns.join('')}</div>
-              <div class="shield-note">↗ = נפתח ביוטיוב בטאב חדש</div>
+              <div class="shield-note">${t('opens_youtube')}</div>
               ${webRow}
               <button class="retry-btn" style="opacity:0.6"
-                      onclick="retryHighlights('${matchId}', '${home}', '${away}')">↻ חפש שוב (מנקה קאש)</button>
+                      onclick="retryHighlights('${matchId}', '${home}', '${away}')">${t('search_again')}</button>
             </div>
             <div id="video-frame"></div>
           </div>`;
       })
       .catch(err => {
         if (err.message === 'auth') return;
-        body.innerHTML = `<div class="no-highlight-msg">שגיאה בחיפוש תקציר</div>`;
+        body.innerHTML = `<div class="no-highlight-msg">${t('search_error')}</div>`;
       });
   }
 
@@ -790,7 +976,6 @@
   // ── תצוגת "לפי יום" ─────────────────────────────────
 
   let currentDay = new Date();
-  const HEB_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
 
   function isoDay(d) {
     const pad = n => String(n).padStart(2,'0');
@@ -814,8 +999,8 @@
   function updateDayUI() {
     const iso = isoDay(currentDay), todayIso = isoDay(new Date());
     const [y, mo, d] = iso.split('-');
-    let label = `${HEB_DAYS[currentDay.getDay()]} · ${d}/${mo}`;
-    if (iso === todayIso) label += ' (היום)';
+    let label = `${dayName(currentDay)} · ${d}/${mo}`;
+    if (iso === todayIso) label += ` (${t('today')})`;
     document.getElementById('day-label').textContent = label;
     document.getElementById('day-today').disabled = iso === todayIso;
   }
@@ -823,7 +1008,7 @@
   async function loadDay() {
     updateDayUI();
     const container = document.getElementById('matches-container');
-    container.innerHTML = '<div class="loading">טוען משחקים</div>';
+    container.innerHTML = `<div class="loading">${t('loading_matches')}</div>`;
     try {
       const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}`)
                      .then(r => r.json());
@@ -836,13 +1021,13 @@
                       .filter(lk => !autoRefreshed.has(lk));
       if (stale.length) {
         stale.forEach(lk => autoRefreshed.add(lk));
-        document.getElementById('match-count').textContent += ' · ⏳ מעדכן תוצאות';
+        document.getElementById('match-count').textContent += ` · ⏳ ${t('updating_results')}`;
         Promise.all(stale.map(lk => refreshLeague(lk)))
           .then(() => { if (currentLeague === '__byday') loadDay(); });
       }
     } catch (err) {
       if (err.message === 'auth') return;
-      container.innerHTML = `<div class="error">שגיאה: ${err.message}</div>`;
+      container.innerHTML = `<div class="error">${t('error')}: ${err.message}</div>`;
     }
   }
 
@@ -850,20 +1035,20 @@
     const container = document.getElementById('matches-container');
     const countEl   = document.getElementById('match-count');
     if (!matches.length) {
-      container.innerHTML = '<div class="empty">אין משחקים בתאריך זה<br>' +
-        '<small style="opacity:0.6">מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה</small></div>';
+      container.innerHTML = `<div class="empty">${t('no_matches_day')}<br>` +
+        `<small style="opacity:0.6">${t('no_matches_day_hint')}</small></div>`;
       countEl.textContent = '';
       return;
     }
-    countEl.textContent = `${matches.length} משחקים`;
+    countEl.textContent = t('n_matches', { n: matches.length });
     // השרת כבר מיין: סדר ליגות ואז שעה — נשאר רק לקבץ לכותרות
     let html = '', lastLeague = null;
     for (const m of matches) {
-      if (m.league !== lastLeague) {
+      if (m.league_key !== lastLeague) {
         if (lastLeague !== null) html += '</div>';
         html += `<div class="date-group">
-          <div class="date-label"><span class="weekday">${m.league}</span></div>`;
-        lastLeague = m.league;
+          <div class="date-label"><span class="weekday">${t('lg_' + m.league_key)}</span></div>`;
+        lastLeague = m.league_key;
       }
       html += matchCardHTML(m);
     }
@@ -914,7 +1099,20 @@
   document.getElementById('refresh-btn').addEventListener('click', doRefresh);
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
+  // מתג שפה: נשמר במכשיר, הדף מתורגם ומוצג מחדש בלי טעינה
+  document.getElementById('lang-select').addEventListener('change', e => {
+    LANG = e.target.value;
+    try { localStorage.setItem('sf:lang', LANG); } catch (err) {}
+    applyStatic();
+    updateRefreshBtn();
+    loadUserBar();
+    setSyncNote('');
+    if (currentLeague === '__byday') loadDay();
+    else if (leagueData[currentLeague]) showLeague(currentLeague, leagueData[currentLeague], true);
+  });
+
   // ── Init ───────────────────────────────────────────
+  applyStatic();
   enterDayView();
   loadUserBar();
   track('app_open');

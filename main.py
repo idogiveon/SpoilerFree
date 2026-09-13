@@ -419,6 +419,59 @@ def _notify_admins_new_user(email: str):
                    f"לאישור או חסימה: {APP_URL}/admin/users\n")
 
 
+# תרגומי מסך הכניסה (השפה נשמרת במכשיר — אותה בחירה כמו באפליקציה).
+# err_*: הודעות השרת (בעברית) → מפתח, כדי להציג אותן בשפת המשתמש.
+LOGIN_I18N = {
+    "he": {"title": "כניסה", "enter_email": "הכנס מייל ונשלח לך קוד כניסה", "send_code": "שלח קוד",
+           "sent_to": "שלחנו קוד בן 6 ספרות אל", "enter": "כניסה", "other_email": "מייל אחר / שלח שוב",
+           "request_sent": "✓ הבקשה נשלחה", "pending": "החשבון ממתין לאישור. תקבל מייל ברגע שהוא יאושר.",
+           "back": "חזרה", "password": "סיסמה", "back_to_email": "חזרה לכניסה במייל",
+           "legacy_link": "כניסה עם סיסמה (זמני)", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
+           "code_len": "הקוד הוא 6 ספרות", "wrong_password": "סיסמה שגויה",
+           "err_invalid_email": "כתובת מייל לא תקינה", "err_send_failed": "שליחת המייל נכשלה — נסה שוב בעוד דקה",
+           "err_expired": "הקוד פג תוקף — בקש קוד חדש", "err_too_many": "יותר מדי ניסיונות — בקש קוד חדש",
+           "err_wrong_code": "קוד שגוי", "err_pending": "החשבון ממתין לאישור"},
+    "en": {"title": "Log in", "enter_email": "Enter your email and we'll send you a login code", "send_code": "Send code",
+           "sent_to": "We sent a 6-digit code to", "enter": "Log in", "other_email": "Different email / resend",
+           "request_sent": "✓ Request sent", "pending": "Your account is awaiting approval. We'll email you once it's approved.",
+           "back": "Back", "password": "Password", "back_to_email": "Back to email login",
+           "legacy_link": "Log in with password (temporary)", "ok": "OK", "generic_err": "Something went wrong — try again",
+           "code_len": "The code has 6 digits", "wrong_password": "Wrong password",
+           "err_invalid_email": "Invalid email address", "err_send_failed": "Couldn't send the email — try again in a minute",
+           "err_expired": "The code has expired — request a new one", "err_too_many": "Too many attempts — request a new code",
+           "err_wrong_code": "Wrong code", "err_pending": "Your account is awaiting approval"},
+    "es": {"title": "Entrar", "enter_email": "Escribe tu correo y te enviaremos un código de acceso", "send_code": "Enviar código",
+           "sent_to": "Enviamos un código de 6 dígitos a", "enter": "Entrar", "other_email": "Otro correo / reenviar",
+           "request_sent": "✓ Solicitud enviada", "pending": "Tu cuenta está pendiente de aprobación. Te avisaremos por correo cuando se apruebe.",
+           "back": "Volver", "password": "Contraseña", "back_to_email": "Volver al acceso por correo",
+           "legacy_link": "Entrar con contraseña (temporal)", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
+           "code_len": "El código tiene 6 dígitos", "wrong_password": "Contraseña incorrecta",
+           "err_invalid_email": "Correo no válido", "err_send_failed": "No se pudo enviar el correo — inténtalo en un minuto",
+           "err_expired": "El código ha caducado — pide uno nuevo", "err_too_many": "Demasiados intentos — pide un código nuevo",
+           "err_wrong_code": "Código incorrecto", "err_pending": "Tu cuenta está pendiente de aprobación"},
+    "fr": {"title": "Connexion", "enter_email": "Saisissez votre e-mail et nous vous enverrons un code", "send_code": "Envoyer le code",
+           "sent_to": "Nous avons envoyé un code à 6 chiffres à", "enter": "Se connecter", "other_email": "Autre e-mail / renvoyer",
+           "request_sent": "✓ Demande envoyée", "pending": "Votre compte est en attente de validation. Vous recevrez un e-mail dès qu'il sera validé.",
+           "back": "Retour", "password": "Mot de passe", "back_to_email": "Retour à la connexion par e-mail",
+           "legacy_link": "Connexion par mot de passe (temporaire)", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
+           "code_len": "Le code comporte 6 chiffres", "wrong_password": "Mot de passe incorrect",
+           "err_invalid_email": "Adresse e-mail invalide", "err_send_failed": "L'e-mail n'a pas pu être envoyé — réessayez dans une minute",
+           "err_expired": "Le code a expiré — demandez-en un nouveau", "err_too_many": "Trop de tentatives — demandez un nouveau code",
+           "err_wrong_code": "Code incorrect", "err_pending": "Votre compte est en attente de validation"},
+}
+
+# מייל הקוד בשפת המשתמש. הנושא מסתיים בקוד (רואים אותו בהתראה בטלפון).
+CODE_EMAIL = {
+    "he": ("קוד כניסה ל-SpoilerFree: {code}",
+           "הקוד שלך: {code}\n\nתקף ל-{m} דקות. אם לא ביקשת — פשוט התעלם מהמייל.\n"),
+    "en": ("Your SpoilerFree login code: {code}",
+           "Your code: {code}\n\nValid for {m} minutes. If you didn't request it, just ignore this email.\n"),
+    "es": ("Tu código de acceso a SpoilerFree: {code}",
+           "Tu código: {code}\n\nVálido durante {m} minutos. Si no lo pediste, ignora este correo.\n"),
+    "fr": ("Votre code de connexion SpoilerFree : {code}",
+           "Votre code : {code}\n\nValable {m} minutes. Si vous ne l'avez pas demandé, ignorez cet e-mail.\n"),
+}
+
 LOGIN_PAGE = """<!DOCTYPE html>
 <html lang="he" dir="rtl"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -450,51 +503,82 @@ padding:0.2rem;text-decoration:underline}
 .cookie-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;
 align-items:center;justify-content:center;padding:1rem;z-index:10}
 .cookie-box{background:#13131a;border:1px solid #2a2a3a;border-radius:12px;
-max-width:460px;max-height:80vh;overflow:auto;padding:1.5rem;text-align:right}
+max-width:460px;max-height:80vh;overflow:auto;padding:1.5rem;text-align:start}
 .cookie-box h2{font-size:1rem;margin:0 0 0.8rem}
 .cookie-box h3{font-size:0.8rem;color:#9a9ab0;margin:1rem 0 0.3rem}
 .cookie-box p{font-size:0.78rem;color:#6b6b80;margin:0}
 .cookie-box button{margin-top:1.2rem}
 [hidden]{display:none!important}
+.lang{position:fixed;top:12px;inset-inline-end:12px;background:#13131a;color:#9a9ab0;
+border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75rem}
 </style></head><body>
+<select class="lang" id="lang-select" aria-label="Language">
+  <option value="he">🌐 עברית</option><option value="en">🌐 English</option>
+  <option value="es">🌐 Español</option><option value="fr">🌐 Français</option>
+</select>
 <div class="box"><h1>SPOILERFREE</h1>
 
 <div id="step-email">
-  <p>הכנס מייל ונשלח לך קוד כניסה</p>
+  <p data-i18n="enter_email">הכנס מייל ונשלח לך קוד כניסה</p>
   <input type="email" id="email" placeholder="you@example.com" autocomplete="email" dir="ltr">
-  <button id="send-btn" onclick="sendCode()">שלח קוד</button>
+  <button id="send-btn" onclick="sendCode()" data-i18n="send_code">שלח קוד</button>
 </div>
 
 <div id="step-code" hidden>
-  <p>שלחנו קוד בן 6 ספרות אל<br><b id="sent-to" dir="ltr"></b></p>
+  <p><span data-i18n="sent_to">שלחנו קוד בן 6 ספרות אל</span><br><b id="sent-to" dir="ltr"></b></p>
   <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" dir="ltr">
-  <button id="verify-btn" onclick="verify()">כניסה</button>
-  <button class="link" onclick="back()">מייל אחר / שלח שוב</button>
+  <button id="verify-btn" onclick="verify()" data-i18n="enter">כניסה</button>
+  <button class="link" onclick="back()" data-i18n="other_email">מייל אחר / שלח שוב</button>
 </div>
 
 <div id="step-pending" hidden>
-  <p class="ok">✓ הבקשה נשלחה</p>
-  <p>החשבון ממתין לאישור. תקבל מייל ברגע שהוא יאושר.</p>
-  <button class="link" onclick="back()">חזרה</button>
+  <p class="ok" data-i18n="request_sent">✓ הבקשה נשלחה</p>
+  <p data-i18n="pending">החשבון ממתין לאישור. תקבל מייל ברגע שהוא יאושר.</p>
+  <button class="link" onclick="back()" data-i18n="back">חזרה</button>
 </div>
 
 <div id="step-legacy" hidden>
   <input type="password" id="pw" placeholder="סיסמה">
-  <button onclick="legacy()">כניסה</button>
-  <button class="link" onclick="back()">חזרה לכניסה במייל</button>
+  <button onclick="legacy()" data-i18n="enter">כניסה</button>
+  <button class="link" onclick="back()" data-i18n="back_to_email">חזרה לכניסה במייל</button>
 </div>
 
 <div class="err" id="err"></div>
-<!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
+<!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')" data-i18n="legacy_link">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
 </div>
 <button class="cookie-link" onclick="openCookies()">Cookie settings</button>
 <div class="cookie-overlay" id="cookie-overlay" hidden
      onclick="if (event.target === this) closeCookies()">
   <div class="cookie-box"><div id="cookie-body"></div>
-    <button onclick="closeCookies()">אישור</button></div>
+    <button onclick="closeCookies()" data-i18n="ok">אישור</button></div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
+// ── שפה (אותה בחירה כמו באפליקציה — נשמרת במכשיר) ──
+const L = __LOGIN_I18N__;
+let LANG = 'he';
+try { LANG = localStorage.getItem('sf:lang') || 'he'; } catch (e) {}
+if (!L[LANG]) LANG = 'he';
+const t = k => (L[LANG] || {})[k] ?? L.he[k] ?? k;
+function applyLang() {
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = LANG === 'he' ? 'rtl' : 'ltr';
+  document.title = 'SpoilerFree — ' + t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  $('pw').placeholder = t('password');
+  $('lang-select').value = LANG;
+}
+$('lang-select').addEventListener('change', e => {
+  LANG = e.target.value;
+  try { localStorage.setItem('sf:lang', LANG); } catch (err) {}
+  applyLang();
+});
+// הודעות השרת מגיעות בעברית — מתורגמות לפי המפתח שלהן
+function serverMsg(detail) {
+  const k = Object.keys(L.he).find(k => k.startsWith('err_') && L.he[k] === detail);
+  return k ? t(k) : (detail || t('generic_err'));
+}
+applyLang();
 function show(id) {
   for (const s of ['step-email','step-code','step-pending','step-legacy']) $(s).hidden = s !== id;
   $('err').textContent = '';
@@ -504,7 +588,7 @@ async function post(url, body) {
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
                               body: JSON.stringify(body)});
   let j = {}; try { j = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(j.detail || 'שגיאה — נסה שוב');
+  if (!r.ok) throw new Error(serverMsg(j.detail));
   return j;
 }
 async function sendCode() {
@@ -512,7 +596,7 @@ async function sendCode() {
   if (!email) return;
   $('send-btn').disabled = true; $('err').textContent = '';
   try {
-    const j = await post('/auth/request_code', {email});
+    const j = await post('/auth/request_code', {email, lang: LANG});
     if (j.status === 'pending') { show('step-pending'); return; }
     $('sent-to').textContent = email; show('step-code'); $('code').focus();
   } catch (e) { $('err').textContent = e.message; }
@@ -520,7 +604,7 @@ async function sendCode() {
 }
 async function verify() {
   const code = $('code').value.trim();
-  if (code.length !== 6) { $('err').textContent = 'הקוד הוא 6 ספרות'; return; }
+  if (code.length !== 6) { $('err').textContent = t('code_len'); return; }
   $('verify-btn').disabled = true; $('err').textContent = '';
   try {
     await post('/auth/verify', {email: $('email').value.trim(), code});
@@ -530,11 +614,11 @@ async function verify() {
 }
 async function legacy() {
   try { await post('/login', {password: $('pw').value}); location.href = '/?fresh=1'; }
-  catch (e) { $('err').textContent = 'סיסמה שגויה'; }
+  catch (e) { $('err').textContent = t('wrong_password'); }
 }
 async function openCookies() {
   $('cookie-overlay').hidden = false;
-  try { $('cookie-body').innerHTML = await (await fetch('/cookies')).text(); } catch (e) {}
+  try { $('cookie-body').innerHTML = await (await fetch('/cookies?lang=' + LANG)).text(); } catch (e) {}
 }
 function closeCookies() { $('cookie-overlay').hidden = true; }
 $('email').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
@@ -546,7 +630,7 @@ $('email').focus();
 
 
 def render_login_page() -> str:
-    page = LOGIN_PAGE
+    page = LOGIN_PAGE.replace("__LOGIN_I18N__", json.dumps(LOGIN_I18N, ensure_ascii=False))
     if not APP_PASSWORD:
         page = re.sub(r"<!--LEGACY-->.*?<!--/LEGACY-->", "", page, flags=re.S)
     return page
@@ -2207,10 +2291,57 @@ COOKIES_HTML = """<h2>הגדרות עוגיות ופרטיות</h2>
 ההתחברות.</p>"""
 
 
+COOKIES_HTML_BY_LANG = {
+    "he": COOKIES_HTML,
+    "en": """<h2>Cookie & privacy settings</h2>
+<p>We use cookies and similar technologies to make the site work, remember your
+login and improve the service.</p>
+<h3>Essential cookies</h3>
+<p>Needed for login and security (a login cookie for up to 90 days). They can't be turned off.</p>
+<h3>Local storage</h3>
+<p>Fixtures and the page are stored on your device so the site opens quickly, even on a weak connection.</p>
+<h3>Usage data</h3>
+<p>We store your email address, login times, and which leagues, matches and highlights
+you opened — to run and improve the service. This data is not sold or shared with third parties.</p>
+<h3>Third-party services</h3>
+<p>Videos open on YouTube and are subject to YouTube and Google policies. Fonts load from Google Fonts.</p>
+<h3>Manage and delete</h3>
+<p>You can view your account details and delete your account permanently from "Account" at the top of the page, after logging in.</p>""",
+    "es": """<h2>Configuración de cookies y privacidad</h2>
+<p>Usamos cookies y tecnologías similares para que el sitio funcione, recordar tu
+sesión y mejorar el servicio.</p>
+<h3>Cookies necesarias</h3>
+<p>Necesarias para el inicio de sesión y la seguridad (una cookie de sesión de hasta 90 días). No se pueden desactivar.</p>
+<h3>Almacenamiento local</h3>
+<p>Los partidos y la página se guardan en tu dispositivo para que el sitio abra rápido, incluso con mala conexión.</p>
+<h3>Datos de uso</h3>
+<p>Guardamos tu correo, las horas de acceso y qué ligas, partidos y resúmenes abriste,
+para operar y mejorar el servicio. No se venden ni se comparten con terceros.</p>
+<h3>Servicios de terceros</h3>
+<p>Los vídeos se abren en YouTube y se rigen por las políticas de YouTube y Google. Las fuentes se cargan desde Google Fonts.</p>
+<h3>Gestión y eliminación</h3>
+<p>Puedes ver los datos de tu cuenta y eliminarla definitivamente desde "Cuenta", arriba de la página, tras iniciar sesión.</p>""",
+    "fr": """<h2>Paramètres des cookies et confidentialité</h2>
+<p>Nous utilisons des cookies et des technologies similaires pour faire fonctionner le
+site, mémoriser votre connexion et améliorer le service.</p>
+<h3>Cookies essentiels</h3>
+<p>Nécessaires à la connexion et à la sécurité (un cookie de connexion jusqu'à 90 jours). Ils ne peuvent pas être désactivés.</p>
+<h3>Stockage local</h3>
+<p>Le calendrier et la page sont enregistrés sur votre appareil pour que le site s'ouvre vite, même avec une connexion faible.</p>
+<h3>Données d'utilisation</h3>
+<p>Nous enregistrons votre e-mail, vos heures de connexion et les ligues, matchs et
+résumés consultés, pour faire fonctionner et améliorer le service. Ces données ne sont ni vendues ni partagées.</p>
+<h3>Services tiers</h3>
+<p>Les vidéos s'ouvrent sur YouTube et relèvent des règles de YouTube et Google. Les polices sont chargées depuis Google Fonts.</p>
+<h3>Gestion et suppression</h3>
+<p>Vous pouvez consulter votre compte et le supprimer définitivement via « Compte » en haut de la page, une fois connecté.</p>""",
+}
+
+
 @app.get("/cookies")
-def cookies_policy():
+def cookies_policy(lang: str = "he"):
     """תוכן חלון "Cookie settings" — ציבורי, משותף למסך הכניסה ולאפליקציה."""
-    return HTMLResponse(COOKIES_HTML)
+    return HTMLResponse(COOKIES_HTML_BY_LANG.get(lang, COOKIES_HTML))
 
 
 @app.get("/health/db")
@@ -2437,11 +2568,12 @@ def get_highlights(request: Request, match_id: str):
                 # סטטוס מיושן, ו-sportsdb חסום מצד השרת: הדפדפן מרענן את
                 # הליגה בעצמו (needs_refresh) ופותח שוב — מכל עמוד, כולל "לפי יום"
                 return {"available": False, "needs_refresh": True,
-                        "league_key": row["league_key"],
+                        "league_key": row["league_key"], "reason_code": "stale",
                         "reason": "עדיין לא התקבל עדכון שהמשחק הסתיים — "
                                   "נסה שוב בעוד כמה דקות",
                         "sources": []}
-            return {"available": False, "reason": "המשחק עדיין לא נגמר",
+            return {"available": False, "reason_code": "not_over",
+                    "reason": "המשחק עדיין לא נגמר",
                     "sources": []}
 
     sources = get_sources_for_match(row)
@@ -2574,6 +2706,11 @@ def get_highlights(request: Request, match_id: str):
             else:
                 url = "https://duckduckgo.com/?q=" + quote(f"{wq} {w['domain']}")
         web_links.append({"name": w["name"], "url": url})
+
+    # שם הקבוצה לצד ערוץ מועדון — הפרונט מציג אותו בשפת המשתמש
+    club_of = {s["id"]: s.get("club_team") for s in sources}
+    for r in results:
+        r["club_team"] = club_of.get(r["source_id"])
 
     return {
         "available": True,
@@ -3053,9 +3190,10 @@ def auth_request_code(payload: dict = Body(...)):
          (now + timedelta(minutes=CODE_MINUTES)).isoformat(), now.isoformat()))
     conn.commit()
     conn.close()
-    ok = send_email(email, f"קוד כניסה ל-SpoilerFree: {code}",
-                    f"הקוד שלך: {code}\n\nתקף ל-{CODE_MINUTES} דקות. "
-                    f"אם לא ביקשת — פשוט התעלם מהמייל.\n")
+    lang = payload.get("lang") if payload.get("lang") in CODE_EMAIL else "he"
+    subject, body = CODE_EMAIL[lang]
+    ok = send_email(email, subject.format(code=code),
+                    body.format(code=code, m=CODE_MINUTES))
     if not ok:
         conn = get_db()
         conn.execute("DELETE FROM login_codes WHERE email=?", (email,))
