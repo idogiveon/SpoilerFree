@@ -81,9 +81,15 @@ LEAGUES = {
         # הקבוצות מסננת את ליג 1/ליג 2. משחק בן יום-יומיים+ → search.list.
         # ערוצי המועדונים קודם (כמו בפרמייר ובצ'מפיונס), Sky אחריהם כגיבוי.
         # אומתו 13.9.26 מול ה-RSS הציבורי: כל ערוץ כאן העלה תקציר ממחזור 6–7.
-        # בלי ערוץ פעיל: לינקולן, נוריץ' (@OfficialNCFC הוא נוטס קאונטי),
-        # וולבס, רקסהאם — מקבלים את ערוץ היריבה + Sky.
+        # רקסהאם, לינקולן, נוריץ' ו-וולבס — ערוצים שהמשתמש מצא (handles לא
+        # סטנדרטיים: @WxmAFCofficial, @lincolncityfc1685, @CanariesTV,
+        # @OfficialWolvesVideo), אומתו באותה דרך (וולבס: מחזורים 4–5 — מחזור 6
+        # נדחה ל-20.10 ומחזור 7 טרם שוחק). כל 24 המועדונים מכוסים.
         "club_channels": {
+            "Wolverhampton Wanderers": "UCQ7Lqg5Czh5djGK6iOG53KQ",
+            "Wrexham":              "UCS7BAYpqOSaYy-pZp6oO4PA",
+            "Lincoln City":         "UCCLmGW0zE-1Gdagxg52G7sA",
+            "Norwich City":         "UCzdkZv6--BWsUQ9rKUtQ1TQ",
             "Birmingham City":      "UCW1HMToSBse9JgQtsm2vMsQ",
             "Blackburn Rovers":     "UCg4185wSpo9swSCSUEYUGTg",
             "Bolton Wanderers":     "UC6oTkDRXLR6GO53l44i0LFw",
@@ -252,6 +258,22 @@ LEAGUES = {
         "web_sources": [
             {"name": "ספורט 5", "domain": "sport5.co.il",
              "query": "תקציר {home} {away}"},
+        ],
+    },
+    "mls": {
+        "name": "MLS",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4346"],
+        "sportsdb_season": "2026",   # עונה קלנדרית
+        # הערוץ הרשמי מעלה תקציר לכל משחק: "Home vs. Away | Full Match
+        # Highlights" (אומת 13.9.26). ערוץ עמוס מאוד (15 סרטונים ב-3 שעות) —
+        # משחק בן כמה שעות+ עובר ל-search.list (100 יחידות, פעם אחת למשחק).
+        "sources": [
+            {"id": "mls_official", "name": "MLS",
+             "channel_id": "UCSZbXT5TLLW_i-5W8FZpFsg",
+             "search_template": "{home} vs {away} highlights",
+             "title_include": ["highlights"],
+             "allow_embed": False},
         ],
     },
     "argentina": {
@@ -564,7 +586,7 @@ button.no{border-color:#ff4757;color:#ff4757}
 </table></div>
 <script>
 const LEAGUES = {premier:'פרמייר', championship:"צ'מפיונשיפ", israel:'ליגת העל', bundesliga:'בונדסליגה', laliga:'לה ליגה',
-  seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", argentina:'ארגנטינה'};
+  seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", mls:'MLS', argentina:'ארגנטינה'};
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function when(iso) {
   if (!iso) return '<span class="muted">—</span>';
@@ -1665,6 +1687,11 @@ TEAM_ALIASES = {
     "Sheffield United": ["sheff utd", "sheffield utd"],
     "Portsmouth": ["pompey"],
     "Preston North End": ["pne"],
+    # MLS — השמות בכותרות הערוץ הרשמי
+    "Los Angeles FC": ["lafc"],
+    "St. Louis City SC": ["st. louis"],
+    "DC United": ["d.c. united"],
+    "New York City FC": ["nycfc"],
 }
 
 # סיומות כלליות — לא מספיקות לבד לזיהוי קבוצה בכותרת. בלי זה, היריבה
@@ -1673,6 +1700,8 @@ TEAM_ALIASES = {
 GENERIC_TEAM_WORDS = {
     "city", "united", "county", "rovers", "athletic", "town", "wanderers",
     "albion", "rangers", "wednesday", "end",
+    # קיצורים (MLS ועוד): "sc" של St. Louis City SC היה נמצא בכל "score"
+    "sc", "cf", "fc", "afc",
 }
 
 
@@ -1748,8 +1777,8 @@ def is_match_highlight(title: str, home: str, away: str,
                    # קבוצות נוער / תוכן נלווה מאותו ערוץ ואותו יריב
                    "u19", "uyl", "youth league", "watchparty", "re-live",
                    "vlog", "uncut", "backstage",
-                   # תוכנית אולפן לפני המשחק (Man City, Shakhtar)
-                   "matchday live"])
+                   # תוכנית אולפן לפני המשחק (Man City, Shakhtar, Wrexham)
+                   "matchday live", "match day live"])
 
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
