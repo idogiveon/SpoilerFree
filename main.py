@@ -1541,6 +1541,9 @@ def fetched_recently(row, minutes: int = 10) -> bool:
 # ערוצים ישראליים מתייגים בעברית — חיפוש בשמות אנגליים מחזיר ריק.
 # התאמה לפי הכלה (case-insensitive), הארוך/ספציפי קודם.
 HEB_TEAMS = [
+    # sportsdb כותב "Tel-Aviv" עם מקף; מכבי פ"ת חסרה — חיפושים בעברית נכשלו
+    ("hapoel tel-aviv",     "הפועל תל אביב"),
+    ("maccabi petah tikva", "מכבי פתח תקווה"),
     ("maccabi tel aviv",  "מכבי תל אביב"),
     ("maccabi haifa",     "מכבי חיפה"),
     ("maccabi netanya",   "מכבי נתניה"),
@@ -1648,6 +1651,104 @@ def to_hebrew_team(name: str) -> str:
         if key in tl:
             return heb
     return name
+
+# ── שמות קבוצות לתצוגה, לפי שפה ────────────────────────
+# נפרד מ-HEB_TEAMS בכוונה: HEB_TEAMS מזין חיפושי תקצירים בעברית (התאמה לפי
+# הכלה), וכל שינוי בו משנה חיפושים. כאן — רק מה שהמשתמש רואה. מפתח = השם
+# המדויק מהמקור (football-data / TheSportsDB). חסר → נופל ל-HEB_TEAMS / למקור.
+TEAM_NAMES = {
+    "he": {
+        # פרמייר ליג (שמות football-data)
+        "AFC Bournemouth": "בורנמות'", "Brentford FC": "ברנטפורד", "Brighton & Hove Albion FC": "ברייטון",
+        "Coventry City FC": "קובנטרי", "Crystal Palace FC": "קריסטל פאלאס", "Everton FC": "אברטון",
+        "Fulham FC": "פולהאם", "Hull City AFC": "האל סיטי", "Ipswich Town FC": "איפסוויץ'",
+        "Leeds United FC": "לידס", "Nottingham Forest FC": "נוטינגהאם פורסט", "Sunderland AFC": "סנדרלנד",
+        # צ'מפיונשיפ
+        "Birmingham City": "ברמינגהאם", "Blackburn Rovers": "בלקבורן", "Bolton Wanderers": "בולטון",
+        "Bristol City": "בריסטול סיטי", "Burnley": "ברנלי", "Cardiff City": "קארדיף",
+        "Charlton Athletic": "צ'רלטון", "Derby County": "דרבי קאונטי", "Lincoln City": "לינקולן סיטי",
+        "Middlesbrough": "מידלסברו", "Millwall": "מילוול", "Norwich City": "נוריץ'",
+        "Portsmouth": "פורטסמות'", "Preston North End": "פרסטון", "Queens Park Rangers": "קווינס פארק ריינג'רס",
+        "Sheffield United": "שפילד יונייטד", "Southampton": "סאות'המפטון", "Stoke City": "סטוק סיטי",
+        "Swansea City": "סוונסי", "Watford": "ווטפורד", "West Bromwich Albion": "ווסט ברומיץ'",
+        "West Ham United": "ווסטהאם", "Wolverhampton Wanderers": "וולבס", "Wrexham": "רקסהאם",
+        # ליגת העל
+        "Hapoel Tel-Aviv": "הפועל תל אביב", "Maccabi Petah Tikva": "מכבי פתח תקווה",
+        # בונדסליגה
+        "Augsburg": "אאוגסבורג", "Borussia Mönchengladbach": "בורוסיה מנשנגלדבאך", "Elversberg": "אלברסברג",
+        "Freiburg": "פרייבורג", "Hamburg": "המבורג", "Hoffenheim": "הופנהיים", "Köln": "קלן",
+        "Mainz": "מיינץ", "Paderborn": "פאדרבורן", "Schalke 04": "שאלקה", "Union Berlin": "אוניון ברלין",
+        "Werder Bremen": "ורדר ברמן",
+        # ליג 1
+        "Angers": "אנז'ה", "Auxerre": "אוקסר", "Brest": "ברסט", "Le Havre": "לה האבר", "Le Mans": "לה מאן",
+        "Lens": "לאנס", "Lorient": "לוריין", "Lyon": "ליון", "Nice": "ניס", "Rennes": "רן",
+        "Strasbourg": "שטרסבורג", "Toulouse": "טולוז", "Troyes": "טרואה",
+        # צ'מפיונס (שלב הליגה)
+        "AEK Athens": "א.א.ק אתונה", "Bodø/Glimt": "בודו/גלימט", "Fenerbahçe": "פנרבחצ'ה", "LASK": "לאסק",
+        "Sabah Baku": "סבאח באקו", "Shakhtar Donetsk": "שחטאר דונייצק", "Slavia Prague": "סלביה פראג",
+        "Slovan Bratislava": "סלובאן ברטיסלבה", "Viking": "ויקינג",
+        # MLS
+        "Atlanta United": "אטלנטה יונייטד", "Austin FC": "אוסטין", "CF Montréal": "מונטריאול",
+        "Charlotte FC": "שארלוט", "Chicago Fire": "שיקגו פייר", "Colorado Rapids": "קולורדו ראפידס",
+        "Columbus Crew": "קולומבוס קרו", "DC United": "די.סי. יונייטד", "FC Cincinnati": "סינסינטי",
+        "FC Dallas": "דאלאס", "Houston Dynamo": "יוסטון דינמו", "Inter Miami": "אינטר מיאמי",
+        "LA Galaxy": "לוס אנג'לס גלקסי", "Los Angeles FC": "לוס אנג'לס FC", "Minnesota United": "מינסוטה יונייטד",
+        "Nashville SC": "נאשוויל", "New England Revolution": "ניו אינגלנד רבולושן",
+        "New York City FC": "ניו יורק סיטי", "New York Red Bulls": "ניו יורק רד בולס",
+        "Orlando City": "אורלנדו סיטי", "Philadelphia Union": "פילדלפיה יוניון", "Portland Timbers": "פורטלנד טימברס",
+        "Real Salt Lake": "ריאל סולט לייק", "San Diego FC": "סן דייגו", "San Jose Earthquakes": "סן חוזה ארת'קוויקס",
+        "Seattle Sounders": "סיאטל סאונדרס", "Sporting Kansas City": "ספורטינג קנזס סיטי",
+        "St. Louis City SC": "סנט לואיס סיטי", "Toronto FC": "טורונטו", "Vancouver Whitecaps": "ונקובר וייטקאפס",
+        # ארגנטינה
+        "Aldosivi": "אלדוסיבי", "Argentinos Juniors": "ארחנטינוס ג'וניורס", "Atlético Tucumán": "אתלטיקו טוקומאן",
+        "Banfield": "בנפילד", "Barracas Central": "בארקאס סנטרל", "Belgrano": "בלגרנו",
+        "Boca Juniors": "בוקה ג'וניורס", "Central Córdoba de Santiago del Estero": "סנטרל קורדובה",
+        "Defensa y Justicia": "דפנסה אי חוסטיסיה", "Deportivo Riestra": "דפורטיבו ריאסטרה",
+        "Estudiantes de La Plata": "אסטודיאנטס", "Estudiantes de Río Cuarto": "אסטודיאנטס ריו קוארטו",
+        "Gimnasia y Esgrima de La Plata": "חימנסיה לה פלאטה", "Gimnasia y Esgrima de Mendoza": "חימנסיה מנדוסה",
+        "Huracán": "הוראקן", "Independiente": "אינדפנדיינטה", "Independiente Rivadavia": "אינדפנדיינטה ריבדביה",
+        "Instituto": "אינסטיטוטו", "Lanús": "לאנוס", "Newell's Old Boys": "ניואלס אולד בויז",
+        "Platense": "פלטנסה", "Racing Club": "ראסינג קלאב", "River Plate": "ריבר פלייט",
+        "Rosario Central": "רוסאריו סנטרל", "San Lorenzo": "סן לורנסו", "Sarmiento": "סרמיינטו",
+        "Talleres de Córdoba": "טאייר קורדובה", "Tigre": "טיגרה", "Unión": "אוניון סנטה פה",
+        "Vélez Sarsfield": "ולס סרספילד",
+    },
+    # ספרדית/צרפתית: רק שמות שונים מהאנגלית (השאר — כמו במקור)
+    "es": {
+        "Bayern Munich": "Bayern de Múnich", "Inter Milan": "Inter de Milán", "Atlético Madrid": "Atlético de Madrid",
+        "Sporting CP": "Sporting de Portugal", "Slavia Prague": "Slavia de Praga", "Club Brugge": "Brujas",
+        "Köln": "Colonia", "Crvena Zvezda": "Estrella Roja", "Marseille": "Olympique de Marsella",
+        "Lyon": "Olympique de Lyon", "Paris Saint-Germain": "París Saint-Germain", "Tottenham Hotspur FC": "Tottenham",
+        "Shakhtar Donetsk": "Shajtar Donetsk",
+    },
+    "fr": {
+        "Atlético Madrid": "Atlético de Madrid", "Barcelona": "FC Barcelone", "Sevilla": "Séville",
+        "Valencia": "Valence", "Napoli": "Naples", "Roma": "AS Rome", "Genoa": "Gênes", "Venezia": "Venise",
+        "Torino": "Turin", "Sporting CP": "Sporting Portugal", "Club Brugge": "FC Bruges", "Köln": "Cologne",
+        "Crvena Zvezda": "Étoile rouge de Belgrade", "Bayern Munich": "Bayern Munich",
+        "Shakhtar Donetsk": "Chakhtar Donetsk",
+    },
+}
+DISPLAY_LANGS = ("he", "en", "es", "fr")
+
+
+def _short_en(name: str) -> str:
+    """"Arsenal FC" → "Arsenal", "AFC Bournemouth" → "Bournemouth" (שמות football-data)."""
+    return re.sub(r"^AFC |\s+A?FC$", "", name or "").strip() or (name or "")
+
+
+def display_team(name: str, lang: str = "he") -> str:
+    """שם הקבוצה כפי שמוצג למשתמש בשפה שבחר."""
+    if not name:
+        return name
+    if lang == "he":
+        return TEAM_NAMES["he"].get(name) or to_hebrew_team(name)
+    return TEAM_NAMES.get(lang, {}).get(name) or _short_en(name)
+
+
+def _lang(lang: str) -> str:
+    return lang if lang in DISPLAY_LANGS else "he"
+
 
 GOOGLE_SEARCH_KEY = os.environ.get("GOOGLE_SEARCH_KEY", "")
 GOOGLE_CSE_ID     = os.environ.get("GOOGLE_CSE_ID", "")
@@ -2395,7 +2496,8 @@ def login(payload: dict = Body(...)):
 
 @app.get("/matches/{league_key}")
 def get_matches(request: Request, league_key: str,
-                refresh: bool = False, matchday: int = None):
+                refresh: bool = False, matchday: int = None, lang: str = "he"):
+    lang = _lang(lang)
     require_auth(request)
     if league_key not in LEAGUES:
         raise HTTPException(404, "ליגה לא נמצאה")
@@ -2431,6 +2533,8 @@ def get_matches(request: Request, league_key: str,
             "id":       row["id"],
             "home":     row["home_team"],
             "away":     row["away_team"],
+            "home_name": display_team(row["home_team"], lang),
+            "away_name": display_team(row["away_team"], lang),
             "date":     il["date"],
             "time":     il["time"],
             "weekday":  il["weekday"],
@@ -2456,7 +2560,7 @@ def get_matches(request: Request, league_key: str,
 
 
 @app.get("/matches/by_date/{date_il}")
-def get_matches_by_date(request: Request, date_il: str):
+def get_matches_by_date(request: Request, date_il: str, lang: str = "he"):
     """כל המשחקים מכל הליגות בתאריך נתון בשעון ישראל (YYYY-MM-DD),
     ממוינים לפי סדר הליגות ואז שעת פתיחה. קורא מה-DB בלבד —
     רענון נתונים נעשה בטאבי הליגות."""
@@ -2486,6 +2590,8 @@ def get_matches_by_date(request: Request, date_il: str):
             "id":         row["id"],
             "home":       row["home_team"],
             "away":       row["away_team"],
+            "home_name":  display_team(row["home_team"], _lang(lang)),
+            "away_name":  display_team(row["away_team"], _lang(lang)),
             "date":       il["date"],
             "time":       il["time"],
             "weekday":    il["weekday"],
@@ -2537,7 +2643,7 @@ def refresh_from_client(request: Request, league_key: str,
 
 
 @app.get("/highlights/{match_id}")
-def get_highlights(request: Request, match_id: str):
+def get_highlights(request: Request, match_id: str, lang: str = "he"):
     require_auth(request)
     conn = get_db()
     row  = conn.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
@@ -2711,6 +2817,7 @@ def get_highlights(request: Request, match_id: str):
     club_of = {s["id"]: s.get("club_team") for s in sources}
     for r in results:
         r["club_team"] = club_of.get(r["source_id"])
+        r["club_name"] = display_team(r["club_team"], _lang(lang)) if r["club_team"] else None
 
     return {
         "available": True,
