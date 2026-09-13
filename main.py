@@ -2072,7 +2072,31 @@ def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str
 def serve_frontend(request: Request):
     if not is_authed(request):
         return HTMLResponse(LOGIN_PAGE)
-    return FileResponse("index.html")
+    # X-SF-App: ה-service worker שומר בקאש רק את הדף הזה, לא את מסך הכניסה
+    return FileResponse("index.html", headers={"X-SF-App": "1"})
+
+
+# ── PWA ────────────────────────────────────────────────
+# ציבוריים (בלי סיסמה) — הדפדפן טוען אותם גם לפני כניסה.
+
+@app.get("/manifest.webmanifest")
+def pwa_manifest():
+    return FileResponse("static/manifest.webmanifest",
+                        media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def pwa_service_worker():
+    # no-cache: שינויים ב-sw.js מגיעים למכשירים מיד אחרי deploy
+    return FileResponse("static/sw.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/icons/{name}")
+def pwa_icon(name: str):
+    if name not in ("icon-192.png", "icon-512.png", "apple-touch-icon.png"):
+        raise HTTPException(404)
+    return FileResponse(f"static/icons/{name}", media_type="image/png")
 
 
 # ── Init ───────────────────────────────────────────────
