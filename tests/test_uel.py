@@ -34,15 +34,7 @@ def test_sources():
     assert [s["club_team"] for s in main.get_sources_for_match(_row("Celtic", "Ferencváros"))] == ["Celtic"]
 
 
-def test_beer_sheva_sport5_link(monkeypatch):
-    class Resp:
-        status_code = 200
-        text = ('<a href="https://www.sport5.co.il/articles.aspx?FolderID=400&amp;docID=1">'
-                'לילה אירופי: הפועל ב&quot;ש ניצחה 1:2 את דינמו זאגרב</a>')
-    main._site_cache.clear()
-    monkeypatch.setattr(main.requests, "get", lambda url, **k: Resp())
-    w = main.LEAGUES["uel"]["web_sources"][0]
-    url = main.find_web_highlight(w["scrape_pages"], w["link_pattern"],
-                                  main._he_names("Hapoel Be'er Sheva"), main._he_names("Dinamo Zagreb"),
-                                  base=w["base"])
-    assert url == "https://www.sport5.co.il/articles.aspx?FolderID=400&docID=1"
+def test_no_israeli_web_source_yet():
+    """ספורט 5 כנראה לא משדרים את הליגה האירופית — המקור הישראלי ייקבע
+    אחרי מחזור 1, כשיהיה ברור איפה התקצירים עולים."""
+    assert not main.LEAGUES["uel"].get("web_sources")

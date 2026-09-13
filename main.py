@@ -151,6 +151,23 @@ LEAGUES = {
              "search_template": "תקציר {home} {away}",
              "hebrew_names": True,
              "allow_embed": False},
+            # ערוצים לא רשמיים (העלאות פיראטיות) — לפעמים מקדימים את הרשמיים.
+            # il_both_teams: רק "תקציר" + שתי הקבוצות בשם מלא (is_il_both_teams)
+            {"id": "yt_footballyom1", "name": "@FootballYom1",
+             "channel_id": "UC5TtVDq_BSplSOHf7lb2AGQ",
+             "search_template": "תקציר {home} {away}",
+             "hebrew_names": True, "il_both_teams": True,
+             "allow_embed": False},
+            {"id": "yt_almog218", "name": "@almog218",
+             "channel_id": "UCm8OkQc5lHJE29ADWkbB7CQ",
+             "search_template": "תקציר {home} {away}",
+             "hebrew_names": True, "il_both_teams": True,
+             "allow_embed": False},
+            {"id": "yt_itsfootball44", "name": "@ItsFootball44",
+             "channel_id": "UCUEeo-8_3zovErCSQb58dnw",
+             "search_template": "תקציר {home} {away}",
+             "hebrew_names": True, "il_both_teams": True,
+             "allow_embed": False},
         ],
         # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
         "web_sources": [
@@ -302,7 +319,8 @@ LEAGUES = {
         "sources": [],
         # ערוצי מועדונים עם תקצירים בפורמט הרגיל (אומתו 13.9.26 מול ה-RSS —
         # תקצירי ליגה מקומית; שלב הליגה עוד לא התחיל). לרוב הקבוצות, כולל
-        # הפועל באר שבע, לא נמצא ערוץ רשמי — ספורט 5 (משדרת) + ערוץ היריבה.
+        # הפועל באר שבע, לא נמצא ערוץ רשמי. מקור ישראלי (המשדרת) — ייבדק אחרי
+        # מחזור 1, כשיהיו תקצירים (לא ספורט 5 — כנראה לא משדרים את הליגה).
         "club_channels": {
             "Sunderland":     "UCrw-7k6yJc0EMJdf-0BAkoQ",
             "Crystal Palace": "UCWB9N0012fG6bGyj486Qxmg",
@@ -311,14 +329,6 @@ LEAGUES = {
             "Celtic":         "UCBN-bb-hE7jYlcp4exwXRsQ",
             "AC Milan":       "UCKcx1uK38H4AOkmfv4ywlrg",
         },
-        "web_sources": [
-            {"name": "ספורט 5", "domain": "sport5.co.il",
-             "scrape_pages": ["https://www.sport5.co.il/",
-                              "https://www.sport5.co.il/liga.aspx?FolderID=400"],
-             "link_pattern": SPORT5_LINK_OR_ARTICLE,
-             "base": "https://www.sport5.co.il",
-             "query": "תקציר {home} {away}"},
-        ],
     },
     "mls": {
         "name": "MLS",
@@ -1951,6 +1961,32 @@ def _web_team_in(name: str, text: str) -> bool:
     return _he_team_in(name, text)
 
 
+def _il_title_norm(title: str) -> str:
+    """כתיבים של ערוצי יוטיוב ישראליים לא רשמיים: ביתר / בית''ר / קרית."""
+    t = title.replace("`", "'").replace("׳", "'").replace("״", '"').replace("''", '"')
+    t = t.replace("ביתר", 'בית"ר').replace("קרית", "קריית")
+    return t.replace("הפועל קריית שמונה", "עירוני קריית שמונה")
+
+
+def is_il_both_teams(title: str, home_he: str, away_he: str,
+                     published: str = "", match_date: str = "") -> bool:
+    """ערוצים לא רשמיים (העלאות פיראטיות): רק כותרת עם "תקציר" או תוצאה, ושתי
+    הקבוצות בשם מלא (בכל סדר) — מכבי ת"א ≠ הפועל ת"א. עד 3 ימים אחרי המשחק, כדי
+    שמפגש חוזר (גביע / מחזור הבא) לא ייתפס."""
+    t = _il_title_norm(title)
+    # "תקציר", או תוצאה ("0-3") — חלק מהכותרות בלי המילה
+    if "תקציר" not in t and not re.search(r"\d+\s*-\s*\d+", t):
+        return False
+    if published and match_date:
+        try:
+            last = datetime.fromisoformat(match_date).date() + timedelta(days=3)
+            if published[:10] > last.isoformat():
+                return False
+        except ValueError:
+            pass
+    return _web_team_in(home_he, t) and _web_team_in(away_he, t)
+
+
 def find_web_highlight(pages: list, link_pattern: str,
                        home_names: list, away_names: list, base: str = ""):
     """URL ישיר לכתבת התקציר באתר, או None. שתי הקבוצות חייבות להופיע
@@ -2338,7 +2374,8 @@ def search_youtube(home: str, away: str, match_date: str,
                    home_alt: str = None, away_alt: str = None,
                    require_team: bool = False,
                    implicit_team: str = None,
-                   headline: bool = False) -> list:
+                   headline: bool = False,
+                   il_both: bool = False) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not channel_id:
         return []
@@ -2350,6 +2387,9 @@ def search_youtube(home: str, away: str, match_date: str,
             return False
         if title_include and not any(x.lower() in tl for x in title_include):
             return False
+        if il_both:    # ערוצים ישראליים לא רשמיים — כלל מחמיר
+            return is_il_both_teams(title, home_alt or home, away_alt or away,
+                                    published, match_date)
         if headline:   # ONE — כותרות חדשותיות בעברית
             return is_headline_highlight(title, home_alt or home, away_alt or away,
                                          published, match_date)
@@ -2881,6 +2921,7 @@ def _source_highlights(row, source) -> dict:
         require_team=source.get("require_team_match", False),
         implicit_team=source.get("club_team"),
         headline=source.get("headline_titles", False),
+        il_both=source.get("il_both_teams", False),
     )
     if videos is None:
         # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך
