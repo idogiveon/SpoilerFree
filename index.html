@@ -20,6 +20,8 @@
       --live: #ff6b6b;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
+    /* hidden גובר על display:flex של חלונות (אחרת החלון נפתח בטעינה) */
+    [hidden] { display:none !important; }
     body { background:var(--bg); color:var(--text); font-family:'Heebo',sans-serif; min-height:100vh; overflow-x:hidden; }
     body::before { content:''; position:fixed; top:-50%; right:-20%; width:600px; height:600px; background:radial-gradient(circle,rgba(0,229,160,0.04) 0%,transparent 70%); pointer-events:none; z-index:0; }
 
@@ -31,6 +33,21 @@
     .user-bar { font-size:0.75rem; color:var(--muted); display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; }
     .user-bar a, .user-bar button { color:var(--muted); background:none; border:none; font:inherit; cursor:pointer; text-decoration:underline; padding:0; }
     .user-bar a:hover, .user-bar button:hover { color:var(--accent); }
+
+    .app-footer { max-width:960px; margin:0 auto; padding:0 2rem 2rem; text-align:center; position:relative; z-index:1; }
+    .cookie-link { background:none; border:none; color:#4a4a5a; font-family:'Heebo',sans-serif; font-size:0.7rem; text-decoration:underline; cursor:pointer; }
+    .sheet-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1100; display:flex; align-items:center; justify-content:center; padding:1rem; }
+    .sheet { background:var(--surface); border:1px solid var(--border); border-radius:12px; max-width:460px; width:100%; max-height:80vh; overflow:auto; padding:1.5rem; }
+    .sheet h2 { font-size:1rem; margin-bottom:0.8rem; }
+    .sheet h3 { font-size:0.8rem; color:#9a9ab0; margin:1rem 0 0.3rem; }
+    .sheet p { font-size:0.8rem; color:var(--muted); line-height:1.6; }
+    .sheet p b { color:var(--text); }
+    .sheet input { width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); margin:0.6rem 0; }
+    .sheet-close { margin-top:1.2rem; width:100%; padding:0.6rem; border-radius:100px; border:none; background:var(--accent); color:#000; font-weight:700; cursor:pointer; font-family:'Heebo',sans-serif; }
+    .danger-zone { margin-top:1.2rem; border-top:1px solid var(--border); padding-top:0.8rem; }
+    .danger-zone summary { font-size:0.75rem; color:var(--muted); cursor:pointer; }
+    .danger-btn { width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--danger); background:transparent; color:var(--danger); cursor:pointer; font-family:'Heebo',sans-serif; }
+    .del-err { color:var(--danger); font-size:0.75rem; min-height:1em; margin-top:0.4rem; }
 
     .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; padding:1rem 2rem; max-width:960px; margin:0 auto; position:relative; z-index:1; }
     .tab { padding:0.4rem 1rem; border-radius:100px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
@@ -165,6 +182,17 @@
   <div id="matches-container"><div class="loading">טוען משחקים</div></div>
 </main>
 
+<footer class="app-footer">
+  <button class="cookie-link" id="cookie-link">Cookie settings</button>
+</footer>
+
+<div class="sheet-overlay" id="sheet" hidden>
+  <div class="sheet">
+    <div id="sheet-body"></div>
+    <button class="sheet-close" id="sheet-close">סגור</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-header">
@@ -234,7 +262,7 @@
   async function apiFetch(url, opts) {
     const r = await fetch(url, opts);
     // fresh=1 עוקף את קאש ה-service worker — אחרת היה מוגש שוב הדף השמור
-    if (r.status === 401) { location.href = '/app?fresh=1'; throw new Error('auth'); }
+    if (r.status === 401) { location.href = '/?fresh=1'; throw new Error('auth'); }
     return r;
   }
 
@@ -260,14 +288,60 @@
       who.dir = 'ltr';
       who.textContent = me.email || 'כניסה בסיסמה';
       bar.replaceChildren(who);
+      if (me.email) bar.insertAdjacentHTML('beforeend', '<button onclick="openAccount()">חשבון</button>');
       if (me.is_admin) bar.insertAdjacentHTML('beforeend', '<a href="/admin/users">ניהול</a>');
       bar.insertAdjacentHTML('beforeend', '<button onclick="logout()">יציאה</button>');
     } catch (e) {}
   }
 
+  // ── חלון כללי: Cookie settings / חשבון ──────────────
+  const esc = s => String(s ?? '').replace(/[&<>"']/g,
+    c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+  function openSheet(html) {
+    document.getElementById('sheet-body').innerHTML = html;
+    document.getElementById('sheet').hidden = false;
+  }
+  function closeSheet() { document.getElementById('sheet').hidden = true; }
+
+  async function openCookies() {
+    openSheet('<div class="loading">טוען</div>');
+    try { openSheet(await (await fetch(`${API}/cookies`)).text()); }
+    catch (e) { closeSheet(); }
+  }
+
+  async function openAccount() {
+    openSheet('<div class="loading">טוען</div>');
+    try {
+      const a = await apiFetch(`${API}/auth/account`).then(r => r.json());
+      const d = iso => iso ? new Date(iso).toLocaleDateString('he-IL') : '—';
+      openSheet(`<h2>החשבון שלי</h2>
+        <p>מייל: <b dir="ltr">${esc(a.email)}</b></p>
+        <p>הצטרפת: ${d(a.created_at)} · כניסה אחרונה: ${d(a.last_login)} · כניסות: ${a.login_count || 0}</p>
+        <details class="danger-zone"><summary>מחיקת החשבון</summary>
+          <p>המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.</p>
+          <input id="del-confirm" dir="ltr" autocomplete="off" placeholder="${esc(a.email)}">
+          <button class="danger-btn" onclick="deleteAccount()">מחק את החשבון לצמיתות</button>
+          <div class="del-err" id="del-err"></div>
+        </details>`);
+    } catch (e) {
+      if (e.message !== 'auth') openSheet('<p>שגיאה בטעינת החשבון</p>');
+    }
+  }
+
+  async function deleteAccount() {
+    const r = await fetch(`${API}/auth/delete_account`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: document.getElementById('del-confirm').value }),
+    });
+    if (r.ok) { location.href = '/?fresh=1'; return; }
+    let j = {}; try { j = await r.json(); } catch (e) {}
+    document.getElementById('del-err').textContent = j.detail || 'המחיקה נכשלה';
+  }
+
   async function logout() {
     try { await fetch(`${API}/auth/logout`, { method: 'POST' }); } catch (e) {}
-    location.href = '/app?fresh=1';
+    location.href = '/?fresh=1';
   }
 
   // ── Matchday nav ───────────────────────────────────
@@ -802,6 +876,9 @@
   });
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('cookie-link').addEventListener('click', openCookies);
+  document.getElementById('sheet-close').addEventListener('click', closeSheet);
+  document.getElementById('sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
   document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
   document.getElementById('refresh-btn').addEventListener('click', doRefresh);
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });

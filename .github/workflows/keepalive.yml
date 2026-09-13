@@ -11,4 +11,4 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - run: curl -fsS --retry 3 --retry-delay 10 --max-time 90 https://spoilerfree.onrender.com/ -o /dev/null -w "%{http_code} %{time_total}s\n"
+      - run: curl -fsS --retry 3 --retry-delay 10 --max-time 90 https://spoilerfree.onrender.com/health -o /dev/null -w "%{http_code} %{time_total}s\n"
