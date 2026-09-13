@@ -4,3 +4,6 @@ __pycache__/
 spike_*.py
 .env.DS_Store
 Claude Session Log/
+database.db
+turso_replica.db*
+.claude/

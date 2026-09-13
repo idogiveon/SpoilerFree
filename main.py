@@ -11,11 +11,15 @@ import os
 import json
 import time
 import hashlib
+import hmac
+import secrets
+import smtplib
+from email.message import EmailMessage
 import unicodedata
 from html import unescape as _unescape
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -231,50 +235,314 @@ LEAGUES = {
 }
 
 # ── Auth ───────────────────────────────────────────────
+# כניסה אישית: מייל → קוד חד-פעמי (6 ספרות, 10 דקות) → session ל-90 יום.
+# חשבון חדש ממתין לאישור ידני של אדמין (/admin/users). אדמינים: ADMIN_EMAILS
+# (משתנה סביבה ב-Render — לא בקוד, הריפו ציבורי).
+# הסיסמה המשותפת הישנה (APP_PASSWORD) עובדת במקביל עד שמסירים אותה מ-Render.
+# בלי אף אחד מהמשתנים (פיתוח מקומי) — האתר פתוח. AUTH_DEV=1: כניסה פעילה
+# מקומית, והקוד מודפס ללוג במקום להישלח.
+
+GMAIL_USER         = os.environ.get("GMAIL_USER", "")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+ADMIN_EMAILS = {e.strip().lower()
+                for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
+APP_URL  = os.environ.get("APP_URL", "https://spoilerfree.onrender.com").rstrip("/")
+AUTH_DEV = os.environ.get("AUTH_DEV") == "1"
+AUTH_ON  = bool(APP_PASSWORD or GMAIL_USER or AUTH_DEV)
+
+SESSION_DAYS      = 90
+CODE_MINUTES      = 10
+CODE_MAX_ATTEMPTS = 5
+CODE_RESEND_SEC   = 60
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EVENT_TYPES = {"app_open", "league_view", "day_view", "match_open",
+               "highlight_play", "web_link"}
+
 
 def _auth_token() -> str:
+    """cookie של הסיסמה המשותפת הישנה."""
     return hashlib.sha256(APP_PASSWORD.encode()).hexdigest() if APP_PASSWORD else ""
 
+
+def _sha(s: str) -> str:
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def current_user(request):
+    """{"email", "is_admin", "legacy"} או None. נשמר על הבקשה — שאילתה אחת לבקשה."""
+    if request is None:
+        return None
+    if hasattr(request.state, "sf_user"):
+        return request.state.sf_user
+    user = None
+    token = request.cookies.get("sf_session", "")
+    if token:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT u.email, u.is_admin, u.status FROM sessions s "
+            "JOIN users u ON u.email = s.email "
+            "WHERE s.token_hash=? AND s.expires_at>?",
+            (_sha(token), _now().isoformat())).fetchone()
+        conn.close()
+        if row and row["status"] == "approved":
+            user = {"email": row["email"], "legacy": False,
+                    "is_admin": bool(row["is_admin"]) or row["email"] in ADMIN_EMAILS}
+    if user is None and APP_PASSWORD and request.cookies.get("sf_auth", "") == _auth_token():
+        # סיסמה משותפת ישנה — שומרת על ההרשאות של היום עד שמסירים אותה
+        user = {"email": None, "is_admin": True, "legacy": True}
+    request.state.sf_user = user
+    return user
+
+
 def is_authed(request: Request) -> bool:
-    if not APP_PASSWORD:
-        return True  # אין סיסמה מוגדרת (פיתוח מקומי) — פתוח
-    return request.cookies.get("sf_auth", "") == _auth_token()
+    if not AUTH_ON:
+        return True  # פיתוח מקומי — פתוח
+    return current_user(request) is not None
+
 
 def require_auth(request: Request):
     if not is_authed(request):
         raise HTTPException(401, "נדרשת התחברות")
 
+
+def require_admin(request: Request):
+    """נקודות דיבאג/אדמין — רק למנהלים (לא לכל משתמש מאושר)."""
+    if not AUTH_ON:
+        return
+    u = current_user(request)
+    if not u:
+        raise HTTPException(401, "נדרשת התחברות")
+    if not u["is_admin"]:
+        raise HTTPException(403, "למנהלים בלבד")
+
+
+def send_email(to: str, subject: str, body: str) -> bool:
+    """שליחה דרך Gmail ייעודי (SMTP + סיסמת אפליקציה מ-Render)."""
+    if not (GMAIL_USER and GMAIL_APP_PASSWORD):
+        if AUTH_DEV:
+            print(f"[mail:dev] to={to} | {subject}\n{body}")
+            return True
+        print(f"[mail] not configured — cannot send to {to}")
+        return False
+    msg = EmailMessage()
+    msg["From"] = f"SpoilerFree <{GMAIL_USER}>"
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as s:
+            s.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            s.send_message(msg)
+        return True
+    except Exception as ex:
+        print(f"[mail] send to {to} failed: {ex}")
+        return False
+
+
+def _notify_admins_new_user(email: str):
+    for admin in ADMIN_EMAILS:
+        send_email(admin, f"SpoilerFree — בקשת הצטרפות: {email}",
+                   f"{email} ביקש/ה להצטרף ל-SpoilerFree.\n\n"
+                   f"לאישור או חסימה: {APP_URL}/admin/users\n")
+
+
 LOGIN_PAGE = """<!DOCTYPE html>
 <html lang="he" dir="rtl"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SpoilerFree — כניסה</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#0a0a0f">
 <style>
 body{background:#0a0a0f;color:#e8e8f0;font-family:sans-serif;display:flex;
 align-items:center;justify-content:center;min-height:100vh;margin:0}
 .box{background:#13131a;border:1px solid #2a2a3a;border-radius:16px;
-padding:2.5rem;text-align:center;max-width:320px;width:90%}
+padding:2.5rem;text-align:center;max-width:340px;width:90%}
 h1{color:#00e5a0;font-size:1.4rem;letter-spacing:2px;margin:0 0 1.5rem}
+p{color:#9a9ab0;font-size:0.9rem;line-height:1.6;margin:0 0 1rem}
 input{width:100%;padding:0.7rem;border-radius:8px;border:1px solid #2a2a3a;
 background:#1a1a24;color:#e8e8f0;font-size:1rem;box-sizing:border-box;
 margin-bottom:1rem;text-align:center}
+#code{letter-spacing:6px;font-size:1.3rem}
 button{width:100%;padding:0.7rem;border-radius:100px;border:none;
 background:#00e5a0;color:#000;font-weight:700;font-size:1rem;cursor:pointer}
+button:disabled{opacity:0.5}
+.link{background:none;color:#6b6b80;font-weight:400;font-size:0.8rem;
+margin-top:0.8rem;width:auto;padding:0.2rem;text-decoration:underline}
 .err{color:#ff4757;font-size:0.85rem;margin-top:0.8rem;min-height:1.2em}
+.ok{color:#00e5a0}
+.privacy{color:#6b6b80;font-size:0.7rem;line-height:1.5;margin-top:1.5rem;
+border-top:1px solid #2a2a3a;padding-top:1rem}
+[hidden]{display:none!important}
 </style></head><body>
 <div class="box"><h1>SPOILERFREE</h1>
-<input type="password" id="pw" placeholder="סיסמה" autofocus>
-<button onclick="go()">כניסה</button>
-<div class="err" id="err"></div></div>
+
+<div id="step-email">
+  <p>הכנס מייל ונשלח לך קוד כניסה</p>
+  <input type="email" id="email" placeholder="you@example.com" autocomplete="email" dir="ltr">
+  <button id="send-btn" onclick="sendCode()">שלח קוד</button>
+</div>
+
+<div id="step-code" hidden>
+  <p>שלחנו קוד בן 6 ספרות אל<br><b id="sent-to" dir="ltr"></b></p>
+  <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" dir="ltr">
+  <button id="verify-btn" onclick="verify()">כניסה</button>
+  <button class="link" onclick="back()">מייל אחר / שלח שוב</button>
+</div>
+
+<div id="step-pending" hidden>
+  <p class="ok">✓ הבקשה נשלחה</p>
+  <p>החשבון ממתין לאישור. תקבל מייל ברגע שהוא יאושר.</p>
+  <button class="link" onclick="back()">חזרה</button>
+</div>
+
+<div id="step-legacy" hidden>
+  <input type="password" id="pw" placeholder="סיסמה">
+  <button onclick="legacy()">כניסה</button>
+  <button class="link" onclick="back()">חזרה לכניסה במייל</button>
+</div>
+
+<div class="err" id="err"></div>
+<!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
+
+<div class="privacy">
+  מה נשמר: המייל שלך, זמני כניסה, ואילו ליגות, משחקים ותקצירים פתחת —
+  כדי לשפר את האתר. בלי פרסום ובלי העברה לאף אחד.
+  למחיקת החשבון והנתונים: <span dir="ltr">__CONTACT__</span>
+</div></div>
 <script>
-async function go(){
-  const r = await fetch('/login', {method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({password: document.getElementById('pw').value})});
-  if (r.ok) location.reload();
-  else document.getElementById('err').textContent = 'סיסמה שגויה';
+const $ = id => document.getElementById(id);
+function show(id) {
+  for (const s of ['step-email','step-code','step-pending','step-legacy']) $(s).hidden = s !== id;
+  $('err').textContent = '';
 }
-document.getElementById('pw').addEventListener('keydown',
-  e => { if (e.key === 'Enter') go(); });
+function back() { show('step-email'); $('email').focus(); }
+async function post(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                              body: JSON.stringify(body)});
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.detail || 'שגיאה — נסה שוב');
+  return j;
+}
+async function sendCode() {
+  const email = $('email').value.trim();
+  if (!email) return;
+  $('send-btn').disabled = true; $('err').textContent = '';
+  try {
+    const j = await post('/auth/request_code', {email});
+    if (j.status === 'pending') { show('step-pending'); return; }
+    $('sent-to').textContent = email; show('step-code'); $('code').focus();
+  } catch (e) { $('err').textContent = e.message; }
+  finally { $('send-btn').disabled = false; }
+}
+async function verify() {
+  const code = $('code').value.trim();
+  if (code.length !== 6) { $('err').textContent = 'הקוד הוא 6 ספרות'; return; }
+  $('verify-btn').disabled = true; $('err').textContent = '';
+  try {
+    await post('/auth/verify', {email: $('email').value.trim(), code});
+    location.href = '/app?fresh=1';
+  } catch (e) { $('err').textContent = e.message; }
+  finally { $('verify-btn').disabled = false; }
+}
+async function legacy() {
+  try { await post('/login', {password: $('pw').value}); location.href = '/app?fresh=1'; }
+  catch (e) { $('err').textContent = 'סיסמה שגויה'; }
+}
+$('email').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
+$('code').addEventListener('input', e => { if (e.target.value.trim().length === 6) verify(); });
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') legacy(); });
+$('email').focus();
+</script></body></html>"""
+
+
+def render_login_page() -> str:
+    page = LOGIN_PAGE.replace("__CONTACT__", GMAIL_USER or "")
+    if not APP_PASSWORD:
+        page = re.sub(r"<!--LEGACY-->.*?<!--/LEGACY-->", "", page, flags=re.S)
+    return page
+
+
+ADMIN_USERS_PAGE = """<!DOCTYPE html>
+<html lang="he" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpoilerFree — משתמשים</title>
+<style>
+body{background:#0a0a0f;color:#e8e8f0;font-family:sans-serif;margin:0;padding:1.5rem}
+h1{color:#00e5a0;font-size:1.3rem;letter-spacing:2px;margin:0 0 0.3rem}
+a{color:#00e5a0}
+.sub{color:#6b6b80;font-size:0.85rem;margin-bottom:1.2rem}
+.kpis{display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.2rem}
+.kpi{background:#13131a;border:1px solid #2a2a3a;border-radius:10px;padding:0.7rem 1rem;min-width:110px}
+.kpi b{display:block;font-size:1.4rem;color:#00e5a0}
+.kpi span{font-size:0.75rem;color:#6b6b80}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:0.85rem;min-width:820px}
+th,td{padding:0.55rem 0.6rem;border-bottom:1px solid #2a2a3a;text-align:right;white-space:nowrap}
+th{color:#6b6b80;font-weight:400;font-size:0.75rem}
+.st{padding:0.1rem 0.5rem;border-radius:100px;font-size:0.72rem}
+.pending{background:rgba(255,193,7,0.15);color:#ffc107}
+.approved{background:rgba(0,229,160,0.12);color:#00e5a0}
+.blocked{background:rgba(255,71,87,0.15);color:#ff4757}
+button{background:transparent;border:1px solid #2a2a3a;color:#e8e8f0;border-radius:6px;
+padding:0.25rem 0.6rem;cursor:pointer;font-size:0.78rem;margin-left:0.3rem}
+button.go{border-color:#00e5a0;color:#00e5a0}
+button.no{border-color:#ff4757;color:#ff4757}
+.muted{color:#6b6b80}
+</style></head><body>
+<h1>SPOILERFREE — משתמשים</h1>
+<div class="sub"><a href="/app">← חזרה לאפליקציה</a></div>
+<div class="kpis" id="kpis"></div>
+<div class="wrap"><table>
+<thead><tr><th>מייל</th><th>סטטוס</th><th>נרשם</th><th>כניסה אחרונה</th>
+<th>כניסות</th><th>פתיחות אפליקציה</th><th>משחקים שנפתחו</th><th>תקצירים שנצפו</th>
+<th>ליגות מובילות</th><th>פעילות אחרונה</th><th></th></tr></thead>
+<tbody id="rows"><tr><td colspan="11" class="muted">טוען...</td></tr></tbody>
+</table></div>
+<script>
+const LEAGUES = {premier:'פרמייר', israel:'ליגת העל', bundesliga:'בונדסליגה', laliga:'לה ליגה',
+  seriea:'סריה A', ligue1:'ליג 1', ucl:"צ'מפיונס", argentina:'ארגנטינה'};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function when(iso) {
+  if (!iso) return '<span class="muted">—</span>';
+  const d = new Date(iso);
+  return d.toLocaleDateString('he-IL', {day:'2-digit', month:'2-digit'}) + ' ' +
+         d.toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'});
+}
+const ST = {pending:'ממתין', approved:'מאושר', blocked:'חסום'};
+async function load() {
+  const r = await fetch('/admin/api/users');
+  if (!r.ok) { document.getElementById('rows').innerHTML = '<tr><td colspan="11">אין הרשאה</td></tr>'; return; }
+  const {users, kpis} = await r.json();
+  document.getElementById('kpis').innerHTML =
+    [['משתמשים', kpis.total], ['ממתינים', kpis.pending], ['פעילים 7 ימים', kpis.active_7d],
+     ['תקצירים שנצפו', kpis.plays]].map(([k,v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+  document.getElementById('rows').innerHTML = users.map(u => {
+    const e = esc(u.email);
+    const btns = u.status === 'approved'
+      ? `<button class="no" onclick="setStatus('${e}','blocked')">חסום</button>`
+      : `<button class="go" onclick="setStatus('${e}','approved')">אשר</button>` +
+        (u.status === 'pending' ? `<button class="no" onclick="setStatus('${e}','blocked')">דחה</button>` : '');
+    const lg = (u.top_leagues || []).map(l => LEAGUES[l] || esc(l)).join(', ') || '<span class="muted">—</span>';
+    return `<tr><td dir="ltr">${e}${u.is_admin ? ' ⭐' : ''}</td>
+      <td><span class="st ${u.status}">${ST[u.status] || u.status}</span></td>
+      <td>${when(u.created_at)}</td><td>${when(u.last_login)}</td>
+      <td>${u.login_count || 0}</td><td>${u.app_open || 0}</td><td>${u.match_open || 0}</td>
+      <td>${u.highlight_play || 0}</td><td>${lg}</td><td>${when(u.last_active)}</td>
+      <td>${u.is_admin ? '' : btns}</td></tr>`;
+  }).join('') || '<tr><td colspan="11" class="muted">אין משתמשים עדיין</td></tr>';
+}
+async function setStatus(email, status) {
+  const r = await fetch('/admin/api/users/' + encodeURIComponent(email), {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})});
+  if (!r.ok) alert('נכשל'); load();
+}
+load();
 </script></body></html>"""
 
 # ── DB ─────────────────────────────────────────────────
@@ -401,6 +669,48 @@ def init_db():
             PRIMARY KEY (match_id, source_id)
         )
     """)
+
+    # כניסה אישית + מעקב שימוש
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            email        TEXT PRIMARY KEY,
+            status       TEXT DEFAULT 'pending',
+            is_admin     INTEGER DEFAULT 0,
+            created_at   TEXT,
+            approved_at  TEXT,
+            last_login   TEXT,
+            login_count  INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS login_codes (
+            email      TEXT PRIMARY KEY,
+            code_hash  TEXT,
+            expires_at TEXT,
+            attempts   INTEGER DEFAULT 0,
+            sent_at    TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            token_hash TEXT PRIMARY KEY,
+            email      TEXT,
+            created_at TEXT,
+            expires_at TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            email    TEXT,
+            ts       TEXT,
+            type     TEXT,
+            league   TEXT,
+            match_id TEXT,
+            detail   TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_events_email ON events(email)")
 
     conn.commit()
 
@@ -1669,7 +1979,7 @@ def health_rss():
 @app.get("/debug/quota")
 def debug_quota(request: Request):
     """צריכת quota של יוטיוב ב-7 הימים האחרונים (לפי מונה פנימי)."""
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     rows = conn.execute("SELECT key, value FROM meta WHERE key LIKE 'yt_units:%' "
                         "ORDER BY key DESC LIMIT 7").fetchall()
@@ -2025,7 +2335,7 @@ def clear_cache(request: Request, match_id: str):
 @app.delete("/cache")
 def clear_all_cache(request: Request):
     """Clear ALL highlight cache — useful when debugging."""
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     conn.execute("DELETE FROM highlight_cache")
     conn.commit()
@@ -2035,7 +2345,7 @@ def clear_all_cache(request: Request):
 
 @app.get("/clubs/{league_key}")
 def get_clubs(request: Request, league_key: str):
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM clubs WHERE league_key=? ORDER BY tier, name", (league_key,)
@@ -2046,7 +2356,7 @@ def get_clubs(request: Request, league_key: str):
 
 @app.put("/clubs/{club_id}/channel")
 def update_club_channel(request: Request, club_id: str, channel_id: str):
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     conn.execute("UPDATE clubs SET yt_channel_id=? WHERE id=?", (channel_id, club_id))
     conn.commit()
@@ -2057,7 +2367,7 @@ def update_club_channel(request: Request, club_id: str, channel_id: str):
 @app.get("/debug/db")
 def debug_db(request: Request):
     """Quick debug endpoint — shows counts per league."""
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     leagues = conn.execute(
         "SELECT league_key, COUNT(*) as c, "
@@ -2076,7 +2386,7 @@ def debug_db(request: Request):
 @app.get("/debug/fd")
 def debug_fd(request: Request):
     """אבחון football-data — מציג מה ה-API באמת מחזיר עבור הפרמייר ליג."""
-    require_auth(request)
+    require_admin(request)
     league = LEAGUES["premier"]
     try:
         r = requests.get(
@@ -2102,7 +2412,7 @@ def debug_fd(request: Request):
 @app.get("/debug/pl_teams")
 def debug_pl_teams(request: Request):
     """כל קבוצות הפרמייר מהלוח הנוכחי + סטטוס ערוץ יוטיוב לכל אחת."""
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     teams = {}
     rows = conn.execute(
@@ -2128,7 +2438,7 @@ def admin_set_channel(request: Request, fd_team_id: str, url: str, name: str = "
     """מגדיר ערוץ יוטיוב למועדון, מהדפדפן.
     url יכול להיות כל צורה: youtube.com/@Arsenal, @Arsenal,
     או youtube.com/channel/UC... — handle נפתר אוטומטית דרך YouTube API."""
-    require_auth(request)
+    require_admin(request)
     url = url.strip()
 
     channel_id = ""
@@ -2194,7 +2504,7 @@ def debug_highlights(request: Request, q: str):
     """אבחון תקצירים: מציג את הכותרות הגולמיות מכל מקור ולמה כל אחת
     עברה/נפסלה. שימוש: /debug/highlights?q=Chelsea (שם קבוצה, חלקי מספיק).
     זהירות: כל מקור = חיפוש אמיתי = 100 יחידות quota."""
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     row = conn.execute(
         "SELECT * FROM matches WHERE (home_team LIKE ? OR away_team LIKE ?) "
@@ -2268,7 +2578,7 @@ def debug_channels(request: Request):
     """אימות ערוצים: שואל את YouTube (channels.list, יחידת quota אחת)
     מה השם האמיתי של כל channel_id מקובע — מועדוני פרמייר + מקורות הליגות.
     ID שגוי יתגלה מיד: שם לא קשור, או 'לא קיים'."""
-    require_auth(request)
+    require_admin(request)
 
     # אוספים את כל ה-IDs: מועדונים + מקורות ליגה
     entries = []   # (label, channel_id)
@@ -2316,7 +2626,7 @@ def debug_channels(request: Request):
 @app.get("/debug/match")
 def debug_match(request: Request, q: str):
     """השורה הגולמית של משחק מה-DB — סטטוס, תאריך, מתי נשלף."""
-    require_auth(request)
+    require_admin(request)
     conn = get_db()
     rows = conn.execute(
         "SELECT id, league_key, home_team, away_team, date_utc, time_utc, "
@@ -2333,7 +2643,7 @@ def debug_match(request: Request, q: str):
 def admin_resolve_channel(request: Request, url: str):
     """פותר handle של יוטיוב ל-channel ID, בלי לכתוב כלום.
     שימוש: /admin/resolve_channel?url=@sport1sport2"""
-    require_auth(request)
+    require_admin(request)
     url = url.strip().rstrip("/")   # סלאש בסוף שבר את חילוץ ה-handle
     if "/channel/" in url:
         cid = url.split("/channel/")[1].split("/")[0].split("?")[0]
@@ -2359,7 +2669,7 @@ def admin_resolve_channel(request: Request, url: str):
 def debug_weblink(request: Request, q: str, domain: str):
     """אבחון קישורי אתר: מציג מה Google CSE באמת מחזיר.
     שימוש: /debug/weblink?q=תקציר מכבי חיפה&domain=sport1.maariv.co.il"""
-    require_auth(request)
+    require_admin(request)
     report = {
         "google_key_configured": bool(GOOGLE_SEARCH_KEY),
         "cse_id_configured":     bool(GOOGLE_CSE_ID),
@@ -2388,7 +2698,7 @@ def debug_weblink(request: Request, q: str, domain: str):
 @app.get("/debug/vodscrape")
 def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str = "הפועל רמת גן"):
     """אבחון סקרייפר ספורט 1: מה העמוד מחזיר והאם נמצאה התאמה."""
-    require_auth(request)
+    require_admin(request)
     report = {"home_variants": he_team_variants(home),
               "away_variants": he_team_variants(away)}
     try:
@@ -2422,10 +2732,240 @@ def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str
 
 
 # Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)
+# ── Auth endpoints ─────────────────────────────────────
+
+def _email_from(payload) -> str:
+    email = str(payload.get("email") or "").strip().lower()
+    if len(email) > 200 or not EMAIL_RE.match(email):
+        raise HTTPException(400, "כתובת מייל לא תקינה")
+    return email
+
+
+@app.post("/auth/request_code")
+def auth_request_code(payload: dict = Body(...)):
+    email = _email_from(payload)
+    now = _now()
+    is_admin_email = email in ADMIN_EMAILS
+    conn = get_db()
+    user = conn.execute("SELECT status FROM users WHERE email=?", (email,)).fetchone()
+    new_pending = False
+    if user is None:
+        status = "approved" if is_admin_email else "pending"
+        conn.execute(
+            "INSERT INTO users (email, status, is_admin, created_at, approved_at, login_count) "
+            "VALUES (?,?,?,?,?,0)",
+            (email, status, int(is_admin_email), now.isoformat(),
+             now.isoformat() if is_admin_email else None))
+        conn.commit()
+        new_pending = status == "pending"
+    else:
+        status = user["status"]
+        if is_admin_email and status != "approved":
+            conn.execute("UPDATE users SET status='approved', is_admin=1 WHERE email=?", (email,))
+            conn.commit()
+            status = "approved"
+    if status != "approved":
+        conn.close()
+        if new_pending:
+            _notify_admins_new_user(email)
+        # ממתין או חסום — אותה תשובה (לא חושפים חסימה)
+        return {"status": "pending"}
+
+    row = conn.execute("SELECT sent_at FROM login_codes WHERE email=?", (email,)).fetchone()
+    if row:
+        try:
+            if (now - datetime.fromisoformat(row["sent_at"])).total_seconds() < CODE_RESEND_SEC:
+                conn.close()
+                return {"status": "code_sent"}   # נשלח לפני פחות מדקה — משתמשים בו
+        except Exception:
+            pass
+    code = f"{secrets.randbelow(10**6):06d}"
+    conn.execute(
+        "INSERT OR REPLACE INTO login_codes (email, code_hash, expires_at, attempts, sent_at) "
+        "VALUES (?,?,?,0,?)",
+        (email, _sha(f"{email}:{code}"),
+         (now + timedelta(minutes=CODE_MINUTES)).isoformat(), now.isoformat()))
+    conn.commit()
+    conn.close()
+    ok = send_email(email, f"קוד כניסה ל-SpoilerFree: {code}",
+                    f"הקוד שלך: {code}\n\nתקף ל-{CODE_MINUTES} דקות. "
+                    f"אם לא ביקשת — פשוט התעלם מהמייל.\n")
+    if not ok:
+        conn = get_db()
+        conn.execute("DELETE FROM login_codes WHERE email=?", (email,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(503, "שליחת המייל נכשלה — נסה שוב בעוד דקה")
+    return {"status": "code_sent"}
+
+
+@app.post("/auth/verify")
+def auth_verify(payload: dict = Body(...)):
+    email = _email_from(payload)
+    code = re.sub(r"\D", "", str(payload.get("code") or ""))
+    now = _now()
+    conn = get_db()
+    row = conn.execute("SELECT code_hash, expires_at, attempts FROM login_codes WHERE email=?",
+                       (email,)).fetchone()
+    if not row or row["expires_at"] < now.isoformat():
+        conn.close()
+        raise HTTPException(400, "הקוד פג תוקף — בקש קוד חדש")
+    if row["attempts"] >= CODE_MAX_ATTEMPTS:
+        conn.close()
+        raise HTTPException(429, "יותר מדי ניסיונות — בקש קוד חדש")
+    if not hmac.compare_digest(row["code_hash"], _sha(f"{email}:{code}")):
+        conn.execute("UPDATE login_codes SET attempts = attempts + 1 WHERE email=?", (email,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(400, "קוד שגוי")
+    user = conn.execute("SELECT status FROM users WHERE email=?", (email,)).fetchone()
+    if not user or user["status"] != "approved":
+        conn.close()
+        raise HTTPException(403, "החשבון ממתין לאישור")
+
+    token = secrets.token_urlsafe(32)
+    conn.execute("DELETE FROM login_codes WHERE email=?", (email,))
+    conn.execute("INSERT INTO sessions (token_hash, email, created_at, expires_at) VALUES (?,?,?,?)",
+                 (_sha(token), email, now.isoformat(),
+                  (now + timedelta(days=SESSION_DAYS)).isoformat()))
+    conn.execute("UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE email=?",
+                 (now.isoformat(), email))
+    conn.execute("INSERT INTO events (email, ts, type) VALUES (?,?,'login')", (email, now.isoformat()))
+    conn.commit()
+    conn.close()
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("sf_session", token, max_age=SESSION_DAYS * 24 * 3600,
+                    httponly=True, samesite="lax", secure=bool(os.environ.get("RENDER")))
+    return resp
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request):
+    token = request.cookies.get("sf_session", "")
+    if token:
+        conn = get_db()
+        conn.execute("DELETE FROM sessions WHERE token_hash=?", (_sha(token),))
+        conn.commit()
+        conn.close()
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("sf_session")
+    resp.delete_cookie("sf_auth")
+    return resp
+
+
+@app.get("/auth/me")
+def auth_me(request: Request):
+    require_auth(request)
+    u = current_user(request) or {}
+    return {"auth_on": AUTH_ON, "email": u.get("email"),
+            "is_admin": bool(u.get("is_admin")) or not AUTH_ON,
+            "legacy": bool(u.get("legacy"))}
+
+
+@app.post("/events")
+def log_event(request: Request, payload: dict = Body(...)):
+    """מעקב שימוש: אירוע אחד לכל פעולה (פתיחת אפליקציה, ליגה, משחק, תקציר)."""
+    require_auth(request)
+    u = current_user(request)
+    if not u or not u.get("email"):
+        return {"ok": True, "skipped": True}   # פיתוח מקומי / סיסמה ישנה — אין משתמש
+    etype = payload.get("type")
+    if etype not in EVENT_TYPES:
+        raise HTTPException(400, "סוג אירוע לא מוכר")
+
+    def field(k):
+        v = payload.get(k)
+        return str(v)[:100] if v not in (None, "") else None
+
+    conn = get_db()
+    conn.execute("INSERT INTO events (email, ts, type, league, match_id, detail) VALUES (?,?,?,?,?,?)",
+                 (u["email"], _now().isoformat(), etype,
+                  field("league"), field("match_id"), field("detail")))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ── Admin: משתמשים ─────────────────────────────────────
+
+@app.get("/admin/users")
+def admin_users_page(request: Request):
+    if AUTH_ON and not (current_user(request) or {}).get("is_admin"):
+        return RedirectResponse("/app")
+    return HTMLResponse(ADMIN_USERS_PAGE)
+
+
+@app.get("/admin/api/users")
+def admin_api_users(request: Request):
+    require_admin(request)
+    conn = get_db()
+    users = [{k: r[k] for k in r.keys()} for r in conn.execute("SELECT * FROM users").fetchall()]
+    counts = conn.execute("SELECT email, type, COUNT(*) AS c, MAX(ts) AS last "
+                          "FROM events GROUP BY email, type").fetchall()
+    leagues = conn.execute("SELECT email, league, COUNT(*) AS c FROM events "
+                           "WHERE league IS NOT NULL GROUP BY email, league").fetchall()
+    conn.close()
+
+    by = {u["email"]: u for u in users}
+    for u in users:
+        u["last_active"] = u.get("last_login")
+        u["_lg"] = {}
+        u["is_admin"] = bool(u.get("is_admin")) or u["email"] in ADMIN_EMAILS
+    for r in counts:
+        u = by.get(r["email"])
+        if not u:
+            continue
+        u[r["type"]] = r["c"]
+        if r["last"] and (not u["last_active"] or r["last"] > u["last_active"]):
+            u["last_active"] = r["last"]
+    for r in leagues:
+        if r["email"] in by:
+            by[r["email"]]["_lg"][r["league"]] = r["c"]
+    for u in users:
+        u["top_leagues"] = [k for k, _ in sorted(u.pop("_lg").items(), key=lambda x: -x[1])[:3]]
+
+    order = {"pending": 0, "approved": 1, "blocked": 2}
+    # ממתינים קודם, ובתוך כל סטטוס — הפעיל לאחרונה למעלה (מיון יציב)
+    users.sort(key=lambda u: u["last_active"] or "", reverse=True)
+    users.sort(key=lambda u: order.get(u["status"], 3))
+    week = (_now() - timedelta(days=7)).isoformat()
+    kpis = {"total": len(users),
+            "pending": sum(u["status"] == "pending" for u in users),
+            "active_7d": sum(1 for u in users if (u["last_active"] or "") > week),
+            "plays": sum(u.get("highlight_play", 0) for u in users)}
+    return {"users": users, "kpis": kpis}
+
+
+@app.post("/admin/api/users/{email}")
+def admin_api_update_user(request: Request, email: str, payload: dict = Body(...)):
+    require_admin(request)
+    email = unquote(email).strip().lower()
+    status = payload.get("status")
+    if status not in ("approved", "blocked", "pending"):
+        raise HTTPException(400, "סטטוס לא תקין")
+    conn = get_db()
+    row = conn.execute("SELECT status FROM users WHERE email=?", (email,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, "משתמש לא נמצא")
+    conn.execute("UPDATE users SET status=?, "
+                 "approved_at = CASE WHEN ?='approved' THEN ? ELSE approved_at END WHERE email=?",
+                 (status, status, _now().isoformat(), email))
+    if status == "blocked":
+        conn.execute("DELETE FROM sessions WHERE email=?", (email,))  # מנותק מיד
+    conn.commit()
+    conn.close()
+    if status == "approved" and row["status"] != "approved":
+        send_email(email, "אושרת ל-SpoilerFree ⚽",
+                   f"החשבון שלך אושר!\n\nלכניסה: {APP_URL}/app\n"
+                   f"הכנס את המייל הזה ותקבל קוד כניסה.\n")
+    return {"ok": True}
+
+
 @app.get("/app")
 def serve_frontend(request: Request):
     if not is_authed(request):
-        return HTMLResponse(LOGIN_PAGE)
+        return HTMLResponse(render_login_page())
     # X-SF-App: ה-service worker שומר בקאש רק את הדף הזה, לא את מסך הכניסה
     return FileResponse("index.html", headers={"X-SF-App": "1"})
 

@@ -28,6 +28,10 @@
     .logo { font-family:'Bebas Neue',sans-serif; font-size:2rem; letter-spacing:2px; color:var(--accent); line-height:1; }
     .logo span { color:var(--muted); font-size:0.8rem; font-family:'Heebo',sans-serif; font-weight:300; display:block; letter-spacing:4px; text-transform:uppercase; margin-top:2px; }
 
+    .user-bar { font-size:0.75rem; color:var(--muted); display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; }
+    .user-bar a, .user-bar button { color:var(--muted); background:none; border:none; font:inherit; cursor:pointer; text-decoration:underline; padding:0; }
+    .user-bar a:hover, .user-bar button:hover { color:var(--accent); }
+
     .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; padding:1rem 2rem; max-width:960px; margin:0 auto; position:relative; z-index:1; }
     .tab { padding:0.4rem 1rem; border-radius:100px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
     .tab:hover { border-color:var(--accent); color:var(--accent); }
@@ -121,6 +125,7 @@
 <header>
   <div class="header-inner">
     <div class="logo">SPOILERFREE<span>לוח משחקים ותקצירים</span></div>
+    <div class="user-bar" id="user-bar"></div>
   </div>
 </header>
 
@@ -229,6 +234,38 @@
     // fresh=1 עוקף את קאש ה-service worker — אחרת היה מוגש שוב הדף השמור
     if (r.status === 401) { location.href = '/app?fresh=1'; throw new Error('auth'); }
     return r;
+  }
+
+  // ── משתמש + מעקב שימוש ─────────────────────────────
+
+  // אירוע שימוש (נשמר למשתמש המחובר) — לא חוסם ולא מפיל כלום אם נכשל
+  function track(type, data = {}) {
+    try {
+      fetch(`${API}/events`, {
+        method: 'POST', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, ...data }),
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  async function loadUserBar() {
+    try {
+      const me = await apiFetch(`${API}/auth/me`).then(r => r.json());
+      if (!me.auth_on) return;
+      const bar = document.getElementById('user-bar');
+      const who = document.createElement('span');
+      who.dir = 'ltr';
+      who.textContent = me.email || 'כניסה בסיסמה';
+      bar.replaceChildren(who);
+      if (me.is_admin) bar.insertAdjacentHTML('beforeend', '<a href="/admin/users">ניהול</a>');
+      bar.insertAdjacentHTML('beforeend', '<button onclick="logout()">יציאה</button>');
+    } catch (e) {}
+  }
+
+  async function logout() {
+    try { await fetch(`${API}/auth/logout`, { method: 'POST' }); } catch (e) {}
+    location.href = '/app?fresh=1';
   }
 
   // ── Matchday nav ───────────────────────────────────
@@ -525,7 +562,12 @@
 
   // ── Modal ──────────────────────────────────────────
 
+  let currentMatchId = null;   // למעקב: לאיזה משחק שייכת לחיצה על תקציר
+
   function openMatchModal(matchId, home, away, isOver) {
+    currentMatchId = matchId;
+    track('match_open', { match_id: matchId,
+                          league: currentLeague === '__byday' ? null : currentLeague });
     const modal = document.getElementById('modal');
     const title = document.getElementById('modal-title');
     const body  = document.getElementById('modal-body');
@@ -569,7 +611,7 @@
 
         // כפתורי אתר (ספורט1/וואלה/ספורט5) — קפיצה לתוצאה ראשונה
         const webBtns = (data.web_links || []).map(l =>
-          `<button class="retry-btn" onclick="window.open('${l.url}','_blank')">🔗 ${l.name} ↗</button>`);
+          `<button class="retry-btn" onclick="openWeb('${l.url}','${l.name}')">🔗 ${l.name} ↗</button>`);
         const webRow = webBtns.length
           ? `<div class="sources-row">${webBtns.join('')}</div>
              <div class="shield-note">🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד</div>`
@@ -625,16 +667,23 @@
   }
 
   function openOnYoutube(videoId) {
+    track('highlight_play', { match_id: currentMatchId, detail: videoId });
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
   }
 
   function loadVideo(videoId) {
+    track('highlight_play', { match_id: currentMatchId, detail: videoId });
     document.getElementById('shield').style.display = 'none';
     document.getElementById('video-frame').innerHTML = `
       <iframe
         src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
         allowfullscreen></iframe>`;
+  }
+
+  function openWeb(url, name) {
+    track('web_link', { match_id: currentMatchId, detail: name });
+    window.open(url, '_blank');
   }
 
   function closeModal() {
@@ -723,8 +772,8 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentLeague = tab.dataset.league;
-      if (currentLeague === '__byday') { enterDayView(); }
-      else { exitDayView(); openLeague(currentLeague); }
+      if (currentLeague === '__byday') { enterDayView(); track('day_view'); }
+      else { exitDayView(); openLeague(currentLeague); track('league_view', { league: currentLeague }); }
     });
   });
 
@@ -757,6 +806,8 @@
 
   // ── Init ───────────────────────────────────────────
   openLeague(currentLeague);
+  loadUserBar();
+  track('app_open');
 
   // PWA: הדף נשמר במכשיר ונפתח מיד גם כשהשרת ישן
   if ('serviceWorker' in navigator) {
