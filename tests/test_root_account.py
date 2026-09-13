@@ -39,10 +39,7 @@ def test_cookies_text_is_public_and_mentions_usage_and_deletion():
 
 
 def _approve_friend(mails):
-    client().post("/auth/request_code", json={"email": FRIEND})
-    admin = login(mails, ADMIN)
-    admin.post(f"/admin/api/users/{FRIEND}", json={"status": "approved"})
-    return login(mails, FRIEND)
+    return login(mails, FRIEND)          # בלי אישור מנהל — הקוד מאמת את המייל
 
 
 def test_account_details(auth_on):
@@ -68,5 +65,5 @@ def test_delete_removes_account_and_data(auth_on):
         n = conn.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE email=?", (FRIEND,)).fetchone()["c"]
         assert n == 0, table
     conn.close()
-    # מי שנמחק ומבקש שוב — חוזר לתור האישור
-    assert client().post("/auth/request_code", json={"email": FRIEND}).json()["status"] == "pending"
+    # מי שנמחק נרשם מחדש כמו משתמש חדש (קוד → סיסמה חדשה)
+    assert login(auth_on, FRIEND).get("/auth/account").json()["login_count"] == 1

@@ -393,6 +393,14 @@ SESSION_DAYS      = 90
 CODE_MINUTES      = 10
 CODE_MAX_ATTEMPTS = 5
 CODE_RESEND_SEC   = 60
+PW_MIN_LEN        = 8
+PW_MAX_FAILS      = 5      # טעויות סיסמה רצופות → נעילה
+PW_LOCK_MIN       = 15
+PW_RESET_MIN      = 15     # אחרי כניסה עם קוד — חלון לקביעת/החלפת סיסמה
+PW_ITER           = 200_000
+# לאן נשלחת הודעה על כל הרשמה חדשה (ברירת מחדל: ADMIN_EMAILS)
+NOTIFY_EMAILS = {e.strip().lower()
+                 for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EVENT_TYPES = {"app_open", "league_view", "day_view", "match_open",
                "highlight_play", "web_link"}
@@ -409,6 +417,22 @@ def _sha(s: str) -> str:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _pw_hash(pw: str) -> str:
+    """PBKDF2-SHA256 עם salt — הסיסמה עצמה לא נשמרת בשום מקום."""
+    salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), PW_ITER).hex()
+    return f"pbkdf2${PW_ITER}${salt}${h}"
+
+
+def _pw_check(pw: str, stored: str) -> bool:
+    try:
+        _, it, salt, h = stored.split("$")
+        got = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), int(it)).hex()
+        return hmac.compare_digest(got, h)
+    except Exception:
+        return False
 
 
 def current_user(request):
@@ -482,52 +506,88 @@ def send_email(to: str, subject: str, body: str) -> bool:
         return False
 
 
-def _notify_admins_new_user(email: str):
-    for admin in ADMIN_EMAILS:
-        send_email(admin, f"SpoilerFree — בקשת הצטרפות: {email}",
-                   f"{email} ביקש/ה להצטרף ל-SpoilerFree.\n\n"
-                   f"לאישור או חסימה: {APP_URL}/admin/users\n")
+def _notify_registration(email: str, lang: str = None):
+    """כל הרשמה חדשה (אחרי שהמייל אומת בקוד) — הודעה למנהל.
+    NOTIFY_EMAILS ב-Render; אם לא הוגדר — ADMIN_EMAILS."""
+    conn = get_db()
+    n = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+    conn.close()
+    for to in (NOTIFY_EMAILS or ADMIN_EMAILS):
+        send_email(to, f"SpoilerFree — משתמש חדש: {email}",
+                   f"{email} נרשם/ה ל-SpoilerFree.\n"
+                   f"שפה: {lang or 'he'}\nסה\"כ משתמשים: {n}\n\n"
+                   f"ניהול (וחסימה אם צריך): {APP_URL}/admin/users\n")
 
 
 # תרגומי מסך הכניסה (השפה נשמרת במכשיר — אותה בחירה כמו באפליקציה).
 # err_*: הודעות השרת (בעברית) → מפתח, כדי להציג אותן בשפת המשתמש.
 LOGIN_I18N = {
-    "he": {"title": "כניסה", "enter_email": "הכנס מייל ונשלח לך קוד כניסה", "send_code": "שלח קוד",
-           "sent_to": "שלחנו קוד בן 6 ספרות אל", "enter": "כניסה", "other_email": "מייל אחר / שלח שוב",
-           "request_sent": "✓ הבקשה נשלחה", "pending": "החשבון ממתין לאישור. תקבל מייל ברגע שהוא יאושר.",
-           "back": "חזרה", "password": "סיסמה", "back_to_email": "חזרה לכניסה במייל",
+    "he": {"title": "כניסה", "enter_email": "הכנס מייל וסיסמה", "password": "סיסמה", "enter": "כניסה",
+           "new_user": "משתמש חדש? נשלח לך קוד למייל", "forgot": "שכחתי סיסמה",
+           "code_intro": "נשלח קוד בן 6 ספרות אל המייל שלך", "send_code": "שלח קוד",
+           "sent_to": "שלחנו קוד בן 6 ספרות אל", "other_email": "מייל אחר / שלח שוב", "back": "חזרה",
+           "set_pw_title": "בחר סיסמה לכניסות הבאות", "new_password": "סיסמה (8 תווים לפחות)",
+           "confirm_password": "הקלד אותה שוב", "save": "שמירה וכניסה", "pw_mismatch": "הסיסמאות לא זהות",
+           "back_to_email": "חזרה לכניסה במייל",
            "legacy_link": "כניסה עם סיסמה (זמני)", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
            "code_len": "הקוד הוא 6 ספרות", "wrong_password": "סיסמה שגויה",
            "err_invalid_email": "כתובת מייל לא תקינה", "err_send_failed": "שליחת המייל נכשלה — נסה שוב בעוד דקה",
            "err_expired": "הקוד פג תוקף — בקש קוד חדש", "err_too_many": "יותר מדי ניסיונות — בקש קוד חדש",
-           "err_wrong_code": "קוד שגוי", "err_pending": "החשבון ממתין לאישור"},
-    "en": {"title": "Log in", "enter_email": "Enter your email and we'll send you a login code", "send_code": "Send code",
-           "sent_to": "We sent a 6-digit code to", "enter": "Log in", "other_email": "Different email / resend",
-           "request_sent": "✓ Request sent", "pending": "Your account is awaiting approval. We'll email you once it's approved.",
-           "back": "Back", "password": "Password", "back_to_email": "Back to email login",
+           "err_wrong_code": "קוד שגוי", "err_blocked": "אין גישה לחשבון הזה",
+           "err_bad_login": "מייל או סיסמה שגויים",
+           "err_locked": "יותר מדי ניסיונות — נסה שוב בעוד 15 דקות או היכנס עם קוד",
+           "err_pw_short": "הסיסמה צריכה 8 תווים לפחות", "err_pw_long": "הסיסמה ארוכה מדי",
+           "err_pw_reset": "כדי להחליף סיסמה — היכנס עם קוד למייל"},
+    "en": {"title": "Log in", "enter_email": "Enter your email and password", "password": "Password", "enter": "Log in",
+           "new_user": "New here? We'll email you a code", "forgot": "Forgot password",
+           "code_intro": "We'll send a 6-digit code to your email", "send_code": "Send code",
+           "sent_to": "We sent a 6-digit code to", "other_email": "Different email / resend", "back": "Back",
+           "set_pw_title": "Choose a password for next time", "new_password": "Password (at least 8 characters)",
+           "confirm_password": "Type it again", "save": "Save and continue", "pw_mismatch": "Passwords don't match",
+           "back_to_email": "Back to email login",
            "legacy_link": "Log in with password (temporary)", "ok": "OK", "generic_err": "Something went wrong — try again",
            "code_len": "The code has 6 digits", "wrong_password": "Wrong password",
            "err_invalid_email": "Invalid email address", "err_send_failed": "Couldn't send the email — try again in a minute",
            "err_expired": "The code has expired — request a new one", "err_too_many": "Too many attempts — request a new code",
-           "err_wrong_code": "Wrong code", "err_pending": "Your account is awaiting approval"},
-    "es": {"title": "Entrar", "enter_email": "Escribe tu correo y te enviaremos un código de acceso", "send_code": "Enviar código",
-           "sent_to": "Enviamos un código de 6 dígitos a", "enter": "Entrar", "other_email": "Otro correo / reenviar",
-           "request_sent": "✓ Solicitud enviada", "pending": "Tu cuenta está pendiente de aprobación. Te avisaremos por correo cuando se apruebe.",
-           "back": "Volver", "password": "Contraseña", "back_to_email": "Volver al acceso por correo",
+           "err_wrong_code": "Wrong code", "err_blocked": "This account has no access",
+           "err_bad_login": "Wrong email or password",
+           "err_locked": "Too many attempts — try again in 15 minutes or log in with a code",
+           "err_pw_short": "Password must be at least 8 characters", "err_pw_long": "Password is too long",
+           "err_pw_reset": "To change your password, log in with an email code"},
+    "es": {"title": "Entrar", "enter_email": "Escribe tu correo y contraseña", "password": "Contraseña", "enter": "Entrar",
+           "new_user": "¿Nuevo? Te enviamos un código por correo", "forgot": "Olvidé mi contraseña",
+           "code_intro": "Te enviaremos un código de 6 dígitos por correo", "send_code": "Enviar código",
+           "sent_to": "Enviamos un código de 6 dígitos a", "other_email": "Otro correo / reenviar", "back": "Volver",
+           "set_pw_title": "Elige una contraseña para la próxima vez", "new_password": "Contraseña (mínimo 8 caracteres)",
+           "confirm_password": "Repítela", "save": "Guardar y entrar", "pw_mismatch": "Las contraseñas no coinciden",
+           "back_to_email": "Volver al acceso por correo",
            "legacy_link": "Entrar con contraseña (temporal)", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
            "code_len": "El código tiene 6 dígitos", "wrong_password": "Contraseña incorrecta",
            "err_invalid_email": "Correo no válido", "err_send_failed": "No se pudo enviar el correo — inténtalo en un minuto",
            "err_expired": "El código ha caducado — pide uno nuevo", "err_too_many": "Demasiados intentos — pide un código nuevo",
-           "err_wrong_code": "Código incorrecto", "err_pending": "Tu cuenta está pendiente de aprobación"},
-    "fr": {"title": "Connexion", "enter_email": "Saisissez votre e-mail et nous vous enverrons un code", "send_code": "Envoyer le code",
-           "sent_to": "Nous avons envoyé un code à 6 chiffres à", "enter": "Se connecter", "other_email": "Autre e-mail / renvoyer",
-           "request_sent": "✓ Demande envoyée", "pending": "Votre compte est en attente de validation. Vous recevrez un e-mail dès qu'il sera validé.",
-           "back": "Retour", "password": "Mot de passe", "back_to_email": "Retour à la connexion par e-mail",
+           "err_wrong_code": "Código incorrecto", "err_blocked": "Esta cuenta no tiene acceso",
+           "err_bad_login": "Correo o contraseña incorrectos",
+           "err_locked": "Demasiados intentos — inténtalo en 15 minutos o entra con un código",
+           "err_pw_short": "La contraseña debe tener al menos 8 caracteres", "err_pw_long": "La contraseña es demasiado larga",
+           "err_pw_reset": "Para cambiar la contraseña, entra con un código por correo"},
+    "fr": {"title": "Connexion", "enter_email": "Saisissez votre e-mail et votre mot de passe", "password": "Mot de passe",
+           "enter": "Se connecter", "new_user": "Nouveau ? Nous vous envoyons un code par e-mail",
+           "forgot": "Mot de passe oublié", "code_intro": "Nous vous enverrons un code à 6 chiffres par e-mail",
+           "send_code": "Envoyer le code",
+           "sent_to": "Nous avons envoyé un code à 6 chiffres à", "other_email": "Autre e-mail / renvoyer", "back": "Retour",
+           "set_pw_title": "Choisissez un mot de passe pour la prochaine fois",
+           "new_password": "Mot de passe (8 caractères min.)", "confirm_password": "Retapez-le",
+           "save": "Enregistrer et continuer", "pw_mismatch": "Les mots de passe ne correspondent pas",
+           "back_to_email": "Retour à la connexion par e-mail",
            "legacy_link": "Connexion par mot de passe (temporaire)", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
            "code_len": "Le code comporte 6 chiffres", "wrong_password": "Mot de passe incorrect",
            "err_invalid_email": "Adresse e-mail invalide", "err_send_failed": "L'e-mail n'a pas pu être envoyé — réessayez dans une minute",
            "err_expired": "Le code a expiré — demandez-en un nouveau", "err_too_many": "Trop de tentatives — demandez un nouveau code",
-           "err_wrong_code": "Code incorrect", "err_pending": "Votre compte est en attente de validation"},
+           "err_wrong_code": "Code incorrect", "err_blocked": "Ce compte n'a pas accès",
+           "err_bad_login": "E-mail ou mot de passe incorrect",
+           "err_locked": "Trop de tentatives — réessayez dans 15 minutes ou connectez-vous avec un code",
+           "err_pw_short": "Le mot de passe doit comporter au moins 8 caractères", "err_pw_long": "Mot de passe trop long",
+           "err_pw_reset": "Pour changer de mot de passe, connectez-vous avec un code reçu par e-mail"},
 }
 
 # מייל הקוד בשפת המשתמש. הנושא מסתיים בקוד (רואים אותו בהתראה בטלפון).
@@ -588,23 +648,34 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 </select>
 <div class="box"><h1>SPOILERFREE</h1>
 
-<div id="step-email">
-  <p data-i18n="enter_email">הכנס מייל ונשלח לך קוד כניסה</p>
-  <input type="email" id="email" placeholder="you@example.com" autocomplete="email" dir="ltr">
+<div id="step-login">
+  <p data-i18n="enter_email">הכנס מייל וסיסמה</p>
+  <input type="email" id="email" placeholder="you@example.com" autocomplete="username" dir="ltr">
+  <input type="password" id="login-pw" autocomplete="current-password" dir="ltr">
+  <button id="login-btn" onclick="pwLogin()" data-i18n="enter">כניסה</button>
+  <button class="link" onclick="codeMode('new')" data-i18n="new_user">משתמש חדש? נשלח לך קוד למייל</button>
+  <button class="link" onclick="codeMode('reset')" data-i18n="forgot">שכחתי סיסמה</button>
+</div>
+
+<div id="step-email" hidden>
+  <p data-i18n="code_intro">נשלח קוד בן 6 ספרות אל המייל שלך</p>
+  <input type="email" id="code-email" placeholder="you@example.com" autocomplete="email" dir="ltr">
   <button id="send-btn" onclick="sendCode()" data-i18n="send_code">שלח קוד</button>
+  <button class="link" onclick="back()" data-i18n="back">חזרה</button>
 </div>
 
 <div id="step-code" hidden>
   <p><span data-i18n="sent_to">שלחנו קוד בן 6 ספרות אל</span><br><b id="sent-to" dir="ltr"></b></p>
   <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" dir="ltr">
   <button id="verify-btn" onclick="verify()" data-i18n="enter">כניסה</button>
-  <button class="link" onclick="back()" data-i18n="other_email">מייל אחר / שלח שוב</button>
+  <button class="link" onclick="show('step-email')" data-i18n="other_email">מייל אחר / שלח שוב</button>
 </div>
 
-<div id="step-pending" hidden>
-  <p class="ok" data-i18n="request_sent">✓ הבקשה נשלחה</p>
-  <p data-i18n="pending">החשבון ממתין לאישור. תקבל מייל ברגע שהוא יאושר.</p>
-  <button class="link" onclick="back()" data-i18n="back">חזרה</button>
+<div id="step-setpw" hidden>
+  <p data-i18n="set_pw_title">בחר סיסמה לכניסות הבאות</p>
+  <input type="password" id="new-pw" autocomplete="new-password" dir="ltr">
+  <input type="password" id="new-pw2" autocomplete="new-password" dir="ltr">
+  <button id="setpw-btn" onclick="setPw()" data-i18n="save">שמירה וכניסה</button>
 </div>
 
 <div id="step-legacy" hidden>
@@ -636,6 +707,9 @@ function applyLang() {
   document.title = 'SpoilerFree — ' + t('title');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   $('pw').placeholder = t('password');
+  $('login-pw').placeholder = t('password');
+  $('new-pw').placeholder = t('new_password');
+  $('new-pw2').placeholder = t('confirm_password');
   $('lang-select').value = LANG;
 }
 $('lang-select').addEventListener('change', e => {
@@ -649,11 +723,35 @@ function serverMsg(detail) {
   return k ? t(k) : (detail || t('generic_err'));
 }
 applyLang();
+// מסכים: מייל+סיסמה (ברירת מחדל) · בקשת קוד (משתמש חדש / שכחתי) · קוד · קביעת סיסמה
+let MODE = 'new';
 function show(id) {
-  for (const s of ['step-email','step-code','step-pending','step-legacy']) $(s).hidden = s !== id;
+  for (const s of ['step-login','step-email','step-code','step-setpw','step-legacy']) $(s).hidden = s !== id;
   $('err').textContent = '';
 }
-function back() { show('step-email'); $('email').focus(); }
+function back() { show('step-login'); $('email').focus(); }
+function go() { location.href = '/?fresh=1'; }
+function codeMode(m) {
+  MODE = m;
+  $('code-email').value = $('email').value.trim();
+  show('step-email'); $('code-email').focus();
+}
+async function pwLogin() {
+  const email = $('email').value.trim(), password = $('login-pw').value;
+  if (!email || !password) return;
+  $('login-btn').disabled = true; $('err').textContent = '';
+  try { await post('/auth/login', {email, password}); go(); }
+  catch (e) { $('err').textContent = e.message; }
+  finally { $('login-btn').disabled = false; }
+}
+async function setPw() {
+  const a = $('new-pw').value, b = $('new-pw2').value;
+  if (a !== b) { $('err').textContent = t('pw_mismatch'); return; }
+  $('setpw-btn').disabled = true; $('err').textContent = '';
+  try { await post('/auth/set_password', {password: a}); go(); }
+  catch (e) { $('err').textContent = e.message; }
+  finally { $('setpw-btn').disabled = false; }
+}
 async function post(url, body) {
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
                               body: JSON.stringify(body)});
@@ -662,13 +760,12 @@ async function post(url, body) {
   return j;
 }
 async function sendCode() {
-  const email = $('email').value.trim();
+  const email = $('code-email').value.trim();
   if (!email) return;
   $('send-btn').disabled = true; $('err').textContent = '';
   try {
-    const j = await post('/auth/request_code', {email, lang: LANG});
-    if (j.status === 'pending') { show('step-pending'); return; }
-    $('sent-to').textContent = email; show('step-code'); $('code').focus();
+    await post('/auth/request_code', {email, lang: LANG});
+    $('sent-to').textContent = email; $('code').value = ''; show('step-code'); $('code').focus();
   } catch (e) { $('err').textContent = e.message; }
   finally { $('send-btn').disabled = false; }
 }
@@ -677,8 +774,10 @@ async function verify() {
   if (code.length !== 6) { $('err').textContent = t('code_len'); return; }
   $('verify-btn').disabled = true; $('err').textContent = '';
   try {
-    await post('/auth/verify', {email: $('email').value.trim(), code});
-    location.href = '/?fresh=1';
+    const j = await post('/auth/verify', {email: $('code-email').value.trim(), code, lang: LANG});
+    // כניסה ראשונה (אין סיסמה) או "שכחתי סיסמה" — קובעים סיסמה; אחרת נכנסים
+    if (j.need_password || MODE === 'reset') { show('step-setpw'); $('new-pw').focus(); }
+    else go();
   } catch (e) { $('err').textContent = e.message; }
   finally { $('verify-btn').disabled = false; }
 }
@@ -691,7 +790,10 @@ async function openCookies() {
   try { $('cookie-body').innerHTML = await (await fetch('/cookies?lang=' + LANG)).text(); } catch (e) {}
 }
 function closeCookies() { $('cookie-overlay').hidden = true; }
-$('email').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
+$('email').addEventListener('keydown', e => { if (e.key === 'Enter') $('login-pw').focus(); });
+$('login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') pwLogin(); });
+$('code-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
+$('new-pw2').addEventListener('keydown', e => { if (e.key === 'Enter') setPw(); });
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
 $('code').addEventListener('input', e => { if (e.target.value.trim().length === 6) verify(); });
 $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') legacy(); });
@@ -955,6 +1057,13 @@ def init_db():
             login_count  INTEGER DEFAULT 0
         )
     """)
+    # כניסה עם סיסמה (13.9.26) — עמודות חדשות לטבלה קיימת ב-Turso
+    for col in ("password_hash TEXT", "pw_fails INTEGER DEFAULT 0",
+                "pw_locked_until TEXT", "pw_reset_until TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+        except Exception:
+            pass   # כבר קיימת
     conn.execute("""
         CREATE TABLE IF NOT EXISTS login_codes (
             email      TEXT PRIMARY KEY,
@@ -3602,35 +3711,40 @@ def _email_from(payload) -> str:
     return email
 
 
+BLOCKED_MSG = "אין גישה לחשבון הזה"
+
+
+def _start_session(conn, email: str, now, method: str) -> str:
+    """session חדש + מונה כניסות + אירוע login (method: code / password)."""
+    token = secrets.token_urlsafe(32)
+    conn.execute("INSERT INTO sessions (token_hash, email, created_at, expires_at) VALUES (?,?,?,?)",
+                 (_sha(token), email, now.isoformat(),
+                  (now + timedelta(days=SESSION_DAYS)).isoformat()))
+    conn.execute("UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE email=?",
+                 (now.isoformat(), email))
+    conn.execute("INSERT INTO events (email, ts, type, detail) VALUES (?,?,'login',?)",
+                 (email, now.isoformat(), method))
+    return token
+
+
+def _session_response(token: str, body: dict):
+    resp = JSONResponse(body)
+    resp.set_cookie("sf_session", token, max_age=SESSION_DAYS * 24 * 3600,
+                    httponly=True, samesite="lax", secure=bool(os.environ.get("RENDER")))
+    return resp
+
+
 @app.post("/auth/request_code")
 def auth_request_code(payload: dict = Body(...)):
+    """קוד בן 6 ספרות למייל: כניסה ראשונה (הרשמה), שכחתי סיסמה, או כניסה בלי
+    סיסמה. בלי אישור מנהל — המשתמש נוצר כשהקוד מאומת."""
     email = _email_from(payload)
     now = _now()
-    is_admin_email = email in ADMIN_EMAILS
     conn = get_db()
     user = conn.execute("SELECT status FROM users WHERE email=?", (email,)).fetchone()
-    new_pending = False
-    if user is None:
-        status = "approved" if is_admin_email else "pending"
-        conn.execute(
-            "INSERT INTO users (email, status, is_admin, created_at, approved_at, login_count) "
-            "VALUES (?,?,?,?,?,0)",
-            (email, status, int(is_admin_email), now.isoformat(),
-             now.isoformat() if is_admin_email else None))
-        conn.commit()
-        new_pending = status == "pending"
-    else:
-        status = user["status"]
-        if is_admin_email and status != "approved":
-            conn.execute("UPDATE users SET status='approved', is_admin=1 WHERE email=?", (email,))
-            conn.commit()
-            status = "approved"
-    if status != "approved":
+    if user and user["status"] == "blocked":
         conn.close()
-        if new_pending:
-            _notify_admins_new_user(email)
-        # ממתין או חסום — אותה תשובה (לא חושפים חסימה)
-        return {"status": "pending"}
+        raise HTTPException(403, BLOCKED_MSG)
 
     row = conn.execute("SELECT sent_at FROM login_codes WHERE email=?", (email,)).fetchone()
     if row:
@@ -3680,25 +3794,97 @@ def auth_verify(payload: dict = Body(...)):
         conn.commit()
         conn.close()
         raise HTTPException(400, "קוד שגוי")
-    user = conn.execute("SELECT status FROM users WHERE email=?", (email,)).fetchone()
-    if not user or user["status"] != "approved":
+    user = conn.execute("SELECT status, password_hash FROM users WHERE email=?", (email,)).fetchone()
+    if user and user["status"] == "blocked":
         conn.close()
-        raise HTTPException(403, "החשבון ממתין לאישור")
+        raise HTTPException(403, BLOCKED_MSG)
 
-    token = secrets.token_urlsafe(32)
+    new_user = user is None
+    if new_user:
+        conn.execute(
+            "INSERT INTO users (email, status, is_admin, created_at, approved_at, login_count) "
+            "VALUES (?, 'approved', ?, ?, ?, 0)",
+            (email, int(email in ADMIN_EMAILS), now.isoformat(), now.isoformat()))
+    elif user["status"] != "approved":
+        # ממתינים מהמנגנון הקודם (אישור ידני) — המייל אומת, נכנסים
+        conn.execute("UPDATE users SET status='approved', approved_at=? WHERE email=?",
+                     (now.isoformat(), email))
+    # קוד מהמייל = אפשר לקבוע / להחליף סיסמה ברבע השעה הקרובה
+    conn.execute("UPDATE users SET pw_reset_until=? WHERE email=?",
+                 ((now + timedelta(minutes=PW_RESET_MIN)).isoformat(), email))
     conn.execute("DELETE FROM login_codes WHERE email=?", (email,))
-    conn.execute("INSERT INTO sessions (token_hash, email, created_at, expires_at) VALUES (?,?,?,?)",
-                 (_sha(token), email, now.isoformat(),
-                  (now + timedelta(days=SESSION_DAYS)).isoformat()))
-    conn.execute("UPDATE users SET last_login=?, login_count=COALESCE(login_count,0)+1 WHERE email=?",
-                 (now.isoformat(), email))
-    conn.execute("INSERT INTO events (email, ts, type) VALUES (?,?,'login')", (email, now.isoformat()))
+    token = _start_session(conn, email, now, "code")
     conn.commit()
     conn.close()
-    resp = JSONResponse({"ok": True})
-    resp.set_cookie("sf_session", token, max_age=SESSION_DAYS * 24 * 3600,
-                    httponly=True, samesite="lax", secure=bool(os.environ.get("RENDER")))
-    return resp
+    if new_user:
+        _notify_registration(email, payload.get("lang"))
+    return _session_response(token, {"ok": True,
+                                     "need_password": not (user and user["password_hash"])})
+
+
+_DUMMY_PW_HASH = _pw_hash(secrets.token_hex(8))   # זמן תגובה זהה גם למייל לא קיים
+
+
+@app.post("/auth/login")
+def auth_login(payload: dict = Body(...)):
+    """כניסה עם מייל + סיסמה. 5 טעויות רצופות → נעילה ל-15 דקות (הקוד למייל
+    עדיין עובד)."""
+    email = _email_from(payload)
+    pw = str(payload.get("password") or "")[:200]
+    now = _now()
+    conn = get_db()
+    u = conn.execute("SELECT status, password_hash, pw_fails, pw_locked_until FROM users "
+                     "WHERE email=?", (email,)).fetchone()
+    if u and (u["pw_locked_until"] or "") > now.isoformat():
+        conn.close()
+        raise HTTPException(429, "יותר מדי ניסיונות — נסה שוב בעוד 15 דקות או היכנס עם קוד")
+    stored = u["password_hash"] if u and u["password_hash"] else None
+    ok = _pw_check(pw, stored or _DUMMY_PW_HASH) and stored is not None
+    if not ok:
+        if u:
+            fails = (u["pw_fails"] or 0) + 1
+            if fails >= PW_MAX_FAILS:
+                conn.execute("UPDATE users SET pw_fails=0, pw_locked_until=? WHERE email=?",
+                             ((now + timedelta(minutes=PW_LOCK_MIN)).isoformat(), email))
+            else:
+                conn.execute("UPDATE users SET pw_fails=? WHERE email=?", (fails, email))
+            conn.commit()
+        conn.close()
+        raise HTTPException(400, "מייל או סיסמה שגויים")
+    if u["status"] == "blocked":
+        conn.close()
+        raise HTTPException(403, BLOCKED_MSG)
+    conn.execute("UPDATE users SET pw_fails=0, pw_locked_until=NULL WHERE email=?", (email,))
+    token = _start_session(conn, email, now, "password")
+    conn.commit()
+    conn.close()
+    return _session_response(token, {"ok": True})
+
+
+@app.post("/auth/set_password")
+def auth_set_password(request: Request, payload: dict = Body(...)):
+    """קביעת סיסמה בכניסה הראשונה, או החלפה — עד 15 דק' אחרי כניסה עם קוד."""
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if not email:
+        raise HTTPException(400, "אין חשבון אישי")
+    pw = str(payload.get("password") or "")
+    if len(pw) < PW_MIN_LEN:
+        raise HTTPException(400, "הסיסמה צריכה 8 תווים לפחות")
+    if len(pw) > 200:
+        raise HTTPException(400, "הסיסמה ארוכה מדי")
+    now = _now()
+    conn = get_db()
+    u = conn.execute("SELECT password_hash, pw_reset_until FROM users WHERE email=?",
+                     (email,)).fetchone()
+    if u["password_hash"] and (u["pw_reset_until"] or "") < now.isoformat():
+        conn.close()
+        raise HTTPException(403, "כדי להחליף סיסמה — היכנס עם קוד למייל")
+    conn.execute("UPDATE users SET password_hash=?, pw_reset_until=NULL, pw_fails=0, "
+                 "pw_locked_until=NULL WHERE email=?", (_pw_hash(pw), email))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.post("/auth/logout")
