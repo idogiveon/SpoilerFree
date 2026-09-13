@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import secrets
 import smtplib
+import threading
 from email.message import EmailMessage
 import unicodedata
 from html import unescape as _unescape
@@ -2167,9 +2168,11 @@ def _uploads_since(channel_id: str, match_date: str):
         token = resp.get("nextPageToken")
         if reached_older or not token:
             break
+    # complete=False: נגמרה התקרה לפני שהגענו ליום המשחק (משחק ישן בערוץ עמוס)
+    complete = reached_older or not token
     print(f"[yt] uploads {channel_id}: {page} page(s) = {page} units, "
-          f"{len(out)} videos since {match_date}")
-    return out
+          f"{len(out)} videos since {match_date}{'' if complete else ' (cap reached)'}")
+    return out, complete
 
 
 def search_youtube(home: str, away: str, match_date: str,
@@ -2231,9 +2234,15 @@ def search_youtube(home: str, away: str, match_date: str,
         # 2א. רשימת ההעלאות: יחידה לכל 50 סרטונים
         uploads = _uploads_since(channel_id, match_date)
         if uploads is not None:
-            results = [_video(v, t) for v, t, p in uploads if v and _keep(t, p)]
-        else:
-            # 2ב. גיבוי: search.list (100 יחידות) — רק אם הרשימה לא נגישה
+            items_u, complete = uploads
+            results = [_video(v, t) for v, t, p in items_u if v and _keep(t, p)]
+            if not results and not complete:
+                # הרשימה לא הגיעה עד יום המשחק — אחרת היה נקבע "לא נמצא" בטעות
+                print(f"[yt] uploads cap before {match_date} — falling back to search")
+                uploads = None
+        if uploads is None:
+            # 2ב. גיבוי: search.list (100 יחידות) — הרשימה לא נגישה,
+            #     או שהתקרה נגמרה לפני יום המשחק בלי תוצאה
             params = {
                 "key":          YOUTUBE_API_KEY,
                 "channelId":    channel_id,
@@ -2642,6 +2651,143 @@ def refresh_from_client(request: Request, league_key: str,
     return {"ok": True, "received": len(events), "stored": stored}
 
 
+def _not_found_retry(row):
+    """אחרי כמה זמן לחפש שוב כש"לא נמצא" — לפי גיל המשחק. None = לא מחפשים
+    שוב (משחק בן שבוע+ — התקציר כבר לא יעלה; "חפש שוב" עדיין עובד)."""
+    try:
+        kick = datetime.fromisoformat(f"{row['date_utc']}T{row['time_utc']}+00:00")
+    except Exception:
+        return timedelta(minutes=30)
+    match_age = datetime.now(timezone.utc) - kick
+    if match_age < timedelta(days=2):
+        return timedelta(minutes=30)
+    if match_age < timedelta(days=7):
+        return timedelta(hours=6)
+    return None
+
+
+def _source_highlights(row, source) -> dict:
+    """תקציר ממקור אחד למשחק: מהקאש, או חיפוש ושמירה בקאש.
+    משותף ל-/highlights ולחיפוש-מראש ברקע."""
+    match_id    = row["id"]
+    source_id   = source["id"]
+    channel_id  = source.get("channel_id", "")
+    allow_embed = source.get("allow_embed", False)
+    base = {"source_id": source_id, "name": source["name"], "allow_embed": allow_embed}
+
+    if not channel_id:
+        return {**base, "videos": [], "status": "no_channel"}
+
+    conn = get_db()
+    cached = conn.execute(
+        "SELECT videos_json, found_at FROM highlight_cache WHERE match_id=? AND source_id=?",
+        (match_id, source_id)
+    ).fetchone()
+    conn.close()
+
+    if cached:
+        videos = json.loads(cached["videos_json"])
+        cache_age_ok = True
+        try:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(cached["found_at"])
+        except Exception:
+            age = None
+        if not videos:
+            # "לא נמצא" — ניסיון חוזר לפי גיל המשחק (30 דק' / 6 שעות / אף פעם)
+            retry_after = _not_found_retry(row)
+            if retry_after is not None and (age is None or age > retry_after):
+                cache_age_ok = False
+        elif not any(v.get("extended") for v in videos):
+            # נמצא רק תקציר קצר — המלא עולה לרוב יום-יומיים אחרי.
+            # מרעננים לכל היותר פעם ב-12 שעות, עד 3 ימים מהמציאה.
+            if age is not None and timedelta(hours=12) < age < timedelta(days=3):
+                cache_age_ok = False
+        if cache_age_ok:
+            return {**base, "videos": videos, "status": "cached"}
+
+    # עדיפות לשאילתה מוכנה (שמות קצרים למועדונים), אחרת מתבנית המקור
+    query = (source.get("query_override")
+             or build_source_query(source, row["home_team"], row["away_team"]))
+    videos = search_youtube(
+        home=row["home_team"],
+        away=row["away_team"],
+        match_date=row["date_utc"],
+        channel_id=channel_id,
+        query=query,
+        title_exclude=source.get("title_exclude"),
+        title_include=source.get("title_include"),
+        home_alt=to_hebrew_team(row["home_team"]),
+        away_alt=to_hebrew_team(row["away_team"]),
+        require_team=source.get("require_team_match", False),
+        implicit_team=source.get("club_team"),
+        headline=source.get("headline_titles", False),
+    )
+    if videos is None:
+        # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך
+        return {**base, "videos": [], "status": "api_error"}
+
+    conn = get_db()
+    conn.execute("""
+        INSERT OR REPLACE INTO highlight_cache
+        (match_id, source_id, videos_json, found_at)
+        VALUES (?,?,?,?)
+    """, (match_id, source_id, json.dumps(videos),
+          datetime.now(timezone.utc).isoformat()))
+    conn.commit()
+    conn.close()
+    return {**base, "videos": videos, "status": "found" if videos else "not_found"}
+
+
+# ── חיפוש מראש ברקע ────────────────────────────────────
+# משחקים שהסתיימו ב-48 השעות האחרונות ועוד אין להם קאש — השרת מחפש לבד.
+# התקציר מוכן לפני שמישהו פותח, והעלות תלויה במספר המשחקים — לא במשתמשים.
+PREFETCH_EVERY_MIN   = 30
+PREFETCH_MAX_MATCHES = 20
+
+
+def prefetch_highlights_once() -> int:
+    since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%d")
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM matches WHERE date_utc >= ?", (since,)).fetchall()
+    have = {(r["match_id"], r["source_id"]) for r in
+            conn.execute("SELECT match_id, source_id FROM highlight_cache").fetchall()}
+    conn.close()
+    done = 0
+    for row in rows:
+        if done >= PREFETCH_MAX_MATCHES:
+            break
+        if not likely_over(row) or kickoff_passed(row, hours=48):
+            continue
+        todo = [s for s in get_sources_for_match(row)
+                if s.get("channel_id") and (row["id"], s["id"]) not in have]
+        if not todo:
+            continue
+        if _yt_units_today() >= YT_DAILY_BRAKE:
+            break
+        for s in todo:
+            _source_highlights(row, s)
+        done += 1
+    print(f"[prefetch] searched {done} match(es)")
+    return done
+
+
+def _prefetch_loop():
+    time.sleep(60)   # לתת לשרת לעלות לפני הסבב הראשון
+    while True:
+        try:
+            prefetch_highlights_once()
+        except Exception as ex:
+            print(f"[prefetch] {ex}")
+        time.sleep(PREFETCH_EVERY_MIN * 60)
+
+
+@app.on_event("startup")
+def _start_prefetch():
+    # רק כשיש מפתח יוטיוב (פרודקשן). PREFETCH=0 מכבה.
+    if YOUTUBE_API_KEY and os.environ.get("PREFETCH", "1") == "1":
+        threading.Thread(target=_prefetch_loop, daemon=True).start()
+
+
 @app.get("/highlights/{match_id}")
 def get_highlights(request: Request, match_id: str, lang: str = "he"):
     require_auth(request)
@@ -2683,93 +2829,7 @@ def get_highlights(request: Request, match_id: str, lang: str = "he"):
                     "sources": []}
 
     sources = get_sources_for_match(row)
-    results = []
-
-    for source in sources:
-        source_id   = source["id"]
-        channel_id  = source.get("channel_id", "")
-        allow_embed = source.get("allow_embed", False)
-
-        if not channel_id:
-            results.append({"source_id": source_id, "name": source["name"],
-                            "videos": [], "status": "no_channel",
-                            "allow_embed": allow_embed})
-            continue
-
-        # Check cache
-        conn = get_db()
-        cached = conn.execute(
-            "SELECT videos_json, found_at FROM highlight_cache WHERE match_id=? AND source_id=?",
-            (match_id, source_id)
-        ).fetchone()
-        conn.close()
-
-        if cached:
-            videos = json.loads(cached["videos_json"])
-            cache_age_ok = True
-            try:
-                found_dt = datetime.fromisoformat(cached["found_at"])
-                age = datetime.now(timezone.utc) - found_dt
-            except:
-                age = None
-            if not videos:
-                # קאש ריק — ניסיון חוזר אחרי 30 דקות
-                if age is None or age > timedelta(minutes=30):
-                    cache_age_ok = False
-            elif not any(v.get("extended") for v in videos):
-                # נמצא רק תקציר קצר — המלא עולה לרוב יום-יומיים אחרי.
-                # מרעננים לכל היותר פעם ב-12 שעות, עד 3 ימים מהמציאה.
-                if age is not None and timedelta(hours=12) < age < timedelta(days=3):
-                    cache_age_ok = False
-
-            if cache_age_ok:
-                results.append({"source_id": source_id, "name": source["name"],
-                                "videos": videos, "status": "cached",
-                                "allow_embed": allow_embed})
-                continue
-
-        # Build query: עדיפות לשאילתה מוכנה (שמות קצרים למועדונים),
-        # אחרת מתבנית המקור (+ עברית אם צריך)
-        query = (source.get("query_override")
-                 or build_source_query(source, row["home_team"], row["away_team"]))
-
-        videos = search_youtube(
-            home=row["home_team"],
-            away=row["away_team"],
-            match_date=row["date_utc"],
-            channel_id=channel_id,
-            query=query,
-            title_exclude=source.get("title_exclude"),
-            title_include=source.get("title_include"),
-            home_alt=to_hebrew_team(row["home_team"]),
-            away_alt=to_hebrew_team(row["away_team"]),
-            require_team=source.get("require_team_match", False),
-            implicit_team=source.get("club_team"),
-            headline=source.get("headline_titles", False),
-        )
-
-        if videos is None:
-            # שגיאת API (מכסה?) — לא שומרים בקאש, ינוסה שוב בפתיחה הבאה
-            results.append({"source_id": source_id, "name": source["name"],
-                            "videos": [], "status": "api_error",
-                            "allow_embed": allow_embed})
-            continue
-
-        # Save cache
-        conn = get_db()
-        conn.execute("""
-            INSERT OR REPLACE INTO highlight_cache
-            (match_id, source_id, videos_json, found_at)
-            VALUES (?,?,?,?)
-        """, (match_id, source_id, json.dumps(videos),
-              datetime.now(timezone.utc).isoformat()))
-        conn.commit()
-        conn.close()
-
-        results.append({"source_id": source_id, "name": source["name"],
-                        "videos": videos,
-                        "status": "found" if videos else "not_found",
-                        "allow_embed": allow_embed})
+    results = [_source_highlights(row, source) for source in sources]
 
     # קישורי אתר (same-day): השרת מחלץ את הכתבה הישירה ושומר בקאש
     league = LEAGUES.get(row["league_key"], {})
