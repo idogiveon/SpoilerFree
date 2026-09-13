@@ -1,0 +1,14 @@
+# Render free tier מרדים את השרת אחרי 15 דקות בלי בקשות (יקיצה = 30–50 שניות).
+# פינג כל 5 דקות שומר אותו ער. ריפו ציבורי — דקות Actions בחינם.
+# הערה: GitHub עלול לדחות ריצות מתוזמנות בעומס; 5 דקות משאיר מרווח מול ה-15.
+name: keep-alive
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl -fsS --retry 3 --retry-delay 10 --max-time 90 https://spoilerfree.onrender.com/ -o /dev/null -w "%{http_code} %{time_total}s\n"
