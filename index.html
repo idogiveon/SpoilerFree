@@ -478,42 +478,44 @@
   }
 
   // ── מועדפים ────────────────────────────────────────
-  // מפתח = ליגה + שם הקבוצה במקור. עם חשבון אישי — בשרת (כל המכשירים),
-  // בלי (סיסמה ישנה / מקומי) — במכשיר.
+  // מפתח קבוצה אחיד מהשרת (home_key/away_key) — חל על הקבוצה בכל מפעל
+  // (ליברפול בפרמייר = ליברפול בצ'מפיונס). עם חשבון אישי — בשרת (כל
+  // המכשירים), בלי (סיסמה ישנה / מקומי) — במכשיר.
   let ME = null;
   let FAVS = new Set();
   let favCtx = null;            // הקבוצות בחלון המשחק הפתוח
   let lastDayMatches = null;    // לתצוגה מחדש של "לפי יום" בלי טעינה
-  const favKey = (lg, team) => `${lg}|${team}`;
-  const isFav = (lg, team) => FAVS.has(favKey(lg, team));
+  const isFav = key => FAVS.has(key);
   const matchLeague = m => m.league_key || currentLeague;
-  const isFavMatch = m => isFav(matchLeague(m), m.home) || isFav(matchLeague(m), m.away);
+  const homeKey = m => m.home_key || m.home, awayKey = m => m.away_key || m.away;
+  const isFavMatch = m => isFav(homeKey(m)) || isFav(awayKey(m));
   const serverFavs = () => !!(ME && ME.email);
+  const FAVS_LOCAL = 'sf:favs2';   // מפתחות אחידים (הגרסה לפי-ליגה נשמרה ב-sf:favs)
 
   async function loadFavorites() {
     try {
       if (serverFavs()) {
         const r = await apiFetch(`${API}/favorites`).then(r => r.json());
-        FAVS = new Set(r.favorites.map(([lg, team]) => favKey(lg, team)));
+        FAVS = new Set(r.favorites);
       } else {
-        FAVS = new Set(JSON.parse(localStorage.getItem('sf:favs') || '[]'));
+        FAVS = new Set(JSON.parse(localStorage.getItem(FAVS_LOCAL) || '[]'));
       }
     } catch (e) {}
   }
 
-  async function toggleFav(lg, team) {
-    const k = favKey(lg, team), on = !FAVS.has(k);
-    if (on) FAVS.add(k); else FAVS.delete(k);
+  async function toggleFav(key) {
+    const on = !FAVS.has(key);
+    if (on) FAVS.add(key); else FAVS.delete(key);
     renderFavRow();
     rerender();
     try {
       if (serverFavs()) {
         await apiFetch(`${API}/favorites`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ league_key: lg, team, on }),
+          body: JSON.stringify({ team: key, on }),
         });
       } else {
-        localStorage.setItem('sf:favs', JSON.stringify([...FAVS]));
+        localStorage.setItem(FAVS_LOCAL, JSON.stringify([...FAVS]));
       }
     } catch (e) {}
   }
@@ -529,10 +531,10 @@
     if (!favCtx) { el.innerHTML = ''; return; }
     const teams = [[favCtx.home, favCtx.homeName], [favCtx.away, favCtx.awayName]];
     el.innerHTML = teams.map(([key, name], i) =>
-      `<button class="fav-btn" data-i="${i}" title="${t('fav_hint')}">${isFav(favCtx.league, key) ? '⭐' : '☆'} ${esc(name)}</button>`
+      `<button class="fav-btn" data-i="${i}" title="${t('fav_hint')}">${isFav(key) ? '⭐' : '☆'} ${esc(name)}</button>`
     ).join('');
     el.querySelectorAll('.fav-btn').forEach(btn => btn.addEventListener('click', () => {
-      toggleFav(favCtx.league, teams[+btn.dataset.i][0]);
+      toggleFav(teams[+btn.dataset.i][0]);
     }));
   }
 
@@ -646,20 +648,20 @@
     // שמות בשפת המשתמש (מהשרת); escape — יש שמות עם ' ו-" (צ'רלטון, Newell's)
     const home = esc(m.home_name || m.home), away = esc(m.away_name || m.away);
     const lg = matchLeague(m);
-    const star = team => isFav(lg, team) ? '⭐ ' : '';
+    const star = key => isFav(key) ? '⭐ ' : '';
     // הבית ראשון בכיוון הקריאה — בכל שפה (RTL: מימין, LTR: משמאל)
     return `
       <div class="match-card ${cardClass}"
            data-id="${m.id}" data-home="${home}"
            data-away="${away}" data-is-over="${m.is_over}"
-           data-league="${lg}" data-home-key="${esc(m.home)}" data-away-key="${esc(m.away)}">
-        <div class="team home"><div class="team-name">${star(m.home)}${home}</div></div>
+           data-league="${lg}" data-home-key="${esc(homeKey(m))}" data-away-key="${esc(awayKey(m))}">
+        <div class="team home"><div class="team-name">${star(homeKey(m))}${home}</div></div>
         <div class="match-meta">
           <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
           <div class="match-vs">VS</div>
           <div class="venue">${m.venue||''}</div>
         </div>
-        <div class="team away"><div class="team-name">${star(m.away)}${away}</div></div>
+        <div class="team away"><div class="team-name">${star(awayKey(m))}${away}</div></div>
         ${badge}
       </div>`;
   }
