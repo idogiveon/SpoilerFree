@@ -539,7 +539,7 @@
 
   // ── רענון (ברקע — המסך לא נחסם) ─────────────────────
 
-  const refreshing = new Set();
+  const refreshing = new Map();   // league -> promise של רענון שרץ עכשיו
 
   function updateRefreshBtn() {
     const btn = document.getElementById('refresh-btn');
@@ -548,10 +548,18 @@
     btn.textContent = busy ? '⏳ מתעדכן...' : '↻ רענן מ-API';
   }
 
-  async function refreshLeague(league) {
-    if (refreshing.has(league)) return;
-    refreshing.add(league);
-    updateRefreshBtn();
+  // מחזיר promise — מי שקורא בזמן שרענון כבר רץ מחכה לאותו רענון
+  // (חלון משחק / "לפי יום" / כפתור ↻ — בלי רענונים כפולים)
+  function refreshLeague(league) {
+    if (!refreshing.has(league)) {
+      refreshing.set(league, runLeagueRefresh(league)
+        .finally(() => { refreshing.delete(league); updateRefreshBtn(); }));
+      updateRefreshBtn();
+    }
+    return refreshing.get(league);
+  }
+
+  async function runLeagueRefresh(league) {
     if (league === currentLeague) setSyncNote('⏳ מתעדכן ברקע...');
     let note = '';
     try {
@@ -569,9 +577,6 @@
       showLeague(league, data.matches, true);
     } catch (e) {
       note = e.message === 'auth' ? '' : '⚠ הרענון נכשל — מוצגים הנתונים הקיימים';
-    } finally {
-      refreshing.delete(league);
-      updateRefreshBtn();
     }
     if (league === currentLeague) setSyncNote(note);
   }
@@ -642,9 +647,9 @@
 
   let currentMatchId = null;   // למעקב: לאיזה משחק שייכת לחיצה על תקציר
 
-  function openMatchModal(matchId, home, away, isOver) {
+  function openMatchModal(matchId, home, away, isOver, retried = false) {
     currentMatchId = matchId;
-    track('match_open', { match_id: matchId,
+    if (!retried) track('match_open', { match_id: matchId,
                           league: currentLeague === '__byday' ? null : currentLeague });
     const modal = document.getElementById('modal');
     const title = document.getElementById('modal-title');
@@ -662,6 +667,18 @@
       .then(r => r.json())
       .then(data => {
         if (!data.available) {
+          if (data.needs_refresh && !retried) {
+            // הסטטוס ב-DB מיושן — מרעננים את הליגה מכאן ופותחים שוב.
+            // עובד מכל עמוד (גם "לפי יום"), בלי לשלוח את המשתמש לטאב הליגה.
+            body.innerHTML = '<div class="loading">מעדכן תוצאות</div>';
+            refreshLeague(data.league_key).then(() => {
+              const stillOpen = currentMatchId === matchId &&
+                document.getElementById('modal').classList.contains('open');
+              if (stillOpen) openMatchModal(matchId, home, away, isOver, true);
+              if (currentLeague === '__byday') loadDay();
+            });
+            return;
+          }
           body.innerHTML = `<div class="no-highlight-msg">⏳ ${data.reason}</div>`;
           return;
         }
@@ -811,6 +828,18 @@
       const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}`)
                      .then(r => r.json());
       renderDayMatches(data.matches);
+
+      // משחקים שהפתיחה שלהם עברה אבל עדיין לא מסומנים כגמורים — מרעננים את
+      // הליגות שלהם ברקע (פעם אחת לליגה לביקור) ומציגים שוב עם תגי "תקציר"
+      const stale = [...new Set(data.matches.filter(m => m.needs_refresh)
+                                            .map(m => m.league_key))]
+                      .filter(lk => !autoRefreshed.has(lk));
+      if (stale.length) {
+        stale.forEach(lk => autoRefreshed.add(lk));
+        document.getElementById('match-count').textContent += ' · ⏳ מעדכן תוצאות';
+        Promise.all(stale.map(lk => refreshLeague(lk)))
+          .then(() => { if (currentLeague === '__byday') loadDay(); });
+      }
     } catch (err) {
       if (err.message === 'auth') return;
       container.innerHTML = `<div class="error">שגיאה: ${err.message}</div>`;
