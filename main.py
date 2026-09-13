@@ -9,6 +9,7 @@ import requests
 import re
 import os
 import json
+import time
 import hashlib
 import unicodedata
 from fastapi import FastAPI, HTTPException, Request, Body
@@ -24,6 +25,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _timing(request, call_next):
+    """Server-Timing לכל תשובה (נראה ב-DevTools) + לוג לבקשות איטיות."""
+    t0 = time.perf_counter()
+    resp = await call_next(request)
+    ms = (time.perf_counter() - t0) * 1000
+    resp.headers["Server-Timing"] = f"app;dur={ms:.0f}"
+    if ms > 1000:
+        print(f"[slow] {request.method} {request.url.path} {ms:.0f}ms")
+    return resp
 
 DB_PATH = "database.db"
 ISRAEL_TZ = timezone(timedelta(hours=3))
@@ -429,41 +442,108 @@ def map_sportsdb_status(event: dict) -> str:
 
 # ── Store / fetch matches ──────────────────────────────
 
-def _store_sportsdb_events(conn, league_key: str, events: list, now: str) -> int:
-    """Store a list of TheSportsDB events into our matches table."""
-    stored = 0
+_OVER_STATUSES = ("FINISHED", "FT", "AET", "PEN", "AP", "Match Finished")
+_MATCH_COLS = ("home_team", "away_team", "home_team_id", "away_team_id",
+               "date_utc", "time_utc", "venue", "matchday", "status")
+
+
+def _sync_league_rows(conn, league_key: str, incoming: dict,
+                      purge: bool = False, hard: bool = False,
+                      guard_status: bool = False) -> dict:
+    """כותב לטבלת matches רק את מה שהשתנה. incoming: {id: {col: val}}.
+    ב-Turso כל כתיבה היא סבב רשת לענן — כתיבה מחדש של כל ~380 שורות
+    הליגה בכל רענון לקחה ~30 שניות. במצב יציב זה עכשיו כמה כתיבות בודדות.
+    purge: מוחק שורות שהמקור כבר לא מחזיר — רק עתידיות ולא ידניות
+    (היסטוריה שהסתיימה ושורות הלוח הידני שורדות); hard: את כולן.
+    guard_status: לא מורידים FINISHED/LIVE בחזרה ל-SCHEDULED (sportsdb)."""
+    now = datetime.now(timezone.utc).isoformat()
+    existing = {r["id"]: r for r in conn.execute(
+        "SELECT id, " + ", ".join(_MATCH_COLS) +
+        " FROM matches WHERE league_key=?", (league_key,)).fetchall()}
+
+    writes = []
+    for mid, v in incoming.items():
+        old = existing.get(mid)
+        if old is not None:
+            if (guard_status and v["status"] == "SCHEDULED"
+                    and old["status"] in ("FINISHED", "LIVE")):
+                v = {**v, "status": old["status"]}
+            if all(old[c] == v[c] for c in _MATCH_COLS):
+                continue
+        writes.append((mid, league_key, *(v[c] for c in _MATCH_COLS), now))
+
+    deletes = []
+    if purge and incoming:
+        for mid, old in existing.items():
+            if mid in incoming:
+                continue
+            if hard or (old["status"] not in _OVER_STATUSES
+                        and not str(mid).startswith("manual-")):
+                deletes.append((mid,))
+
+    if deletes:
+        conn.executemany("DELETE FROM matches WHERE id=?", deletes)
+    if writes:
+        conn.executemany("""
+            INSERT OR REPLACE INTO matches
+            (id, league_key, home_team, away_team, home_team_id, away_team_id,
+             date_utc, time_utc, venue, matchday, status, fetched_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, writes)
+    if incoming:
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                     (f"fetched:{league_key}", now))
+    print(f"[sync] {league_key}: incoming={len(incoming)} "
+          f"written={len(writes)} deleted={len(deletes)}")
+    return {"written": len(writes), "deleted": len(deletes)}
+
+
+def _league_fetched_at(conn, league_key: str):
+    """מתי הליגה רועננה לאחרונה (ISO). נופל ל-MAX(fetched_at) לנתונים ישנים."""
+    row = conn.execute("SELECT value FROM meta WHERE key=?",
+                       (f"fetched:{league_key}",)).fetchone()
+    if row:
+        return row["value"]
+    row = conn.execute("SELECT MAX(fetched_at) AS f FROM matches WHERE league_key=?",
+                       (league_key,)).fetchone()
+    return row["f"] if row else None
+
+
+def _sportsdb_rows(events: list) -> dict:
+    """אירועי TheSportsDB → {id: שורה}. אותו משחק מגיע מכמה endpoints —
+    eventsround לפעמים מחזיר סטטוס ריק למשחק שנגמר, אז לא מורידים סטטוס."""
+    rows = {}
     for e in events:
         event_id = e.get("idEvent")
         if not event_id:
             continue
-        status = map_sportsdb_status(e)
-        # מגן: endpoint אחד (eventsround) לפעמים מחזיר סטטוס ריק
-        # למשחק שכבר ידוע כ-FINISHED — לא מורידים סטטוס אחורה
-        if status == "SCHEDULED":
-            existing = conn.execute(
-                "SELECT status FROM matches WHERE id=?", (event_id,)
-            ).fetchone()
-            if existing and existing["status"] in ("FINISHED", "LIVE"):
-                status = existing["status"]
         matchday = None
         try:
             matchday = int(e.get("intRound") or 0) or None
         except (ValueError, TypeError):
             pass
-        conn.execute("""
-            INSERT OR REPLACE INTO matches
-            (id, league_key, home_team, away_team,
-             date_utc, time_utc, venue, matchday, status, fetched_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
-        """, (
-            event_id, league_key,
-            e.get("strHomeTeam"), e.get("strAwayTeam"),
-            e.get("dateEvent"), e.get("strTime") or "00:00:00",
-            e.get("strVenue") or "",
-            matchday, status, now
-        ))
-        stored += 1
-    return stored
+        status = map_sportsdb_status(e)
+        prev = rows.get(str(event_id))
+        if prev and status == "SCHEDULED" and prev["status"] in ("FINISHED", "LIVE"):
+            status = prev["status"]
+        rows[str(event_id)] = {
+            "home_team": e.get("strHomeTeam"), "away_team": e.get("strAwayTeam"),
+            "home_team_id": None, "away_team_id": None,
+            "date_utc": e.get("dateEvent"),
+            "time_utc": e.get("strTime") or "00:00:00",
+            "venue": e.get("strVenue") or "", "matchday": matchday,
+            "status": status,
+        }
+    return rows
+
+
+def _store_sportsdb_events(conn, league_key: str, events: list,
+                           purge: bool = False, hard: bool = False) -> int:
+    """Store a list of TheSportsDB events into our matches table."""
+    rows = _sportsdb_rows(events)
+    _sync_league_rows(conn, league_key, rows, purge=purge, hard=hard,
+                      guard_status=True)
+    return len(rows)
 
 
 def fetch_football_data(league_key: str, purge: bool = False):
@@ -475,33 +555,22 @@ def fetch_football_data(league_key: str, purge: bool = False):
         timeout=15
     )
     matches = r.json().get("matches", [])
-    conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-
-    # purge רק אחרי ששליפה הצליחה — לא מוחקים אם ה-API החזיר ריק
-    if purge and matches:
-        # purge סלקטיבי: מוחק רק משחקים עתידיים של המקור —
-        # היסטוריה שהסתיימה ושורות הלוח הידני לעולם לא נמחקות ברענון
-        conn.execute(
-            "DELETE FROM matches WHERE league_key=? "
-            "AND status NOT IN ('FINISHED','FT','AET','PEN','AP','Match Finished') "
-            "AND id NOT LIKE 'manual-%'", (league_key,))
-
+    rows = {}
     for m in matches:
         utc_dt = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
-        conn.execute("""
-            INSERT OR REPLACE INTO matches
-            (id, league_key, home_team, away_team, home_team_id, away_team_id,
-             date_utc, time_utc, venue, matchday, status, fetched_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (
-            str(m["id"]), league_key,
-            m["homeTeam"]["name"], m["awayTeam"]["name"],
-            str(m["homeTeam"]["id"]), str(m["awayTeam"]["id"]),
-            utc_dt.strftime("%Y-%m-%d"), utc_dt.strftime("%H:%M:%S"),
-            "", m.get("matchday"), m.get("status", "SCHEDULED"), now
-        ))
+        rows[str(m["id"])] = {
+            "home_team": m["homeTeam"]["name"], "away_team": m["awayTeam"]["name"],
+            "home_team_id": str(m["homeTeam"]["id"]),
+            "away_team_id": str(m["awayTeam"]["id"]),
+            "date_utc": utc_dt.strftime("%Y-%m-%d"),
+            "time_utc": utc_dt.strftime("%H:%M:%S"),
+            "venue": "", "matchday": m.get("matchday"),
+            "status": m.get("status", "SCHEDULED"),
+        }
 
+    # purge רק אחרי ששליפה הצליחה — _sync_league_rows לא מוחק כשהגיע ריק
+    conn = get_db()
+    _sync_league_rows(conn, league_key, rows, purge=purge)
     conn.commit()
     conn.close()
 
@@ -532,15 +601,7 @@ def fetch_sportsdb(league_key: str, purge: bool = False):
                 print(f"[sportsdb] {ep} ({sdb_id}) failed: {ex}")
 
     conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-    if purge and all_events:
-        # purge סלקטיבי: מוחק רק משחקים עתידיים של המקור —
-        # היסטוריה שהסתיימה ושורות הלוח הידני לעולם לא נמחקות ברענון
-        conn.execute(
-            "DELETE FROM matches WHERE league_key=? "
-            "AND status NOT IN ('FINISHED','FT','AET','PEN','AP','Match Finished') "
-            "AND id NOT LIKE 'manual-%'", (league_key,))
-    _store_sportsdb_events(conn, league_key, all_events, now)
+    _store_sportsdb_events(conn, league_key, all_events, purge=purge)
     conn.commit()
     conn.close()
 
@@ -765,9 +826,14 @@ def kickoff_passed(row, hours: float = 2.5) -> bool:
         return False
 
 def fetched_recently(row, minutes: int = 10) -> bool:
-    """מגן נגד רענוני-אוטו חוזרים: אם השורה נשלפה ממש עכשיו, אין טעם לנסות שוב."""
+    """מגן נגד רענוני-אוטו חוזרים: אם הליגה רועננה ממש עכשיו, אין טעם לנסות שוב."""
+    conn = get_db()
     try:
-        dt = datetime.fromisoformat(row["fetched_at"])
+        ts = _league_fetched_at(conn, row["league_key"])
+    finally:
+        conn.close()
+    try:
+        dt = datetime.fromisoformat(ts)
         return datetime.now(timezone.utc) - dt < timedelta(minutes=minutes)
     except Exception:
         return False
@@ -1249,6 +1315,20 @@ def root():
     return {"status": "SpoilerFree API ✓"}
 
 
+@app.get("/health/db")
+def health_db():
+    """זמני DB בלבד (בלי נתונים) — למדידת Turso בפרודקשן בלי התחברות."""
+    t0 = time.perf_counter()
+    conn = get_db()
+    t1 = time.perf_counter()
+    conn.execute("SELECT COUNT(*) FROM meta").fetchone()
+    t2 = time.perf_counter()
+    conn.close()
+    return {"turso": bool(TURSO_DATABASE_URL and libsql is not None),
+            "connect_ms": round((t1 - t0) * 1000),
+            "query_ms": round((t2 - t1) * 1000)}
+
+
 @app.post("/login")
 def login(payload: dict = Body(...)):
     if not APP_PASSWORD:
@@ -1272,16 +1352,6 @@ def get_matches(request: Request, league_key: str,
     if refresh:
         fetch_and_store(league_key, purge=True)
 
-    conn = get_db()
-    count = conn.execute(
-        "SELECT COUNT(*) as c FROM matches WHERE league_key=?", (league_key,)
-    ).fetchone()["c"]
-    conn.close()
-
-    if count == 0:
-        fetch_and_store(league_key)
-
-    conn = get_db()
     query  = "SELECT * FROM matches WHERE league_key=?"
     params = [league_key]
     if matchday:
@@ -1289,8 +1359,18 @@ def get_matches(request: Request, league_key: str,
         params.append(matchday)
     query += " ORDER BY date_utc, time_utc"
 
+    conn = get_db()
     rows = conn.execute(query, params).fetchall()
+    last_fetch = _league_fetched_at(conn, league_key)
     conn.close()
+
+    # ליגה ריקה לגמרי — שליפה ראשונה
+    if not rows and not matchday and not refresh:
+        fetch_and_store(league_key)
+        conn = get_db()
+        rows = conn.execute(query, params).fetchall()
+        last_fetch = _league_fetched_at(conn, league_key)
+        conn.close()
 
     league_name = LEAGUES[league_key]["name"]
     matches = []
@@ -1312,10 +1392,8 @@ def get_matches(request: Request, league_key: str,
 
     # מדד טריות: מתי הליגה רועננה לאחרונה. הפרונט משתמש בזה
     # כדי לרענן אוטומטית בלי לחיצה כשהנתונים מיושנים.
-    last_fetch, stale = None, True
-    fetch_times = [r["fetched_at"] for r in rows if r["fetched_at"]]
-    if fetch_times:
-        last_fetch = max(fetch_times)
+    stale = True
+    if last_fetch:
         try:
             dt = datetime.fromisoformat(last_fetch)
             stale = (datetime.now(timezone.utc) - dt) > timedelta(hours=3)
@@ -1390,19 +1468,11 @@ def refresh_from_client(request: Request, league_key: str,
         raise HTTPException(400, "פורמט לא תקין — צריך {\"events\": [...]}")
 
     conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
     # purge סלקטיבי: רק משחקים עתידיים — היסטוריה שהסתיימה ושורות
     # הלוח הידני שורדות רענון. לאיפוס מלא (עונה חדשה): "hard": true.
-    if payload.get("purge") and events:
-        if payload.get("hard"):
-            conn.execute("DELETE FROM matches WHERE league_key=?",
-                         (league_key,))
-        else:
-            conn.execute(
-                "DELETE FROM matches WHERE league_key=? "
-                "AND status NOT IN ('FINISHED','FT','AET','PEN','AP','Match Finished') "
-                "AND id NOT LIKE 'manual-%'", (league_key,))
-    stored = _store_sportsdb_events(conn, league_key, events, now)
+    stored = _store_sportsdb_events(conn, league_key, events,
+                                    purge=bool(payload.get("purge")),
+                                    hard=bool(payload.get("hard")))
     conn.commit()
     conn.close()
 

@@ -40,6 +40,7 @@
     .refresh-btn { background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.8rem; padding:0.3rem 0.8rem; border-radius:6px; cursor:pointer; transition:all 0.2s; }
     .refresh-btn:hover { border-color:var(--accent); color:var(--accent); }
     .refresh-btn:disabled { opacity:0.4; cursor:default; }
+    .sync-note { font-size:0.72rem; color:var(--muted); margin-inline-start:auto; margin-inline-end:0.75rem; }
 
     .date-group { margin-bottom:1.75rem; }
     .date-label { font-size:0.75rem; color:var(--muted); letter-spacing:3px; text-transform:uppercase; padding:0.4rem 0; margin-bottom:0.6rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:0.75rem; }
@@ -145,6 +146,7 @@
 <main>
   <div class="status-bar">
     <div class="match-count" id="match-count"></div>
+    <div class="sync-note" id="sync-note"></div>
     <button class="refresh-btn" id="refresh-btn">↻ רענן מ-API</button>
   </div>
   <div id="matches-container"><div class="loading">טוען משחקים</div></div>
@@ -280,7 +282,7 @@
     });
   }
 
-  function renderMatches(matches) {
+  function renderMatches(matches, scroll = true) {
     const container = document.getElementById('matches-container');
     const countEl   = document.getElementById('match-count');
 
@@ -319,7 +321,7 @@
     container.innerHTML = html;
 
     // Scroll to today
-    if (todayGroupId) {
+    if (todayGroupId && scroll) {
       setTimeout(() => {
         const el = document.getElementById(todayGroupId);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -329,87 +331,136 @@
     bindMatchCards(container);
   }
 
-  // ── Fetch ──────────────────────────────────────────
+  // ── Data: מציגים מיד (קאש מקומי), מרעננים ברקע ─────
+  // הלוח כמעט קבוע — אין סיבה שהמסך יחכה לרשת. כל ליגה נשמרת
+  // ב-localStorage ומוצגת מיידית; הרשת רק מעדכנת בשקט.
 
-  async function loadMatches(league, matchday = null, refresh = false) {
-    document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
+  const leagueData = {};   // league -> רשימת המשחקים המלאה
+
+  function cacheGet(league) {
+    try { return JSON.parse(localStorage.getItem('sf:m:' + league)); }
+    catch (e) { return null; }
+  }
+  function cachePut(league, data) {
+    try { localStorage.setItem('sf:m:' + league, JSON.stringify(data)); }
+    catch (e) {}
+  }
+  function setSyncNote(text) {
+    document.getElementById('sync-note').textContent = text || '';
+  }
+
+  // מציג ליגה מתוך הרשימה המלאה. background=true: עדכון שקט —
+  // שומר על המחזור שנבחר ולא גולל.
+  function showLeague(league, matches, background = false) {
+    leagueData[league] = matches;
+    if (league !== currentLeague) return;
+    const withMd = matches.filter(m => m.matchday);
+
+    // אין נתוני מחזור לליגה הזו — תצוגת תאריכים רגילה
+    if (!withMd.length) {
+      showMatchdayNav(false);
+      renderMatches(matches, !background);
+      return;
+    }
+
+    showMatchdayNav(true);
+    matchdayList = [...new Set(withMd.map(m => parseInt(m.matchday)))]
+                     .sort((a, b) => a - b);
+    if (!(background && matchdayList.includes(currentMatchday))) {
+      // "המחזור הרלוונטי": הראשון שיש בו משחק שטרם נגמר.
+      // אם הכל נגמר (סוף עונה / נתונים ישנים) — המחזור האחרון.
+      let chosen = matchdayList[matchdayList.length - 1];
+      for (const md of matchdayList) {
+        if (withMd.some(m => parseInt(m.matchday) === md && !m.is_over)) { chosen = md; break; }
+      }
+      currentMatchday = chosen;
+    }
+    buildMatchdaySelect();
+    updateMatchdayUI();
+    renderMatchday(!background);
+  }
+
+  function renderMatchday(scroll = true) {
+    const ms = (leagueData[currentLeague] || [])
+      .filter(m => parseInt(m.matchday) === currentMatchday);
+    renderMatches(ms, scroll);
+  }
+
+  async function openLeague(league) {
+    setSyncNote('');
+    updateRefreshBtn();
+    const cached = cacheGet(league);
+    if (cached && cached.matches) showLeague(league, cached.matches);
+    else document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
+
+    let data;
     try {
-      let url = `${API}/matches/${league}`;
-      const params = [];
-      if (matchday) params.push(`matchday=${matchday}`);
-      if (refresh)  params.push('refresh=true');
-      if (params.length) url += '?' + params.join('&');
-
-      const data = await apiFetch(url).then(r => r.json());
-      renderMatches(data.matches);
+      data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
     } catch (err) {
-      if (err.message === 'auth') return;
-      document.getElementById('matches-container').innerHTML =
+      if (err.message === 'auth' || league !== currentLeague) return;
+      if (cached) setSyncNote('⚠ אין חיבור לשרת — מוצגים נתונים שמורים');
+      else document.getElementById('matches-container').innerHTML =
         `<div class="error">שגיאה: ${err.message}<br><small>אם אתה מריץ מקומית — וודא שהבקנד רץ (localhost:8000/app)</small></div>`;
+      return;
+    }
+    cachePut(league, data);
+    showLeague(league, data.matches, !!cached);
+
+    // נתונים מיושנים (3+ שעות) או ריקים — רענון ברקע, פעם אחת לליגה לביקור.
+    // המסך כבר מציג את מה שיש; הרענון רק מעדכן בשקט כשהוא מסתיים.
+    if ((data.stale || !data.matches.length) && !autoRefreshed.has(league)) {
+      autoRefreshed.add(league);
+      refreshLeague(league);
     }
   }
 
-  async function loadNearestMatchday(league) {
-    document.getElementById('matches-container').innerHTML = '<div class="loading">טוען משחקים</div>';
+  // ── רענון (ברקע — המסך לא נחסם) ─────────────────────
+
+  const refreshing = new Set();
+
+  function updateRefreshBtn() {
+    const btn = document.getElementById('refresh-btn');
+    const busy = refreshing.has(currentLeague);
+    btn.disabled = busy;
+    btn.textContent = busy ? '⏳ מתעדכן...' : '↻ רענן מ-API';
+  }
+
+  async function refreshLeague(league) {
+    if (refreshing.has(league)) return;
+    refreshing.add(league);
+    updateRefreshBtn();
+    if (league === currentLeague) setSyncNote('⏳ מתעדכן ברקע...');
+    let note = '';
     try {
-      const data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
-
-      // רענון אוטומטי: אם הנתונים מיושנים (3+ שעות) או שאין בכלל —
-      // מרעננים בלי לחיצה, פעם אחת לליגה לכל ביקור. doRefresh
-      // מסתיים בקריאה חוזרת לכאן, אז הזרימה נמשכת רגיל.
-      if ((data.stale || !data.matches.length) && !autoRefreshed.has(league)) {
-        autoRefreshed.add(league);
-        document.getElementById('matches-container').innerHTML =
-          '<div class="loading">הנתונים התיישנו — מרענן אוטומטית</div>';
-        await doRefresh();
-        return;
+      let data;
+      if (SPORTSDB_LEAGUES[league]) {
+        // sportsdb חסום מ-Render — הדפדפן שולף ושולח לשרת
+        const res = await clientRefreshSportsdb(league);
+        note = res.fresh ? `רענון — ${res.diag}` : 'הרענון לא החזיר נתונים עדכניים — נסה שוב';
+        data = await apiFetch(`${API}/matches/${league}`).then(r => r.json());
+      } else {
+        // football-data — שליפה מצד השרת (לא חסום); התשובה כבר מכילה הכל
+        data = await apiFetch(`${API}/matches/${league}?refresh=true`).then(r => r.json());
       }
-
-      const withMd = data.matches.filter(m => m.matchday);
-
-      // אין נתוני מחזור לליגה הזו — תצוגת תאריכים רגילה
-      if (!withMd.length) {
-        showMatchdayNav(false);
-        renderMatches(data.matches);
-        return;
-      }
-
-      showMatchdayNav(true);
-      matchdayList = [...new Set(withMd.map(m => parseInt(m.matchday)))]
-                       .sort((a, b) => a - b);
-
-      // "המחזור הרלוונטי": הראשון שיש בו משחק שטרם נגמר.
-      // אם הכל נגמר (סוף עונה / נתונים ישנים) — המחזור האחרון.
-      const byMd = {};
-      for (const m of withMd) {
-        if (!byMd[m.matchday]) byMd[m.matchday] = [];
-        byMd[m.matchday].push(m);
-      }
-      let chosen = matchdayList[matchdayList.length - 1];
-      for (const md of matchdayList) {
-        if (byMd[md].some(m => !m.is_over)) { chosen = md; break; }
-      }
-      currentMatchday = chosen;
-
-      buildMatchdaySelect();
-      updateMatchdayUI();
-      await loadMatches(league, currentMatchday);
-    } catch (err) {
-      if (err.message === 'auth') return;
-      showMatchdayNav(false);
-      await loadMatches(league, null);
+      cachePut(league, data);
+      showLeague(league, data.matches, true);
+    } catch (e) {
+      note = e.message === 'auth' ? '' : '⚠ הרענון נכשל — מוצגים הנתונים הקיימים';
+    } finally {
+      refreshing.delete(league);
+      updateRefreshBtn();
     }
+    if (league === currentLeague) setSyncNote(note);
+  }
+
+  function doRefresh() {
+    refreshLeague(currentLeague);
   }
 
   // ── Client-side refresh (TheSportsDB חסום מ-Render) ─
 
   async function clientRefreshSportsdb(league) {
     const cfg = SPORTSDB_LEAGUES[league];
-    const btn = document.getElementById('refresh-btn');
-    btn.disabled = true;
-    btn.textContent = '⏳ שולף נתונים...';
-    document.getElementById('matches-container').innerHTML = '<div class="loading">שולף מ-TheSportsDB</div>';
-
     // מפתח "123" מחזיר יותר נתונים מ-"3" (15 מול 5 ב-eventsseason)
     const BASE = 'https://www.thesportsdb.com/api/v1/json/123/';
     const events = [];
@@ -421,74 +472,47 @@
         const j = await r.json();
         const ev = (j && j.events) || [];
         events.push(...ev);
-        if (label) counts[label] += ev.length;
+        counts[label] += ev.length;
         return ev;
       } catch (e) { return []; }
     }
 
-    let fresh = [];
-    try {
-      for (const id of cfg.ids) {
-        // 1. אחרונים — גם נתונים וגם זיהוי המחזור הנוכחי
-        const past = await grab(`eventspastleague.php?id=${id}`, 'אחרונים');
-        // 2. הבאים (מחזיר מעט, אבל בחינם)
-        await grab(`eventsnextleague.php?id=${id}`, 'הבאים');
-        // 3. חלון מחזורים: eventsround עוקף את תקרת eventsseason —
-        //    מחזור שלם (~10 משחקים) נכנס מתחת לתקרה
-        let maxRound = 0;
-        for (const e of past) {
-          const r = parseInt(e.intRound || 0);
-          if (r > maxRound) maxRound = r;
-        }
-        const from = Math.max(1, maxRound - 1);
-        const to   = maxRound + 3;
-        for (let r = from; r <= to; r++) {
-          await grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'מחזורים');
-        }
+    // הבקשות רצות במקביל (היה טור של ~7 בקשות רצופות)
+    await Promise.all(cfg.ids.map(async id => {
+      // 1. אחרונים — גם נתונים וגם זיהוי המחזור הנוכחי; 2. הבאים
+      const [past] = await Promise.all([
+        grab(`eventspastleague.php?id=${id}`, 'אחרונים'),
+        grab(`eventsnextleague.php?id=${id}`, 'הבאים'),
+      ]);
+      // 3. חלון מחזורים: eventsround עוקף את תקרת eventsseason —
+      //    מחזור שלם (~10 משחקים) נכנס מתחת לתקרה
+      let maxRound = 0;
+      for (const e of past) {
+        const r = parseInt(e.intRound || 0);
+        if (r > maxRound) maxRound = r;
       }
+      const rounds = [];
+      for (let r = Math.max(1, maxRound - 1); r <= maxRound + 3; r++) rounds.push(r);
+      await Promise.all(rounds.map(r =>
+        grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'מחזורים')));
+    }));
 
-      // סינון משחקים ישנים מ-14 יום — מנקה שאריות מסבבים קודמים
-      // (בארגנטינה מחזור N קיים גם ב-Apertura מינואר וגם ב-Clausura הנוכחי)
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 14);
-      fresh = events.filter(e => e.dateEvent && new Date(e.dateEvent) >= cutoff);
+    // סינון משחקים ישנים מ-14 יום — מנקה שאריות מסבבים קודמים
+    // (בארגנטינה מחזור N קיים גם ב-Apertura מינואר וגם ב-Clausura הנוכחי)
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+    const fresh = events.filter(e => e.dateEvent && new Date(e.dateEvent) >= cutoff);
 
-      if (fresh.length) {
-        await apiFetch(`${API}/refresh/${league}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events: fresh, purge: true }),
-        });
-      }
-    } catch (e) { /* נציג מה שיש ב-DB */ }
-
-    btn.disabled = false;
-    btn.textContent = '↻ רענן מ-API';
-    await loadNearestMatchday(league);
+    if (fresh.length) {
+      await apiFetch(`${API}/refresh/${league}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: fresh, purge: true }),
+      });
+    }
     // דיאגנוסטיקה: כמה החזיר כל endpoint של TheSportsDB
-    const diag = Object.entries(counts).map(([k,v]) => `${k}: ${v}`).join(' · ');
-    const countEl = document.getElementById('match-count');
-    countEl.textContent = (countEl.textContent || '') + `  |  רענון — ${diag}`;
-    if (!fresh.length) {
-      countEl.textContent = 'הרענון לא החזיר נתונים עדכניים — נסה שוב';
-    }
-  }
-
-  async function doRefresh() {
-    if (SPORTSDB_LEAGUES[currentLeague]) {
-      // sportsdb — הדפדפן שולף ושולח לשרת
-      await clientRefreshSportsdb(currentLeague);
-    } else {
-      // football-data — שליפה מצד השרת (לא חסום), ואז חזרה למחזור הרלוונטי
-      const btn = document.getElementById('refresh-btn');
-      btn.disabled = true;
-      btn.textContent = '⏳ שולף נתונים...';
-      try { await apiFetch(`${API}/matches/${currentLeague}?refresh=true`); }
-      catch (e) { /* נציג מה שיש */ }
-      btn.disabled = false;
-      btn.textContent = '↻ רענן מ-API';
-      await loadNearestMatchday(currentLeague);
-    }
+    const diag = Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    return { fresh: fresh.length, diag };
   }
 
   // ── Modal ──────────────────────────────────────────
@@ -625,6 +649,7 @@
     showMatchdayNav(false);
     document.getElementById('day-nav').classList.remove('hidden');
     document.getElementById('refresh-btn').style.display = 'none';
+    setSyncNote('');
     currentDay = new Date();
     loadDay();
   }
@@ -691,20 +716,20 @@
       tab.classList.add('active');
       currentLeague = tab.dataset.league;
       if (currentLeague === '__byday') { enterDayView(); }
-      else { exitDayView(); loadNearestMatchday(currentLeague); }
+      else { exitDayView(); openLeague(currentLeague); }
     });
   });
 
   document.getElementById('md-prev').addEventListener('click', () => {
     const idx = matchdayList.indexOf(currentMatchday);
-    if (idx > 0) { currentMatchday = matchdayList[idx-1]; updateMatchdayUI(); loadMatches(currentLeague, currentMatchday); }
+    if (idx > 0) { currentMatchday = matchdayList[idx-1]; updateMatchdayUI(); renderMatchday(); }
   });
   document.getElementById('md-next').addEventListener('click', () => {
     const idx = matchdayList.indexOf(currentMatchday);
-    if (idx >= 0 && idx < matchdayList.length-1) { currentMatchday = matchdayList[idx+1]; updateMatchdayUI(); loadMatches(currentLeague, currentMatchday); }
+    if (idx >= 0 && idx < matchdayList.length-1) { currentMatchday = matchdayList[idx+1]; updateMatchdayUI(); renderMatchday(); }
   });
   document.getElementById('md-select').addEventListener('change', e => {
-    currentMatchday = parseInt(e.target.value); updateMatchdayUI(); loadMatches(currentLeague, currentMatchday);
+    currentMatchday = parseInt(e.target.value); updateMatchdayUI(); renderMatchday();
   });
 
   document.getElementById('day-prev').addEventListener('click', () => {
@@ -723,7 +748,7 @@
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
   // ── Init ───────────────────────────────────────────
-  loadNearestMatchday(currentLeague);
+  openLeague(currentLeague);
 </script>
 </body>
 </html>
