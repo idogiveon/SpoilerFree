@@ -40,7 +40,7 @@ def test_anonymous_gets_login_page_and_401(auth_on):
     c = client()
     r = c.get("/app")
     assert "שלח קוד" in r.text and "X-SF-App" not in r.headers
-    assert "כניסה עם סיסמה" not in r.text          # אין APP_PASSWORD
+    assert 'id="legacy-link"' not in r.text         # אין APP_PASSWORD — אין כפתור סיסמה
     assert c.get("/matches/premier").status_code == 401
     assert c.post("/auth/request_code", json={"email": "nope"}).status_code == 400
 
