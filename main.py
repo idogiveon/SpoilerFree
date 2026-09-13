@@ -63,6 +63,12 @@ TURSO_AUTH_TOKEN   = os.environ.get("TURSO_AUTH_TOKEN", "")
 # season 2026-27 (התחילה אוגוסט 2026). ארגנטינה — עונה קלנדרית 2026.
 # allow_embed: False כברירת מחדל — רוב הערוצים חוסמים embed, פותחים בטאב חדש.
 # channel_id ריק = מקור מוגדר אך ממתין לאיתור הערוץ (שלב 3).
+# עמודי אתרים לקישורים ישירים (משמשים את web_sources למטה — חייבים להיות לפני LEAGUES)
+SPORT1_PAGES = ["https://sport1.maariv.co.il/israeli-soccer/ligat-haal/video/",
+                "https://sport1.maariv.co.il/vod/"]
+SPORT1_LINK  = r"/video/\d+"
+SPORT5_LINK  = r"vod\.sport5\.co\.il/\?[^'\"]*Vi=\d+"
+
 LEAGUES = {
     "premier": {
         "name": "פרמייר ליג",
@@ -146,12 +152,18 @@ LEAGUES = {
         ],
         # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
         "web_sources": [
+            # scrape_pages: עמודי האתר שמהם נשלף קישור ישיר (בלי מנוע חיפוש)
             {"name": "ספורט 1", "domain": "sport1.maariv.co.il",
-             "resolver": "sport1_vod",
+             "scrape_pages": SPORT1_PAGES, "link_pattern": SPORT1_LINK,
+             "base": "https://sport1.maariv.co.il",
              "query": "תקציר {home} {away}"},
+            # וואלה: אין עמוד תקצירים לקריאה — רק עם Google CSE (אם הוגדר)
             {"name": "וואלה",   "domain": "sports.walla.co.il",
              "query": "תקציר {home} {away}"},
             {"name": "ספורט 5", "domain": "sport5.co.il",
+             "scrape_pages": ["https://www.sport5.co.il/",
+                              "https://www.sport5.co.il/liga.aspx?FolderID=44"],
+             "link_pattern": SPORT5_LINK,
              "query": "תקציר {home} {away}"},
         ],
     },
@@ -262,6 +274,9 @@ LEAGUES = {
         },
         "web_sources": [
             {"name": "ספורט 5", "domain": "sport5.co.il",
+             "scrape_pages": ["https://www.sport5.co.il/",
+                              "https://www.sport5.co.il/liga.aspx?FolderID=397"],
+             "link_pattern": SPORT5_LINK,
              "query": "תקציר {home} {away}"},
         ],
     },
@@ -1818,40 +1833,93 @@ def he_team_variants(heb_name: str) -> list:
     variants.extend(HE_ABBREV.get(core, []))
     return variants
 
-def scrape_sport1_vod(home_he: str, away_he: str):
-    """קורא את עמוד ה-VOD של ספורט 1 ומאתר את התקציר של המשחק.
-    מחזיר URL ישיר לכתבה, או None."""
+# ── קישורים ישירים לאתרים (ספורט 1 / ספורט 5) ───────────
+# בלי מנוע חיפוש (DuckDuckGo חסום): קוראים את עמודי ה-VOD/הליגה של האתר
+# ומשווים את הכותרות לשתי הקבוצות בעברית — אותו כלל כמו כותרות ONE.
+SITE_TTL = 600
+_site_cache = {}
+
+
+def _site_anchors(url: str) -> list:
+    """[(href, text)] מכל העוגנים בעמוד. טקסט מפוענח (&quot; → ") — בלי זה
+    'הפועל פ&quot;ת' לא זוהה. קאש בזיכרון 10 דקות לעמוד."""
+    hit = _site_cache.get(url)
+    if hit and time.time() - hit[0] < SITE_TTL:
+        return hit[1]
+    out = []
     try:
-        r = requests.get(
-            "https://sport1.maariv.co.il/vod/",
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
-            timeout=8,
-        )
-        if r.status_code != 200:
-            return None
-        html = r.text
-        home_v = he_team_variants(home_he)
-        away_v = he_team_variants(away_he)
-        for m in re.finditer(
-                r"<a[^>]+href=['\"]([^'\"]*?/video/\d+[^'\"]*)['\"][^>]*>(.*?)</a>",
-                html, re.S):
-            href = m.group(1)
-            text = re.sub(r"<[^>]+>", " ", m.group(2))
-            # מוסיפים גם title= של העוגן אם קיים
-            text += " " + (re.search(r'title="([^"]*)"', m.group(0)) or [None, ""])[1]
-            if any(v in text for v in home_v) and any(v in text for v in away_v):
-                if href.startswith("/"):
-                    href = "https://sport1.maariv.co.il" + href
-                return href
+        r = requests.get(url, timeout=8, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept-Language": "he-IL,he"})
+        if r.status_code == 200:
+            for m in re.finditer(r"<a([^>]+)>(.*?)</a>", r.text, re.S):
+                href = re.search(r"href=['\"]([^'\"]+)['\"]", m.group(1))
+                if not href:
+                    continue
+                text = re.sub(r"<[^>]+>", " ", m.group(2))
+                title = re.search(r"title=['\"]([^'\"]*)['\"]", m.group(1))
+                if title:
+                    text += " " + title.group(1)
+                out.append((_unescape(href.group(1)), " ".join(_unescape(text).split())))
     except Exception as ex:
-        print(f"[sport1vod] {ex}")
-    return None
+        print(f"[site] {url}: {ex}")
+    _site_cache[url] = (time.time(), out)
+    return out
+
+
+def _he_names(team: str) -> list:
+    """שמות עבריים לחיפוש בכותרות אתרים: שם החיפוש + שם התצוגה."""
+    names = [to_hebrew_team(team), TEAM_NAMES["he"].get(team)]
+    return [n for n in dict.fromkeys(names) if n]
+
+
+IL_PREFIXES = ("מכבי ", "הפועל ", 'בית"ר ', "עירוני ", "בני ", "מ.ס. ")
+
+
+def _web_team_in(name: str, text: str) -> bool:
+    """קבוצה ישראלית: רק שם מלא או קידומת+קיצור ("הפועל פ"ת", "מכבי ת"א") —
+    מילה בודדת ("הפועל", "אביב") מופיעה בעשרות כותרות ומבלבלת בין מכבי
+    להפועל. קבוצות אחרות — הכלל המקל של כותרות ONE."""
+    for p in IL_PREFIXES:
+        if name.startswith(p):
+            core = name[len(p):]
+            return any(f in text for f in [name] + [p + a for a in HE_ABBREV.get(core, [])])
+    return _he_team_in(name, text)
+
+
+def find_web_highlight(pages: list, link_pattern: str,
+                       home_names: list, away_names: list, base: str = ""):
+    """URL ישיר לכתבת התקציר באתר, או None. שתי הקבוצות חייבות להופיע
+    בכותרת (אין תאריך בעמוד — לא מסתפקים בקבוצה אחת). כותרת עם "תקציר"
+    גוברת על קליפ ("צפו: ...") של אותו משחק."""
+    def team_in(names, text):
+        return any(_web_team_in(n, text) for n in names)
+
+    best = None
+    for page in pages:
+        for href, text in _site_anchors(page):
+            if not re.search(link_pattern, href):
+                continue
+            t = text.replace("`", "'").replace("׳", "'").replace("״", '"')
+            if not (team_in(home_names, t) and team_in(away_names, t)):
+                continue
+            url = href if href.startswith("http") else base + href
+            if "תקציר" in t:
+                return url
+            best = best or url
+    return best
+
+
+def scrape_sport1_vod(home_he: str, away_he: str):
+    """תקציר ספורט 1 לפי שמות עבריים (משמש גם את /debug/vodscrape)."""
+    return find_web_highlight(SPORT1_PAGES, SPORT1_LINK, [home_he], [away_he],
+                              base="https://sport1.maariv.co.il")
 
 
 def resolve_web_link(query: str, domain: str):
-    """מחלץ URL ישיר לכתבה הראשונה מהדומיין המבוקש.
-    מסלול ראשי: Google Custom Search API (אמין, 100/יום חינם).
-    גיבוי: DuckDuckGo HTML — עם מפסק זרם כי Render לעיתים חסום שם."""
+    """מחלץ URL ישיר לכתבה הראשונה מהדומיין המבוקש — רק דרך Google Custom
+    Search (כשמוגדר מפתח). DuckDuckGo הוסר: חסום (גם מ-Render), ועמוד
+    התוצאות שלו כלל ספוילרים בכותרות."""
     # מסלול 1: Google CSE
     if GOOGLE_SEARCH_KEY and GOOGLE_CSE_ID:
         try:
@@ -1867,30 +1935,6 @@ def resolve_web_link(query: str, domain: str):
                     return item["link"]
         except Exception as ex:
             print(f"[weblink/cse] {domain}: {ex}")
-
-    # מסלול 2: DuckDuckGo, רק אם לא נכשל לאחרונה
-    import time as _time
-    if _time.time() < _ddg_fail_until[0]:
-        return None
-    try:
-        r = requests.get(
-            "https://html.duckduckgo.com/html/",
-            params={"q": f"{query} {domain}"},
-            headers={"User-Agent": "Mozilla/5.0 (SpoilerFree)"},
-            timeout=4,
-        )
-        links = [unquote(m.group(1))
-                 for m in re.finditer(r'uddg=([^&"\']+)', r.text)]
-        for url in links:
-            if domain in url:
-                return url
-        # יש תוצאות אבל אף אחת מהדומיין — זו לא תקלת DDG,
-        # לא מפעילים מפסק (הדומיין הבא בתור עשוי דווקא להצליח).
-        if r.status_code != 200 or not links:
-            _ddg_fail_until[0] = _time.time() + 900
-    except Exception as ex:
-        print(f"[weblink/ddg] {domain}: {ex}")
-        _ddg_fail_until[0] = _time.time() + 900
     return None
 
 
@@ -2061,7 +2105,8 @@ def _he_team_in(team_he: str, title: str) -> bool:
     תחיליות עבריות (ל/ב/ו) מכוסות — בדיקת הכלה ("למילאן" מכיל "מילאן")."""
     if any(v in title for v in he_team_variants(team_he)):
         return True
-    return any(w in title for w in team_he.split()
+    # גם "/" מפריד מילים: "בודו/גלימט" → "גלימט" (ספורט 5: "בודה גלימט")
+    return any(w in title for w in re.split(r"[\s/]+", team_he)
                if len(w) >= 3 and w not in HE_GENERIC_WORDS)
 
 
@@ -2891,15 +2936,15 @@ def get_highlights(request: Request, match_id: str, lang: str = "he"):
         if cached:
             url = json.loads(cached["videos_json"])["url"]
         else:
-            if w.get("resolver") == "sport1_vod":
-                # עמוד ה-VOD מציג רק את הכתבות האחרונות — משחק בן שבוע
-                # כבר גלל החוצה. אם הסקרייפר החטיא, נופלים לאותו מסלול
-                # חילוץ שעובד לוואלה/ספורט 5 לפני שמוותרים לעמוד חיפוש.
-                url = (scrape_sport1_vod(to_hebrew_team(row["home_team"]),
-                                         to_hebrew_team(row["away_team"]))
-                       or resolve_web_link(wq, w["domain"]))
-            else:
-                url = resolve_web_link(wq, w["domain"])
+            # 1. עמודי האתר עצמו (VOD/ליגה) — קישור ישיר, בלי מנוע חיפוש
+            url = None
+            if w.get("scrape_pages"):
+                url = find_web_highlight(w["scrape_pages"], w["link_pattern"],
+                                         _he_names(row["home_team"]),
+                                         _he_names(row["away_team"]),
+                                         base=w.get("base", ""))
+            # 2. Google CSE — רק אם הוגדר מפתח
+            url = url or resolve_web_link(wq, w["domain"])
             if url:
                 # קאש רק לקישור ישיר — כישלון ינוסה שוב בפתיחה הבאה
                 conn = get_db()
@@ -2911,9 +2956,9 @@ def get_highlights(request: Request, match_id: str, lang: str = "he"):
                       datetime.now(timezone.utc).isoformat()))
                 conn.commit()
                 conn.close()
-            else:
-                url = "https://duckduckgo.com/?q=" + quote(f"{wq} {w['domain']}")
-        web_links.append({"name": w["name"], "url": url})
+        # אין קישור ישיר — אין כפתור (עמוד תוצאות חיפוש = ספוילרים בכותרות)
+        if url:
+            web_links.append({"name": w["name"], "url": url})
 
     # שם הקבוצה לצד ערוץ מועדון — הפרונט מציג אותו בשפת המשתמש
     club_of = {s["id"]: s.get("club_team") for s in sources}
