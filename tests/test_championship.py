@@ -34,6 +34,15 @@ def test_sky_titles(title, home, away, expected):
      "West Bromwich Albion", "Queens Park Rangers", "West Bromwich Albion", True),
     ("Southampton 4-1 Bristol City | Extended Highlights", "Southampton", "Bristol City", "Bristol City", True),
     ("Extended Highlights: Rovers 3-1 Millwall", "Blackburn Rovers", "Millwall", "Blackburn Rovers", True),
+    # ערוצים שהמשתמש מצא (רקסהאם, לינקולן, נוריץ')
+    ("HIGHLIGHTS | West Ham United vs Wrexham AFC", "West Ham United", "Wrexham", "Wrexham", True),
+    ("Match highlights | Preston North End v Lincoln City", "Preston North End", "Lincoln City", "Lincoln City", True),
+    ("Defeat in Middlesbrough | Middlesbrough 4-3 Norwich City | Highlights",
+     "Middlesbrough", "Norwich City", "Norwich City", True),
+    ("Derby day draw | Birmingham City 2-2 Wolves | Highlights",
+     "Birmingham City", "Wolverhampton Wanderers", "Wolverhampton Wanderers", True),
+    # שידור חי לפני המשחק
+    ("Wrexham Match Day Live - Wrexham AFC vs West Ham United", "West Ham United", "Wrexham", "Wrexham", False),
     # תוכן אחרי המשחק — לא תקציר
     ("POST-MATCH ANALYSIS | Southampton 4-1 Bristol City", "Southampton", "Bristol City", "Bristol City", False),
     ("John Mousinho post-match 🎙️ | Charlton v Pompey", "Charlton Athletic", "Portsmouth", "Portsmouth", False),
@@ -52,7 +61,7 @@ def test_sources_clubs_first_then_sky():
                "home_team_id": None, "away_team_id": None}
         return [s["id"] for s in main.get_sources_for_match(row)]
     assert ids("Southampton", "Bristol City") == ["club_southampton", "club_bristol-city", "sky_efl"]
-    assert ids("Lincoln City", "Wrexham") == ["sky_efl"]          # בלי ערוץ פעיל — רק Sky
+    assert ids("Lincoln City", "Wrexham") == ["club_lincoln-city", "club_wrexham", "sky_efl"]
 
 
 def test_title_include_drops_other_leagues(monkeypatch):
