@@ -605,7 +605,8 @@ async function load() {
   const {users, kpis} = await r.json();
   document.getElementById('kpis').innerHTML =
     [['משתמשים', kpis.total], ['ממתינים', kpis.pending], ['פעילים 7 ימים', kpis.active_7d],
-     ['תקצירים שנצפו', kpis.plays]].map(([k,v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+     ['תקצירים שנצפו', kpis.plays],
+     ['יוטיוב היום (מתוך 10,000)', kpis.yt_units_today.toLocaleString()]].map(([k,v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
   document.getElementById('rows').innerHTML = users.map(u => {
     const e = esc(u.email);
     const btns = u.status === 'approved'
@@ -3140,6 +3141,9 @@ def admin_api_users(request: Request):
                           "FROM events GROUP BY email, type").fetchall()
     leagues = conn.execute("SELECT email, league, COUNT(*) AS c FROM events "
                            "WHERE league IS NOT NULL GROUP BY email, league").fetchall()
+    # צריכת quota של יוטיוב היום (יום פסיפיק — כמו האיפוס של גוגל)
+    yt_day = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
+    yt_row = conn.execute("SELECT value FROM meta WHERE key=?", (f"yt_units:{yt_day}",)).fetchone()
     conn.close()
 
     by = {u["email"]: u for u in users}
@@ -3168,7 +3172,8 @@ def admin_api_users(request: Request):
     kpis = {"total": len(users),
             "pending": sum(u["status"] == "pending" for u in users),
             "active_7d": sum(1 for u in users if (u["last_active"] or "") > week),
-            "plays": sum(u.get("highlight_play", 0) for u in users)}
+            "plays": sum(u.get("highlight_play", 0) for u in users),
+            "yt_units_today": int(yt_row["value"]) if yt_row else 0}
     return {"users": users, "kpis": kpis}
 
 
