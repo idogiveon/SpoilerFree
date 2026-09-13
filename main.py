@@ -881,7 +881,8 @@ def init_db():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_email ON events(email)")
-    # מועדפים: קבוצה לפי ליגה (השם במקור הנתונים) — לכל משתמש עם חשבון אישי
+    # מועדפים: מפתח קבוצה אחיד (team_key) — חל על הקבוצה בכל מפעל.
+    # league_key נשאר בסכמה (ריק) מגרסה קודמת שבה הסימון היה לפי ליגה.
     conn.execute("""
         CREATE TABLE IF NOT EXISTS favorites (
             email      TEXT,
@@ -890,6 +891,14 @@ def init_db():
             PRIMARY KEY (email, league_key, team)
         )
     """)
+    # המרה חד-פעמית של שורות מהגרסה לפי-ליגה (שם מקור → מפתח אחיד)
+    old = conn.execute("SELECT email, league_key, team FROM favorites "
+                       "WHERE league_key != ''").fetchall()
+    for r in old:
+        conn.execute("INSERT OR IGNORE INTO favorites (email, league_key, team) VALUES (?, '', ?)",
+                     (r["email"], team_key(r["team"])))
+        conn.execute("DELETE FROM favorites WHERE email=? AND league_key=? AND team=?",
+                     (r["email"], r["league_key"], r["team"]))
 
     conn.commit()
 
@@ -1756,6 +1765,26 @@ def display_team(name: str, lang: str = "he") -> str:
     return TEAM_NAMES.get(lang, {}).get(name) or _short_en(name)
 
 
+# ── מפתח קבוצה אחיד (למועדפים — אותה קבוצה בכל מפעל) ───
+# "Liverpool FC" (football-data, פרמייר) = "Liverpool" (TheSportsDB, צ'מפיונס).
+TEAM_KEY_ALIASES = {
+    "tottenham hotspur": "tottenham",
+    "brighton hove albion": "brighton",
+    "wolverhampton wanderers": "wolves",
+    "paris saint germain": "psg",
+    "inter": "inter milan",
+}
+
+
+def team_key(name: str) -> str:
+    s = unicodedata.normalize("NFD", (name or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = re.sub(r"[^\w\s]", " ", s)                    # פיסוק, &, /, '
+    s = re.sub(r"\b(fc|afc|cf|sc)\b", " ", s)           # סיומות מועדון
+    s = " ".join(s.split())
+    return TEAM_KEY_ALIASES.get(s, s)
+
+
 def _lang(lang: str) -> str:
     return lang if lang in DISPLAY_LANGS else "he"
 
@@ -2553,6 +2582,8 @@ def get_matches(request: Request, league_key: str,
             "away":     row["away_team"],
             "home_name": display_team(row["home_team"], lang),
             "away_name": display_team(row["away_team"], lang),
+            "home_key":  team_key(row["home_team"]),
+            "away_key":  team_key(row["away_team"]),
             "date":     il["date"],
             "time":     il["time"],
             "weekday":  il["weekday"],
@@ -2610,6 +2641,8 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he"):
             "away":       row["away_team"],
             "home_name":  display_team(row["home_team"], _lang(lang)),
             "away_name":  display_team(row["away_team"], _lang(lang)),
+            "home_key":   team_key(row["home_team"]),
+            "away_key":   team_key(row["away_team"]),
             "date":       il["date"],
             "time":       il["time"],
             "weekday":    il["weekday"],
@@ -3513,10 +3546,10 @@ def get_favorites(request: Request):
     if not email:
         return {"favorites": [], "per_device": True}
     conn = get_db()
-    rows = conn.execute("SELECT league_key, team FROM favorites WHERE email=? "
-                        "ORDER BY league_key, team", (email,)).fetchall()
+    rows = conn.execute("SELECT team FROM favorites WHERE email=? ORDER BY team",
+                        (email,)).fetchall()
     conn.close()
-    return {"favorites": [[r["league_key"], r["team"]] for r in rows]}
+    return {"favorites": [r["team"] for r in rows]}
 
 
 @app.post("/favorites")
@@ -3525,17 +3558,16 @@ def set_favorite(request: Request, payload: dict = Body(...)):
     email = (current_user(request) or {}).get("email")
     if not email:
         raise HTTPException(400, "בלי חשבון אישי — המועדפים נשמרים במכשיר")
-    league_key = str(payload.get("league_key") or "")
-    team = str(payload.get("team") or "").strip()[:120]
-    if league_key not in LEAGUES or not team:
-        raise HTTPException(400, "ליגה או קבוצה לא תקינה")
+    # מפתח אחיד — גם אם נשלח שם מקור ("Liverpool FC") הוא מנורמל
+    team = team_key(str(payload.get("team") or ""))[:120]
+    if not team:
+        raise HTTPException(400, "קבוצה לא תקינה")
     conn = get_db()
     if payload.get("on", True):
-        conn.execute("INSERT OR IGNORE INTO favorites (email, league_key, team) VALUES (?,?,?)",
-                     (email, league_key, team))
+        conn.execute("INSERT OR IGNORE INTO favorites (email, league_key, team) VALUES (?, '', ?)",
+                     (email, team))
     else:
-        conn.execute("DELETE FROM favorites WHERE email=? AND league_key=? AND team=?",
-                     (email, league_key, team))
+        conn.execute("DELETE FROM favorites WHERE email=? AND team=?", (email, team))
     conn.commit()
     conn.close()
     return {"ok": True}
