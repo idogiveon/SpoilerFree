@@ -23,6 +23,15 @@ def test_root_serves_app_when_logged_in_and_app_path_still_works(auth_on):
     assert admin.get("/app").headers.get("X-SF-App") == "1"
 
 
+def test_pages_are_never_http_cached(auth_on):
+    """אותה כתובת = כניסה או אפליקציה לפי ה-cookie. אם הדפדפן שומר אותה,
+    אחרי יציאה נטענת האפליקציה השמורה → 401 → שוב אותה כתובת → לולאה."""
+    assert client().get("/?fresh=1").headers["cache-control"] == "no-store"
+    admin = login(auth_on, ADMIN)
+    assert admin.get("/?fresh=1").headers["cache-control"] == "no-store"
+    assert "'/?fresh=' + Date.now()" in open("index.html", encoding="utf-8").read()
+
+
 def test_health_is_public_json():
     assert client().get("/health").json()["status"].startswith("SpoilerFree")
 
@@ -39,10 +48,7 @@ def test_cookies_text_is_public_and_mentions_usage_and_deletion():
 
 
 def _approve_friend(mails):
-    client().post("/auth/request_code", json={"email": FRIEND})
-    admin = login(mails, ADMIN)
-    admin.post(f"/admin/api/users/{FRIEND}", json={"status": "approved"})
-    return login(mails, FRIEND)
+    return login(mails, FRIEND)          # בלי אישור מנהל — הקוד מאמת את המייל
 
 
 def test_account_details(auth_on):
@@ -68,5 +74,5 @@ def test_delete_removes_account_and_data(auth_on):
         n = conn.execute(f"SELECT COUNT(*) AS c FROM {table} WHERE email=?", (FRIEND,)).fetchone()["c"]
         assert n == 0, table
     conn.close()
-    # מי שנמחק ומבקש שוב — חוזר לתור האישור
-    assert client().post("/auth/request_code", json={"email": FRIEND}).json()["status"] == "pending"
+    # מי שנמחק נרשם מחדש כמו משתמש חדש (קוד → סיסמה חדשה)
+    assert login(auth_on, FRIEND).get("/auth/account").json()["login_count"] == 1

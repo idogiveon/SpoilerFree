@@ -194,7 +194,7 @@
   <div class="status-bar">
     <div class="match-count" id="match-count"></div>
     <div class="sync-note" id="sync-note"></div>
-    <button class="refresh-btn" id="refresh-btn">↻ רענן מ-API</button>
+    <button class="refresh-btn" id="refresh-btn">↻ רענון</button>
   </div>
   <div id="matches-container"><div class="loading">טוען משחקים</div></div>
 </main>
@@ -233,7 +233,7 @@
   "lg_ucl": "צ'מפיונס ליג", "lg_uel": "ליגה אירופית", "lg_mls": "MLS", "lg_argentina": "ארגנטינה",
   "byday": "לפי יום", "matchday": "מחזור {n}", "back_today": "חזרה להיום",
   "arrow_prev": "→", "arrow_next": "←",
-  "refresh": "↻ רענן מ-API", "refreshing": "⏳ מתעדכן...",
+  "refresh": "↻ רענון", "refreshing": "⏳ מתעדכן...",
   "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
   "password_login": "כניסה בסיסמה", "account": "חשבון", "admin": "ניהול", "logout": "יציאה",
   "my_account": "החשבון שלי", "email": "מייל", "joined": "הצטרפת", "last_login": "כניסה אחרונה", "logins": "כניסות",
@@ -462,7 +462,7 @@
   async function apiFetch(url, opts) {
     const r = await fetch(url, opts);
     // fresh=1 עוקף את קאש ה-service worker — אחרת היה מוגש שוב הדף השמור
-    if (r.status === 401) { location.href = '/?fresh=1'; throw new Error('auth'); }
+    if (r.status === 401) { location.href = '/?fresh=' + Date.now(); throw new Error('auth'); }
     return r;
   }
 
@@ -602,14 +602,14 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirm: document.getElementById('del-confirm').value }),
     });
-    if (r.ok) { location.href = '/?fresh=1'; return; }
+    if (r.ok) { location.href = '/?fresh=' + Date.now(); return; }
     let j = {}; try { j = await r.json(); } catch (e) {}
     document.getElementById('del-err').textContent = j.detail || t('delete_failed');
   }
 
   async function logout() {
     try { await fetch(`${API}/auth/logout`, { method: 'POST' }); } catch (e) {}
-    location.href = '/?fresh=1';
+    location.href = '/?fresh=' + Date.now();
   }
 
   // ── Matchday nav ───────────────────────────────────

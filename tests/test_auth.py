@@ -1,4 +1,4 @@
-"""כניסה במייל: בקשה → אישור ידני → קוד → session, הרשאות, מעקב, חסימה."""
+"""כניסה: קוד למייל בפעם הראשונה → סיסמה; אחר כך סיסמה או קוד. הרשאות, מעקב, חסימה."""
 import re
 
 import pytest
@@ -45,22 +45,77 @@ def test_anonymous_gets_login_page_and_401(auth_on):
     assert c.post("/auth/request_code", json={"email": "nope"}).status_code == 400
 
 
-def test_full_flow_pending_approve_login_track_block(auth_on):
+def test_first_login_code_then_set_password_then_password_login(auth_on, monkeypatch):
     mails = auth_on
+    monkeypatch.setattr(main, "NOTIFY_EMAILS", {"boss@test.com"})
     friend = client()
-    assert friend.post("/auth/request_code", json={"email": " Friend@Test.com"}).json()["status"] == "pending"
-    assert any(to == ADMIN and FRIEND in subj for to, subj, _ in mails), "admin not notified"
-    assert friend.post("/auth/request_code", json={"email": FRIEND}).json()["status"] == "pending"
-    assert last_code(mails, FRIEND) is None
+    assert friend.post("/auth/request_code", json={"email": " Friend@Test.com"}).json()["status"] == "code_sent"
+    assert not any(to == "boss@test.com" for to, _, _ in mails)      # עוד לא אומת — אין הודעה
+    r = friend.post("/auth/verify", json={"email": FRIEND, "code": last_code(mails, FRIEND)})
+    assert r.json() == {"ok": True, "need_password": True}
+    assert any(to == "boss@test.com" and FRIEND in s for to, s, _ in mails), "registration not reported"
+    assert friend.get("/matches/premier").status_code == 200       # בלי אישור מנהל
 
+    assert friend.post("/auth/set_password", json={"password": "short"}).status_code == 400
+    assert friend.post("/auth/set_password", json={"password": "goodpass1"}).json()["ok"]
+    conn = main.get_db()
+    stored = conn.execute("SELECT password_hash FROM users WHERE email=?", (FRIEND,)).fetchone()[0]
+    conn.close()
+    assert "goodpass1" not in stored and stored.startswith("pbkdf2$")
+
+    c = client()
+    assert c.post("/auth/login", json={"email": FRIEND, "password": "wrongpass"}).status_code == 400
+    assert c.get("/matches/premier").status_code == 401
+    assert c.post("/auth/login", json={"email": FRIEND.upper(), "password": "goodpass1"}).json()["ok"]
+    assert c.get("/matches/premier").status_code == 200
+    # קוד עדיין עובד, ולא מבקש סיסמה שוב; הרשמה נשלחת פעם אחת בלבד
+    c2 = client()
+    c2.post("/auth/request_code", json={"email": FRIEND})
+    assert c2.post("/auth/verify", json={"email": FRIEND, "code": last_code(mails, FRIEND)}).json() == \
+        {"ok": True, "need_password": False}
+    assert sum(1 for to, s, _ in mails if to == "boss@test.com") == 1
+
+
+def test_password_change_only_right_after_code_login(auth_on):
+    mails = auth_on
+    c = login(mails, FRIEND)
+    assert c.post("/auth/set_password", json={"password": "firstpass"}).json()["ok"]
+    # אחרי שנקבעה — החלפה רק בחלון שאחרי כניסה עם קוד ("שכחתי סיסמה")
+    assert c.post("/auth/set_password", json={"password": "hijacked1"}).status_code == 403
+    conn = main.get_db()
+    conn.execute("DELETE FROM login_codes")
+    conn.commit()
+    conn.close()
+    c = login(mails, FRIEND)
+    assert c.post("/auth/set_password", json={"password": "secondpass"}).json()["ok"]
+    assert client().post("/auth/login", json={"email": FRIEND, "password": "firstpass"}).status_code == 400
+    assert client().post("/auth/login", json={"email": FRIEND, "password": "secondpass"}).status_code == 200
+
+
+def test_password_lockout_and_unknown_email(auth_on):
+    c = login(auth_on, FRIEND)
+    c.post("/auth/set_password", json={"password": "goodpass1"})
+    for _ in range(main.PW_MAX_FAILS):
+        assert client().post("/auth/login", json={"email": FRIEND, "password": "nope-nope"}).status_code == 400
+    assert client().post("/auth/login", json={"email": FRIEND, "password": "goodpass1"}).status_code == 429
+    r = client().post("/auth/login", json={"email": "ghost@test.com", "password": "whatever1"})
+    assert r.status_code == 400 and r.json()["detail"] == "מייל או סיסמה שגויים"
+
+
+def test_old_pending_user_gets_in_with_code(auth_on):
+    conn = main.get_db()
+    conn.execute("INSERT INTO users (email, status, created_at) VALUES (?, 'pending', '2026-09-13')", (FRIEND,))
+    conn.commit()
+    conn.close()
+    assert login(auth_on, FRIEND).get("/matches/premier").status_code == 200
+
+
+def test_permissions_tracking_and_block(auth_on):
+    mails = auth_on
     admin = login(mails, ADMIN)
     assert admin.get("/auth/me").json() == {"auth_on": True, "email": ADMIN, "is_admin": True, "legacy": False}
     assert admin.get("/app").headers.get("X-SF-App") == "1"
     assert admin.get("/debug/quota").status_code == 200
-    users = admin.get("/admin/api/users").json()
-    assert users["users"][0]["email"] == FRIEND and users["users"][0]["status"] == "pending"
-    assert admin.post(f"/admin/api/users/{FRIEND}", json={"status": "approved"}).json()["ok"]
-    assert any(to == FRIEND and "אושרת" in subj for to, subj, _ in mails)
 
     friend = login(mails, FRIEND)
     assert friend.get("/matches/premier").status_code == 200
@@ -76,9 +131,11 @@ def test_full_flow_pending_approve_login_track_block(auth_on):
     u = next(x for x in admin.get("/admin/api/users").json()["users"] if x["email"] == FRIEND)
     assert (u["login_count"], u["match_open"], u["highlight_play"], u["top_leagues"]) == (1, 1, 1, ["ucl"])
 
+    friend.post("/auth/set_password", json={"password": "goodpass1"})
     admin.post(f"/admin/api/users/{FRIEND}", json={"status": "blocked"})
     assert friend.get("/matches/premier").status_code == 401
-    assert client().post("/auth/request_code", json={"email": FRIEND}).json()["status"] == "pending"
+    assert client().post("/auth/request_code", json={"email": FRIEND}).status_code == 403
+    assert client().post("/auth/login", json={"email": FRIEND, "password": "goodpass1"}).status_code == 403
 
 
 def test_code_single_use_and_attempt_cap(auth_on):
