@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SpoilerFree ⚽</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SpoilerFree">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&family=Bebas+Neue&display=swap" rel="stylesheet">
   <style>
@@ -219,7 +226,8 @@
 
   async function apiFetch(url, opts) {
     const r = await fetch(url, opts);
-    if (r.status === 401) { location.reload(); throw new Error('auth'); }
+    // fresh=1 עוקף את קאש ה-service worker — אחרת היה מוגש שוב הדף השמור
+    if (r.status === 401) { location.href = '/app?fresh=1'; throw new Error('auth'); }
     return r;
   }
 
@@ -749,6 +757,11 @@
 
   // ── Init ───────────────────────────────────────────
   openLeague(currentLeague);
+
+  // PWA: הדף נשמר במכשיר ונפתח מיד גם כשהשרת ישן
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 </script>
 </body>
 </html>
