@@ -44,6 +44,9 @@ def test_future_match_does_not_ask_refresh(db):
 
 def test_by_date_flags_stale_matches_only(db):
     kick = datetime.now(timezone.utc) - timedelta(hours=20)
+    local = kick.astimezone(main.ISRAEL_TZ)
+    if local.hour == 23 and local.minute >= 50:      # שני המשחקים באותו יום בישראל
+        kick -= timedelta(minutes=15)
     _insert(db, "stale", kick)
     _insert(db, "done", kick + timedelta(minutes=5), status="FINISHED")
     il_day = kick.astimezone(main.ISRAEL_TZ).strftime("%Y-%m-%d")
