@@ -2969,9 +2969,15 @@ def get_sources_for_match(row) -> list:
     conn.close()
 
     clubs = []
-    for club in [home_club, away_club]:
-        if club and club["yt_channel_id"]:
-            clubs.append(club)
+    for club, team in ((home_club, row["home_team"]), (away_club, row["away_team"])):
+        if not (club and club["yt_channel_id"]):
+            continue
+        # שמירה: הערוץ חייב להיות של אחת מקבוצות המשחק. 15.9.26 הוצגו
+        # ערוצי ליברפול ופולהאם במשחק טוטנהאם–אברטון (תקצירים של משחקים אחרים)
+        if team_key(club["name"]) != team_key(team):
+            print(f"[sources] club/team mismatch in {row['id']}: {club['name']} ≠ {team}")
+            continue
+        clubs.append(club)
     clubs.sort(key=lambda c: c["tier"])
 
     # שאילתה משמות קצרים: "Crystal Palace Man City" ולא
@@ -2987,9 +2993,10 @@ def get_sources_for_match(row) -> list:
     short_q = (f"{_short(home_club, row['home_team'])} "
                f"{_short(away_club, row['away_team'])}")
 
+    # club_team: הכפתור מציג את שם המועדון בשפת המשתמש (כמו בצ'מפיונס)
     club_sources = [{"id": f"club_{c['id']}", "name": c["short_name"],
                      "channel_id": c["yt_channel_id"], "allow_embed": False,
-                     "query_override": short_q}
+                     "query_override": short_q, "club_team": c["name"]}
                     for c in clubs]
 
     # מקורות גיבוי ברמת הליגה (למשל Sky Sports) — אחרי המועדונים
@@ -3957,18 +3964,34 @@ def debug_channels(request: Request):
 
 @app.get("/debug/match")
 def debug_match(request: Request, q: str):
-    """השורה הגולמית של משחק מה-DB — סטטוס, תאריך, מתי נשלף."""
+    """השורה הגולמית של משחק מה-DB — סטטוס, תאריך, מזהי קבוצות, מקורות
+    התקצירים שהמשחק מקבל, ומה שמור בקאש לכל מקור (אבחון "ערוץ לא נכון")."""
     require_admin(request)
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, league_key, home_team, away_team, date_utc, time_utc, "
-        "matchday, status, fetched_at FROM matches "
-        "WHERE home_team LIKE ? OR away_team LIKE ? "
+        "SELECT * FROM matches WHERE home_team LIKE ? OR away_team LIKE ? "
         "ORDER BY date_utc DESC LIMIT 5",
         (f"%{q}%", f"%{q}%")
     ).fetchall()
+    out = []
+    for r in rows:
+        d = {k: r[k] for k in ("id", "league_key", "home_team", "away_team", "home_team_id",
+                               "away_team_id", "date_utc", "time_utc", "matchday", "status",
+                               "fetched_at")}
+        clubs = conn.execute("SELECT fd_team_id, name, short_name, yt_channel_id FROM clubs "
+                             "WHERE fd_team_id IN (?, ?)",
+                             (r["home_team_id"], r["away_team_id"])).fetchall()
+        d["clubs_by_team_id"] = [dict(c) for c in clubs]
+        d["cache"] = [{"source_id": c["source_id"], "found_at": c["found_at"],
+                       "videos": c["videos_json"][:300]}
+                      for c in conn.execute("SELECT source_id, found_at, videos_json FROM highlight_cache "
+                                            "WHERE match_id=?", (r["id"],)).fetchall()]
+        out.append(d)
     conn.close()
-    return {"matches": [dict(r) for r in rows]}
+    for d, r in zip(out, rows):
+        d["sources"] = [{"id": s["id"], "name": s["name"], "channel_id": s.get("channel_id")}
+                        for s in get_sources_for_match(r)]
+    return {"matches": out}
 
 
 @app.get("/admin/resolve_channel")
