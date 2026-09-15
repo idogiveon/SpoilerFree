@@ -62,6 +62,12 @@
     .danger-zone summary { font-size:0.75rem; color:var(--muted); cursor:pointer; }
     .danger-btn { width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--danger); background:transparent; color:var(--danger); cursor:pointer; font-family:'Heebo',sans-serif; }
     .del-err { color:var(--danger); font-size:0.75rem; min-height:1em; margin-top:0.4rem; }
+    /* עמוד המועדפים (מהתפריט) */
+    .fav-list { display:flex; flex-direction:column; gap:0.4rem; margin:0.6rem 0; }
+    .fav-item { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:0.5rem 0.7rem; }
+    .fav-item b { font-size:0.85rem; display:block; color:var(--text); }
+    .fav-item small { font-size:0.7rem; color:var(--muted); }
+    .fav-item .fav-btn { flex-shrink:0; }
 
     .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; padding:1rem 2rem; max-width:960px; margin:0 auto; position:relative; z-index:1; }
     .tab { padding:0.4rem 1rem; border-radius:100px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
@@ -266,6 +272,8 @@
   "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
   "password_login": "כניסה בסיסמה", "account": "חשבון", "admin": "ניהול", "logout": "יציאה",
   "menu": "תפריט", "cookie_settings": "הגדרות עוגיות", "language": "שפה",
+  "my_favorites": "המועדפים שלי", "fav_empty": "עוד אין מועדפים — חפש קבוצה למטה והוסף",
+  "fav_search": "חפש קבוצה להוספה…", "fav_add": "הוסף", "fav_remove": "הסר", "fav_no_results": "לא נמצאו קבוצות",
   "my_account": "החשבון שלי", "email": "מייל", "joined": "הצטרפת", "last_login": "כניסה אחרונה", "logins": "כניסות",
   "delete_account": "מחיקת החשבון",
   "delete_warning": "המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.",
@@ -301,6 +309,8 @@
   "loading": "Loading", "loading_matches": "Loading matches", "close": "Close",
   "password_login": "Password login", "account": "Account", "admin": "Admin", "logout": "Log out",
   "menu": "Menu", "cookie_settings": "Cookie settings", "language": "Language",
+  "my_favorites": "My favorites", "fav_empty": "No favorites yet — search for a team below and add it",
+  "fav_search": "Search a team to add…", "fav_add": "Add", "fav_remove": "Remove", "fav_no_results": "No teams found",
   "my_account": "My account", "email": "Email", "joined": "Joined", "last_login": "Last login", "logins": "Logins",
   "delete_account": "Delete account",
   "delete_warning": "Deletion is permanent: your account and all usage data will be removed. To continue, type your email address.",
@@ -336,6 +346,8 @@
   "loading": "Cargando", "loading_matches": "Cargando partidos", "close": "Cerrar",
   "password_login": "Acceso con contraseña", "account": "Cuenta", "admin": "Admin", "logout": "Salir",
   "menu": "Menú", "cookie_settings": "Configuración de cookies", "language": "Idioma",
+  "my_favorites": "Mis favoritos", "fav_empty": "Aún no tienes favoritos — busca un equipo abajo y añádelo",
+  "fav_search": "Busca un equipo para añadir…", "fav_add": "Añadir", "fav_remove": "Quitar", "fav_no_results": "No se encontraron equipos",
   "my_account": "Mi cuenta", "email": "Correo", "joined": "Alta", "last_login": "Último acceso", "logins": "Accesos",
   "delete_account": "Eliminar cuenta",
   "delete_warning": "La eliminación es definitiva: se borrarán tu cuenta y todos los datos de uso. Para continuar, escribe tu correo.",
@@ -371,6 +383,8 @@
   "loading": "Chargement", "loading_matches": "Chargement des matchs", "close": "Fermer",
   "password_login": "Connexion par mot de passe", "account": "Compte", "admin": "Admin", "logout": "Déconnexion",
   "menu": "Menu", "cookie_settings": "Paramètres des cookies", "language": "Langue",
+  "my_favorites": "Mes favoris", "fav_empty": "Pas encore de favoris — cherchez une équipe ci-dessous et ajoutez-la",
+  "fav_search": "Cherchez une équipe à ajouter…", "fav_add": "Ajouter", "fav_remove": "Retirer", "fav_no_results": "Aucune équipe trouvée",
   "my_account": "Mon compte", "email": "E-mail", "joined": "Inscription", "last_login": "Dernière connexion", "logins": "Connexions",
   "delete_account": "Supprimer le compte",
   "delete_warning": "La suppression est définitive : votre compte et toutes les données d'utilisation seront effacés. Pour continuer, saisissez votre e-mail.",
@@ -573,6 +587,58 @@
     }));
   }
 
+  // ── עמוד המועדפים (מהתפריט): הקיימים + חיפוש והוספה ──
+  let TEAMS = null, teamsLang = null;
+  async function loadTeams() {
+    if (TEAMS && teamsLang === LANG) return TEAMS;
+    const r = await apiFetch(`${API}/teams?lang=${LANG}`).then(r => r.json());
+    TEAMS = r.teams; teamsLang = LANG;
+    return TEAMS;
+  }
+  const leagueNames = ls => ls.map(l => t('lg_' + l)).join(' · ');
+  const teamInfo = key => (TEAMS || []).find(x => x.key === key) || { key, name: key, leagues: [] };
+
+  async function openFavorites() {
+    openSheet(`<div class="loading">${t('loading')}</div>`);
+    try { await loadTeams(); }
+    catch (e) { if (e.message === 'auth') return; TEAMS = TEAMS || []; }
+    openSheet(`<h2>⭐ ${t('my_favorites')}</h2>
+      <div id="fav-mine" class="fav-list"></div>
+      <input id="fav-search" autocomplete="off" placeholder="${esc(t('fav_search'))}">
+      <div id="fav-results" class="fav-list"></div>`);
+    document.getElementById('fav-search').addEventListener('input', renderFavResults);
+    renderFavMine();
+    renderFavResults();
+  }
+  function favItemHTML(tm, on) {
+    return `<div class="fav-item"><div><b>${esc(tm.name)}</b><small>${esc(leagueNames(tm.leagues))}</small></div>
+      <button class="fav-btn" data-key="${esc(tm.key)}">${on ? '✕ ' + t('fav_remove') : '☆ ' + t('fav_add')}</button></div>`;
+  }
+  function bindFavButtons(el) {
+    el.querySelectorAll('.fav-btn').forEach(b => b.addEventListener('click', async () => {
+      await toggleFav(b.dataset.key);
+      renderFavMine();
+      renderFavResults();
+    }));
+  }
+  function renderFavMine() {
+    const el = document.getElementById('fav-mine');
+    if (!el) return;
+    const mine = [...FAVS].map(teamInfo).sort((a, b) => a.name.localeCompare(b.name, LOCALES[LANG]));
+    el.innerHTML = mine.length ? mine.map(tm => favItemHTML(tm, true)).join('') : `<p>${t('fav_empty')}</p>`;
+    bindFavButtons(el);
+  }
+  function renderFavResults() {
+    const el = document.getElementById('fav-results'), input = document.getElementById('fav-search');
+    if (!el || !input) return;
+    const q = input.value.trim().toLowerCase();
+    if (!q) { el.innerHTML = ''; return; }
+    const hits = (TEAMS || []).filter(tm => !FAVS.has(tm.key) &&
+      (tm.name.toLowerCase().includes(q) || tm.key.includes(q))).slice(0, 20);
+    el.innerHTML = hits.length ? hits.map(tm => favItemHTML(tm, false)).join('') : `<p>${t('fav_no_results')}</p>`;
+    bindFavButtons(el);
+  }
+
   function favGroupHTML(ms) {
     return `<div class="date-group fav-group">
       <div class="date-label"><span class="weekday">⭐ ${t('favorites')}</span></div>
@@ -590,6 +656,7 @@
         user.textContent = me.email || t('password_login');
         user.hidden = false;
       }
+      items.push(`<button class="drawer-item" onclick="closeDrawer(); openFavorites()"><span class="ico">⭐</span>${t('favorites')}</button>`);
       if (me.email) items.push(`<button class="drawer-item" onclick="closeDrawer(); openAccount()"><span class="ico">👤</span>${t('account')}</button>`);
       if (me.is_admin) items.push(`<a class="drawer-item" href="/admin/users"><span class="ico">⚙️</span>${t('admin')}</a>`);
       document.getElementById('drawer-items').innerHTML = items.join('');
