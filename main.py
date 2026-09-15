@@ -403,7 +403,10 @@ APP_URL  = os.environ.get("APP_URL", "https://spoilerfree.onrender.com").rstrip(
 AUTH_DEV = os.environ.get("AUTH_DEV") == "1"
 # כל דרך שליחה מוגדרת = האתר נעול. בלי זה, מחיקת APP_PASSWORD/GMAIL_USER
 # מ-Render הייתה פותחת את האתר לכולם.
-AUTH_ON  = bool(APP_PASSWORD or GMAIL_USER or BREVO_API_KEY or GMAIL_CLIENT_ID or AUTH_DEV)
+# ב-Render (RENDER=true מוגדר אוטומטית) הכניסה תמיד חובה — גם כשכל משתני
+# הסיסמה/המייל נמחקו (הרשמה עם מייל+סיסמה לא צריכה אף אחד מהם).
+AUTH_ON  = bool(APP_PASSWORD or GMAIL_USER or BREVO_API_KEY or GMAIL_CLIENT_ID or AUTH_DEV
+                or os.environ.get("RENDER"))
 
 SESSION_DAYS      = 90
 CODE_MINUTES      = 10
