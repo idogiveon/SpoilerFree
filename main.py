@@ -4334,6 +4334,31 @@ def set_favorite(request: Request, payload: dict = Body(...)):
 
 # ── Admin: משתמשים ─────────────────────────────────────
 
+@app.get("/teams")
+def list_teams(request: Request, lang: str = "he"):
+    """קטלוג קבוצות לעמוד המועדפים: מפתח אחיד (כמו במועדפים), שם בשפת
+    המשתמש, ובאילו מפעלים הקבוצה משחקת (ליברפול: פרמייר + צ'מפיונס)."""
+    require_auth(request)
+    lang = _lang(lang)
+    conn = get_db()
+    rows = conn.execute("SELECT DISTINCT league_key, home_team AS team FROM matches "
+                        "UNION SELECT DISTINCT league_key, away_team FROM matches").fetchall()
+    conn.close()
+    order = list(LEAGUES)
+    teams = {}
+    for r in rows:
+        name = (r["team"] or "").strip()
+        key = team_key(name)
+        if not key:
+            continue
+        e = teams.setdefault(key, {"key": key, "name": display_team(name, lang), "leagues": []})
+        if r["league_key"] not in e["leagues"]:
+            e["leagues"].append(r["league_key"])
+    for e in teams.values():
+        e["leagues"].sort(key=lambda lg: order.index(lg) if lg in order else len(order))
+    return {"teams": sorted(teams.values(), key=lambda e: e["name"])}
+
+
 @app.get("/admin/users")
 def admin_users_page(request: Request):
     if AUTH_ON and not (current_user(request) or {}).get("is_admin"):
