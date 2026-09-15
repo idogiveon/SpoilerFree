@@ -2460,7 +2460,10 @@ def is_match_highlight(title: str, home: str, away: str,
         words = c.split()
         if c in t:
             return True
-        if any(a in t for a in TEAM_ALIASES.get(team, [])):
+        # football-data: "Manchester United FC" — הכינויים שמורים בלי הסיומת
+        # ("man utd"); בלי זה אף כינוי לא חל בפרמייר ליג (דרבי מנצ'סטר 13.9)
+        base = re.sub(r"\s+A?FC$", "", team.strip())
+        if any(a in t for a in TEAM_ALIASES.get(team, []) + TEAM_ALIASES.get(base, [])):
             return True
         if len(words) >= 1 and words[-1] not in GENERIC_TEAM_WORDS and words[-1] in t:
             return True
