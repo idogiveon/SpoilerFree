@@ -2272,6 +2272,9 @@ HE_SPELLINGS = {
     "Strasbourg": ["שטראסבורג"],
     "Paris Saint-Germain": ["פ.ס.ז'", "פריז סן ז'רמן"],
     "Bodø/Glimt": ["בודה גלימט"],
+    # ONE (15.9.26): "לאמין ובארסה חוגגים על חשבונה של לבאנטה"
+    "Barcelona": ["בארסה"],
+    "Levante": ["לבאנטה"],
 }
 
 
@@ -2579,10 +2582,52 @@ def is_headline_highlight(title: str, home_he: str, away_he: str,
     return False
 
 
+_short_cache = {}   # video_id → True (Short) / False — לא משתנה
+
+
+def _probe_short(video_id: str):
+    """youtube.com/shorts/<id>: 200 = Short, הפניה (303) = סרטון רגיל.
+    חינם, בלי מכסה. None = לא ידוע (תקלת רשת)."""
+    try:
+        r = requests.head(f"https://www.youtube.com/shorts/{video_id}", allow_redirects=False,
+                          headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        return r.status_code == 200 if r.status_code in (200, 301, 302, 303, 307) else None
+    except Exception:
+        return None
+
+
+def _is_short(video_id: str) -> bool:
+    if video_id not in _short_cache:
+        res = _probe_short(video_id)
+        if res is None:
+            return False            # לא ידוע — לא פוסלים, וננסה שוב בפעם הבאה
+        _short_cache[video_id] = res
+    return _short_cache[video_id]
+
+
+def _scrape_durations(video_ids: list) -> dict:
+    """גיבוי בלי API (אין מפתח / בלם יומי): "lengthSeconds" מדף הסרטון.
+    חינם; רק למעט המועמדים שכבר עברו סינון."""
+    durs = {}
+    for vid in video_ids[:6]:
+        try:
+            html = requests.get(f"https://www.youtube.com/watch?v={vid}",
+                                headers={"User-Agent": "Mozilla/5.0"}, timeout=8).text
+            m = re.search(r'"lengthSeconds":"(\d+)"', html)
+            if m:
+                durs[vid] = int(m.group(1))
+        except Exception:
+            pass
+    return durs
+
+
 def _video_durations(video_ids: list) -> dict:
-    """videos.list — משך כל וידאו בשניות. יחידת quota אחת לעד 50 IDs."""
-    if not video_ids or not YOUTUBE_API_KEY or _yt_units_today() >= YT_DAILY_BRAKE:
+    """videos.list — משך כל וידאו בשניות. יחידת quota אחת לעד 50 IDs.
+    בלי מפתח / מעל הבלם — מדף הסרטון (קצר מול מלא עובד תמיד)."""
+    if not video_ids:
         return {}
+    if not YOUTUBE_API_KEY or _yt_units_today() >= YT_DAILY_BRAKE:
+        return _scrape_durations(video_ids)
     _yt_units(1)
     durs = {}
     try:
@@ -2732,9 +2777,11 @@ def search_youtube(home: str, away: str, match_date: str,
         if il_both:    # ערוצים ישראליים לא רשמיים — כלל מחמיר
             return is_il_both_teams(title, home_alt or home, away_alt or away,
                                     published, match_date)
-        if headline:   # ONE — כותרות חדשותיות בעברית
-            return is_headline_highlight(title, home_alt or home, away_alt or away,
-                                         published, match_date)
+        if headline:   # ONE — כותרות חדשותיות בעברית, כל כתיב מוכר ("בארסה")
+            hs = list(dict.fromkeys([home_alt or home] + _he_names(home)))
+            aw = list(dict.fromkeys([away_alt or away] + _he_names(away)))
+            return any(is_headline_highlight(title, h, a, published, match_date)
+                       for h in hs for a in aw)
         return is_match_highlight(title, home, away, home_alt, away_alt,
                                   require_team, implicit_team)
 
@@ -2812,6 +2859,18 @@ def search_youtube(home: str, away: str, match_date: str,
                        for t in [_unescape(item["snippet"]["title"])]
                        if _keep(t, item["snippet"].get("publishedAt", ""))]
 
+    # YouTube Shorts (אנכיים) — קליפ חדשות קצר (ONE: "גורדון על ברצלונה")
+    # או גרסת "רילז" של תקציר שכבר יש (LALIGA). מקורות כותרות-חדשות: Shorts
+    # אף פעם; אחרים: רק כשאין חלופה רגילה.
+    if results:
+        shorts = {v["video_id"] for v in results if _is_short(v["video_id"])}
+        if shorts:
+            regular_only = [v for v in results if v["video_id"] not in shorts]
+            if regular_only or headline:
+                results = regular_only
+        if not results:
+            return []
+
     # דירוג: כותרת עם מילת תקציר מפורשת גוברת על התאמה גנרית
     # (מונע bench cam / סרטוני צבע כשקיים תקציר אמיתי)
     EXPLICIT = ("highlights", "תקציר", "resumen", "zusammenfassung")
@@ -2843,7 +2902,9 @@ def search_youtube(home: str, away: str, match_date: str,
                       "extended": True})
     else:
         # מקרה רגיל: וידאו אחד רלוונטי + מורחב-לפי-כותרת אם קיים
-        regular = next((v for v in pool if not v["extended"]), None)
+        # לא שידור חוזר של כל המשחק (בונדסליגה מעלה "X vs. Y | Matchday N"
+        # של 2+ שעות דקות אחרי התקציר הקצר)
+        regular = next((v for v in pool if not v["extended"] and v["_dur"] <= LONG_CAP), None)
         for v in (regular, titled_ext):
             if v:
                 final.append({"video_id": v["video_id"],
