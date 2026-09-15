@@ -381,8 +381,9 @@ LEAGUES = {
 # בלי אף אחד מהמשתנים (פיתוח מקומי) — האתר פתוח. AUTH_DEV=1: כניסה פעילה
 # מקומית, והקוד מודפס ללוג במקום להישלח.
 
-GMAIL_USER         = os.environ.get("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+GMAIL_USER         = os.environ.get("GMAIL_USER", "").strip()
+# Google מציגה את סיסמת האפליקציה עם רווחים ("abcd efgh ijkl mnop") — מסירים
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "").strip()
 ADMIN_EMAILS = {e.strip().lower()
                 for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 APP_URL  = os.environ.get("APP_URL", "https://spoilerfree.onrender.com").rstrip("/")
@@ -2840,6 +2841,34 @@ def health_rss():
     feed = _rss_feed("UC9LQwHZoucFT94I2h6JOcjw")   # ערוץ ליברפול
     return {"ok": feed is not None, "items": len(feed or []),
             "ms": round((time.perf_counter() - t0) * 1000)}
+
+
+@app.get("/debug/mail")
+def debug_mail(request: Request):
+    """אבחון שליחת מיילים (למנהלים): המשתנים מוגדרים? Render מגיע ל-Gmail?
+    Gmail מקבל את הסיסמה? — בלי לשלוח מייל ובלי לחשוף את הסיסמה."""
+    import socket
+    require_admin(request)
+    report = {"gmail_user": GMAIL_USER or None,
+              "password_set": bool(GMAIL_APP_PASSWORD),
+              "password_length": len(GMAIL_APP_PASSWORD),          # צריך להיות 16
+              "password_had_spaces": " " in os.environ.get("GMAIL_APP_PASSWORD", "")}
+    for port in (465, 587):
+        try:
+            socket.create_connection(("smtp.gmail.com", port), timeout=8).close()
+            report[f"port_{port}"] = "open"
+        except Exception as ex:
+            report[f"port_{port}"] = f"blocked: {type(ex).__name__}"
+    if report["port_465"] == "open" and GMAIL_USER and GMAIL_APP_PASSWORD:
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as s:
+                s.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            report["login"] = "ok"
+        except smtplib.SMTPAuthenticationError as ex:
+            report["login"] = f"rejected by Gmail: {ex.smtp_code}"
+        except Exception as ex:
+            report["login"] = f"error: {type(ex).__name__}"
+    return report
 
 
 @app.get("/debug/quota")
