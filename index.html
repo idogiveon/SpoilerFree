@@ -855,7 +855,13 @@
   const leagueData = {};   // league -> רשימת המשחקים המלאה
 
   function cacheGet(league) {
-    try { return JSON.parse(localStorage.getItem('sf:m:' + LANG + ':' + league)); }
+    try {
+      const d = JSON.parse(localStorage.getItem('sf:m:' + LANG + ':' + league));
+      // קאש מלפני השמות המתורגמים (בלי home_name) — היה מציג שמות באנגלית
+      // עד שהשרת עונה; מתעלמים ממנו
+      if (d && d.matches && d.matches.length && !('home_name' in d.matches[0])) return null;
+      return d;
+    }
     catch (e) { return null; }
   }
   function cachePut(league, data) {
