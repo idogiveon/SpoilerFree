@@ -31,6 +31,10 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "APP_PASSWORD", "")
     monkeypatch.setattr(main, "ADMIN_EMAILS", set())
     main._rss_cache.clear()
+    # בלי רשת בבדיקות: זיהוי Shorts ומשכים מדף הסרטון (בדיקות ייעודיות מחליפות)
+    main._short_cache.clear()
+    monkeypatch.setattr(main, "_probe_short", lambda vid: False)
+    monkeypatch.setattr(main, "_scrape_durations", lambda ids: {})
     main.init_db()
     yield
 
