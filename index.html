@@ -68,6 +68,13 @@
     .fav-item b { font-size:0.85rem; display:block; color:var(--text); }
     .fav-item small { font-size:0.7rem; color:var(--muted); }
     .fav-item .fav-btn { flex-shrink:0; }
+    /* בחירה מרובה (ליגות / קבוצות) — מסכי הפתיחה ועמוד המועדפים */
+    .chips { display:flex; flex-wrap:wrap; gap:0.4rem; margin:0.5rem 0 0.8rem; }
+    .chip { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:100px; padding:0.35rem 0.8rem; font-size:0.8rem; cursor:pointer; font-family:'Heebo',sans-serif; }
+    .chip.on { background:var(--accent); border-color:var(--accent); color:#000; font-weight:700; }
+    .ob-actions { display:flex; gap:0.8rem; align-items:center; margin-top:1rem; }
+    .ob-next { flex:1; padding:0.6rem; border-radius:100px; border:none; background:var(--accent); color:#000; font-weight:700; cursor:pointer; font-family:'Heebo',sans-serif; }
+    .ob-skip { background:none; border:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-family:'Heebo',sans-serif; font-size:0.8rem; }
 
     .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; padding:1rem 2rem; max-width:960px; margin:0 auto; position:relative; z-index:1; }
     .tab { padding:0.4rem 1rem; border-radius:100px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
@@ -274,6 +281,12 @@
   "menu": "תפריט", "cookie_settings": "הגדרות עוגיות", "language": "שפה",
   "my_favorites": "המועדפים שלי", "fav_empty": "עוד אין מועדפים — חפש קבוצה למטה והוסף",
   "fav_search": "חפש קבוצה להוספה…", "fav_add": "הוסף", "fav_remove": "הסר", "fav_no_results": "לא נמצאו קבוצות",
+  "fav_leagues": "ליגות מועדפות", "fav_teams": "קבוצות מועדפות",
+  "ob_title1": "ברוך הבא! באילו ליגות אתה מתעניין?",
+  "ob_hint1": "הן יופיעו ראשונות בתצוגה לפי יום. אפשר לשנות בכל רגע ב-☰ ← מועדפים.",
+  "ob_title2": "קבוצות פופולריות — סמן את שלך", "ob_hint2": "המשחקים שלהן יופיעו ראשונים, בכל מפעל.",
+  "ob_next": "המשך", "ob_skip": "דלג", "ob_done": "סיום",
+  "ob_no_teams": "עוד אין קבוצות לליגות האלה — אפשר להוסיף אחר כך ב-☰ ← מועדפים.",
   "my_account": "החשבון שלי", "email": "מייל", "joined": "הצטרפת", "last_login": "כניסה אחרונה", "logins": "כניסות",
   "delete_account": "מחיקת החשבון",
   "delete_warning": "המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.",
@@ -311,6 +324,12 @@
   "menu": "Menu", "cookie_settings": "Cookie settings", "language": "Language",
   "my_favorites": "My favorites", "fav_empty": "No favorites yet — search for a team below and add it",
   "fav_search": "Search a team to add…", "fav_add": "Add", "fav_remove": "Remove", "fav_no_results": "No teams found",
+  "fav_leagues": "Favorite leagues", "fav_teams": "Favorite teams",
+  "ob_title1": "Welcome! Which leagues do you follow?",
+  "ob_hint1": "They'll show first in the day view. You can change this anytime in ☰ → Favorites.",
+  "ob_title2": "Popular teams — pick yours", "ob_hint2": "Their matches will show first, in every competition.",
+  "ob_next": "Continue", "ob_skip": "Skip", "ob_done": "Done",
+  "ob_no_teams": "No teams for these leagues yet — add some later in ☰ → Favorites.",
   "my_account": "My account", "email": "Email", "joined": "Joined", "last_login": "Last login", "logins": "Logins",
   "delete_account": "Delete account",
   "delete_warning": "Deletion is permanent: your account and all usage data will be removed. To continue, type your email address.",
@@ -348,6 +367,12 @@
   "menu": "Menú", "cookie_settings": "Configuración de cookies", "language": "Idioma",
   "my_favorites": "Mis favoritos", "fav_empty": "Aún no tienes favoritos — busca un equipo abajo y añádelo",
   "fav_search": "Busca un equipo para añadir…", "fav_add": "Añadir", "fav_remove": "Quitar", "fav_no_results": "No se encontraron equipos",
+  "fav_leagues": "Ligas favoritas", "fav_teams": "Equipos favoritos",
+  "ob_title1": "¡Bienvenido! ¿Qué ligas sigues?",
+  "ob_hint1": "Aparecerán primero en la vista por día. Puedes cambiarlo cuando quieras en ☰ → Favoritos.",
+  "ob_title2": "Equipos populares — elige los tuyos", "ob_hint2": "Sus partidos aparecerán primero, en todas las competiciones.",
+  "ob_next": "Continuar", "ob_skip": "Omitir", "ob_done": "Listo",
+  "ob_no_teams": "Aún no hay equipos para estas ligas — añádelos luego en ☰ → Favoritos.",
   "my_account": "Mi cuenta", "email": "Correo", "joined": "Alta", "last_login": "Último acceso", "logins": "Accesos",
   "delete_account": "Eliminar cuenta",
   "delete_warning": "La eliminación es definitiva: se borrarán tu cuenta y todos los datos de uso. Para continuar, escribe tu correo.",
@@ -385,6 +410,12 @@
   "menu": "Menu", "cookie_settings": "Paramètres des cookies", "language": "Langue",
   "my_favorites": "Mes favoris", "fav_empty": "Pas encore de favoris — cherchez une équipe ci-dessous et ajoutez-la",
   "fav_search": "Cherchez une équipe à ajouter…", "fav_add": "Ajouter", "fav_remove": "Retirer", "fav_no_results": "Aucune équipe trouvée",
+  "fav_leagues": "Ligues favorites", "fav_teams": "Équipes favorites",
+  "ob_title1": "Bienvenue ! Quelles ligues suivez-vous ?",
+  "ob_hint1": "Elles s'afficheront en premier dans la vue par jour. Modifiable à tout moment dans ☰ → Favoris.",
+  "ob_title2": "Équipes populaires — choisissez les vôtres", "ob_hint2": "Leurs matchs s'afficheront en premier, dans toutes les compétitions.",
+  "ob_next": "Continuer", "ob_skip": "Passer", "ob_done": "Terminé",
+  "ob_no_teams": "Pas encore d'équipes pour ces ligues — ajoutez-en plus tard dans ☰ → Favoris.",
   "my_account": "Mon compte", "email": "E-mail", "joined": "Inscription", "last_login": "Dernière connexion", "logins": "Connexions",
   "delete_account": "Supprimer le compte",
   "delete_warning": "La suppression est définitive : votre compte et toutes les données d'utilisation seront effacés. Pour continuer, saisissez votre e-mail.",
@@ -540,14 +571,33 @@
   const isFavMatch = m => isFav(homeKey(m)) || isFav(awayKey(m));
   const serverFavs = () => !!(ME && ME.email);
   const FAVS_LOCAL = 'sf:favs2';   // מפתחות אחידים (הגרסה לפי-ליגה נשמרה ב-sf:favs)
+  let FAV_LEAGUES = new Set();     // ליגות מועדפות — ראשונות ב"לפי יום"
+  const FAV_LEAGUES_LOCAL = 'sf:favleagues';
 
   async function loadFavorites() {
     try {
       if (serverFavs()) {
         const r = await apiFetch(`${API}/favorites`).then(r => r.json());
         FAVS = new Set(r.favorites);
+        FAV_LEAGUES = new Set(r.leagues || []);
       } else {
         FAVS = new Set(JSON.parse(localStorage.getItem(FAVS_LOCAL) || '[]'));
+        FAV_LEAGUES = new Set(JSON.parse(localStorage.getItem(FAV_LEAGUES_LOCAL) || '[]'));
+      }
+    } catch (e) {}
+  }
+
+  async function toggleFavLeague(lg, on = !FAV_LEAGUES.has(lg)) {
+    if (on) FAV_LEAGUES.add(lg); else FAV_LEAGUES.delete(lg);
+    rerender();
+    try {
+      if (serverFavs()) {
+        await apiFetch(`${API}/favorites`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ league: lg, on }),
+        });
+      } else {
+        localStorage.setItem(FAV_LEAGUES_LOCAL, JSON.stringify([...FAV_LEAGUES]));
       }
     } catch (e) {}
   }
@@ -603,10 +653,13 @@
     try { await loadTeams(); }
     catch (e) { if (e.message === 'auth') return; TEAMS = TEAMS || []; }
     openSheet(`<h2>⭐ ${t('my_favorites')}</h2>
+      <h3>${t('fav_leagues')}</h3><div id="fav-leagues" class="chips"></div>
+      <h3>${t('fav_teams')}</h3>
       <div id="fav-mine" class="fav-list"></div>
       <input id="fav-search" autocomplete="off" placeholder="${esc(t('fav_search'))}">
       <div id="fav-results" class="fav-list"></div>`);
     document.getElementById('fav-search').addEventListener('input', renderFavResults);
+    renderFavLeagues();
     renderFavMine();
     renderFavResults();
   }
@@ -637,6 +690,78 @@
       (tm.name.toLowerCase().includes(q) || tm.key.includes(q))).slice(0, 20);
     el.innerHTML = hits.length ? hits.map(tm => favItemHTML(tm, false)).join('') : `<p>${t('fav_no_results')}</p>`;
     bindFavButtons(el);
+  }
+
+  // ── בחירה מרובה (chips) — ליגות וקבוצות ─────────────
+  const allLeagues = () => [...document.querySelectorAll('.tab[data-league]')]
+    .map(b => b.dataset.league).filter(l => l !== '__byday');
+  function chipsHTML(items, selected) {
+    return items.map(([val, label]) =>
+      `<button class="chip${selected.has(val) ? ' on' : ''}" data-val="${esc(val)}">${esc(label)}</button>`).join('');
+  }
+  function bindChips(el, selected) {
+    el.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+      const v = c.dataset.val;
+      if (selected.has(v)) selected.delete(v); else selected.add(v);
+      c.classList.toggle('on', selected.has(v));
+    }));
+  }
+  function renderFavLeagues() {
+    const el = document.getElementById('fav-leagues');
+    if (!el) return;
+    el.innerHTML = chipsHTML(allLeagues().map(l => [l, t('lg_' + l)]), FAV_LEAGUES);
+    el.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+      toggleFavLeague(c.dataset.val);
+      c.classList.toggle('on', FAV_LEAGUES.has(c.dataset.val));
+    }));
+  }
+
+  // ── מסכי פתיחה (#32): ליגות מועדפות → קבוצות פופולריות ──
+  // פעם אחת לחשבון (מי שכבר יש לו מועדפים — לא). דילוג / סגירה = הוצג.
+  let ONBOARDING = false;
+  function maybeOnboard() {
+    if (!ME || !ME.email || ME.onboarded !== false) return;
+    ONBOARDING = true;
+    const picked = new Set(FAV_LEAGUES);
+    openSheet(`<h2>👋 ${t('ob_title1')}</h2><p>${t('ob_hint1')}</p>
+      <div class="chips" id="ob-leagues">${chipsHTML(allLeagues().map(l => [l, t('lg_' + l)]), picked)}</div>
+      <div class="ob-actions"><button class="ob-skip" id="ob-skip">${t('ob_skip')}</button>
+        <button class="ob-next" id="ob-next">${t('ob_next')}</button></div>`);
+    bindChips(document.getElementById('ob-leagues'), picked);
+    document.getElementById('ob-skip').onclick = finishOnboarding;
+    document.getElementById('ob-next').onclick = () => onboardTeams(picked);
+  }
+  async function onboardTeams(leagues) {
+    for (const l of leagues) if (!FAV_LEAGUES.has(l)) toggleFavLeague(l, true);
+    if (!leagues.size) return finishOnboarding();
+    openSheet(`<div class="loading">${t('loading')}</div>`);
+    let data = { leagues: {} };
+    try {
+      data = await apiFetch(`${API}/onboarding/teams?leagues=${[...leagues].join(',')}&lang=${LANG}`)
+        .then(r => r.json());
+    } catch (e) {}
+    const chosen = new Set(FAVS);
+    const groups = Object.entries(data.leagues || {}).filter(([, ts]) => ts.length);
+    openSheet(`<h2>⭐ ${t('ob_title2')}</h2><p>${t('ob_hint2')}</p>` +
+      (groups.length
+        ? groups.map(([l, ts]) => `<h3>${t('lg_' + l)}</h3>
+            <div class="chips">${chipsHTML(ts.map(x => [x.key, x.name]), chosen)}</div>`).join('')
+        : `<p>${t('ob_no_teams')}</p>`) +
+      `<div class="ob-actions"><button class="ob-skip" id="ob-skip">${t('ob_skip')}</button>
+        <button class="ob-next" id="ob-done">${t('ob_done')}</button></div>`);
+    document.querySelectorAll('#sheet-body .chips').forEach(el => bindChips(el, chosen));
+    document.getElementById('ob-skip').onclick = finishOnboarding;
+    document.getElementById('ob-done').onclick = async () => {
+      for (const k of chosen) if (!FAVS.has(k)) await toggleFav(k);
+      finishOnboarding();
+    };
+  }
+  async function finishOnboarding() {
+    ONBOARDING = false;
+    if (ME) ME.onboarded = true;
+    document.getElementById('sheet').hidden = true;
+    rerender();
+    try { await apiFetch(`${API}/auth/onboarded`, { method: 'POST' }); } catch (e) {}
   }
 
   function favGroupHTML(ms) {
@@ -687,7 +812,10 @@
     document.getElementById('sheet-body').innerHTML = html;
     document.getElementById('sheet').hidden = false;
   }
-  function closeSheet() { document.getElementById('sheet').hidden = true; }
+  function closeSheet() {
+    document.getElementById('sheet').hidden = true;
+    if (ONBOARDING) finishOnboarding();   // "סגור" באמצע מסכי הפתיחה = דילוג
+  }
 
   async function openCookies() {
     openSheet(`<div class="loading">${t('loading')}</div>`);
@@ -1265,7 +1393,11 @@
     // השרת כבר מיין: סדר ליגות ואז שעה — נשאר רק לקבץ לכותרות
     const favMs = matches.filter(isFavMatch);
     let html = favMs.length ? favGroupHTML(favMs) : '', lastLeague = null;
-    for (const m of matches.filter(m => !isFavMatch(m))) {
+    // ליגות מועדפות קודם (סדר השרת נשמר בתוך כל קבוצה)
+    const rest = matches.filter(m => !isFavMatch(m));
+    const ordered = [...rest.filter(m => FAV_LEAGUES.has(m.league_key)),
+                     ...rest.filter(m => !FAV_LEAGUES.has(m.league_key))];
+    for (const m of ordered) {
       if (m.league_key !== lastLeague) {
         if (lastLeague !== null) html += '</div>';
         html += `<div class="date-group">
@@ -1345,7 +1477,7 @@
   applyStatic();
   enterDayView();
   // המועדפים תלויים במשתמש (חשבון / מכשיר) — אחרי שיודעים מי מחובר
-  loadUserBar().then(loadFavorites).then(rerender);
+  loadUserBar().then(loadFavorites).then(rerender).then(maybeOnboard);
   track('app_open');
 
   // PWA: הדף נשמר במכשיר ונפתח מיד גם כשהשרת ישן
