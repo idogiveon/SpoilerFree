@@ -392,11 +392,18 @@ GMAIL_CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET", "").strip()
 GMAIL_SCOPES   = "https://www.googleapis.com/auth/gmail.send openid email"
 GMAIL_CALLBACK = "/admin/gmail/callback"
 _gmail_token = {"value": None, "exp": 0.0}   # access token בזיכרון (שעה תוקף)
+# Brevo (HTTPS, חינם עד 300 ביום) — הדרך הפעילה: Google חוסמת חשבונות Gmail
+# חדשים. BREVO_SENDER = כתובת שאומתה כשולח ב-Brevo (בלי דומיין משלנו
+# Brevo מחליפה את הדומיין בכתובת @brevosend — צפוי יותר ספאם).
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+BREVO_SENDER  = os.environ.get("BREVO_SENDER", "").strip()
 ADMIN_EMAILS = {e.strip().lower()
                 for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 APP_URL  = os.environ.get("APP_URL", "https://spoilerfree.onrender.com").rstrip("/")
 AUTH_DEV = os.environ.get("AUTH_DEV") == "1"
-AUTH_ON  = bool(APP_PASSWORD or GMAIL_USER or AUTH_DEV)
+# כל דרך שליחה מוגדרת = האתר נעול. בלי זה, מחיקת APP_PASSWORD/GMAIL_USER
+# מ-Render הייתה פותחת את האתר לכולם.
+AUTH_ON  = bool(APP_PASSWORD or GMAIL_USER or BREVO_API_KEY or GMAIL_CLIENT_ID or AUTH_DEV)
 
 SESSION_DAYS      = 90
 CODE_MINUTES      = 10
@@ -548,9 +555,27 @@ def _gmail_api_send(msg: EmailMessage) -> bool:
     return True
 
 
+def _brevo_send(to: str, subject: str, body: str) -> bool:
+    r = requests.post("https://api.brevo.com/v3/smtp/email",
+                      headers={"api-key": BREVO_API_KEY, "accept": "application/json"},
+                      json={"sender": {"name": "SpoilerFree", "email": BREVO_SENDER},
+                            "to": [{"email": to}], "subject": subject, "textContent": body},
+                      timeout=15)
+    if r.status_code not in (200, 201, 202):
+        print(f"[mail] brevo send failed: {r.status_code} {r.text[:200]}")
+        return False
+    return True
+
+
 def send_email(to: str, subject: str, body: str) -> bool:
-    """שליחה מה-Gmail הייעודי: Gmail API ב-HTTPS כשמחובר (Render החינמי חוסם
-    SMTP), אחרת SMTP עם סיסמת אפליקציה (מקומי / שרת בתשלום)."""
+    """שליחה ב-HTTPS (Render החינמי חוסם SMTP): Brevo כשמוגדר, אחרת Gmail API
+    כשמחובר, אחרת SMTP עם סיסמת אפליקציה (מקומי / שרת בתשלום)."""
+    if BREVO_API_KEY and BREVO_SENDER:
+        try:
+            return _brevo_send(to, subject, body)
+        except Exception as ex:
+            print(f"[mail] brevo send to {to} failed: {ex}")
+            return False
     api = gmail_api_ready()
     if not (api or (GMAIL_USER and GMAIL_APP_PASSWORD)):
         if AUTH_DEV:
@@ -2982,6 +3007,18 @@ def debug_mail(request: Request):
                            "connected": bool(_gmail_refresh_token()),
                            "sender": _meta_get("gmail_sender"),
                            "token_ok": bool(_gmail_access_token()) if gmail_api_ready() else None}
+    report["brevo"] = {"key_set": bool(BREVO_API_KEY), "sender": BREVO_SENDER or None,
+                       "active": bool(BREVO_API_KEY and BREVO_SENDER)}
+    if BREVO_API_KEY:
+        try:   # GET /account: 200 = המפתח תקין (לא שולח כלום)
+            a = requests.get("https://api.brevo.com/v3/account",
+                             headers={"api-key": BREVO_API_KEY, "accept": "application/json"}, timeout=10)
+            report["brevo"]["key_ok"] = a.status_code == 200
+            if a.status_code != 200:
+                report["brevo"]["error"] = a.status_code
+        except Exception as ex:
+            report["brevo"]["key_ok"] = False
+            report["brevo"]["error"] = type(ex).__name__
     for port in (465, 587):
         try:
             socket.create_connection(("smtp.gmail.com", port), timeout=8).close()

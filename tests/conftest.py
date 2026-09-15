@@ -13,7 +13,8 @@ sys.path.insert(0, ROOT)
 # לפני import main: בלי Turso, בלי מפתחות, בלי כניסה (כל בדיקה מפעילה מה שצריך)
 for _k in ("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "APP_PASSWORD", "GMAIL_USER",
            "GMAIL_APP_PASSWORD", "ADMIN_EMAILS", "YOUTUBE_API_KEY",
-           "FOOTBALL_DATA_KEY", "AUTH_DEV"):
+           "FOOTBALL_DATA_KEY", "AUTH_DEV", "BREVO_API_KEY", "BREVO_SENDER",
+           "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"):
     os.environ[_k] = ""
 os.chdir(ROOT)  # index.html / static/ נטענים בנתיב יחסי
 
