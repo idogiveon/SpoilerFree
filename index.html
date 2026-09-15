@@ -30,9 +30,23 @@
     .logo { font-family:'Bebas Neue',sans-serif; font-size:2rem; letter-spacing:2px; color:var(--accent); line-height:1; }
     .logo span { color:var(--muted); font-size:0.8rem; font-family:'Heebo',sans-serif; font-weight:300; display:block; letter-spacing:4px; text-transform:uppercase; margin-top:2px; }
 
-    .user-bar { font-size:0.75rem; color:var(--muted); display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; }
-    .user-bar a, .user-bar button { color:var(--muted); background:none; border:none; font:inherit; cursor:pointer; text-decoration:underline; padding:0; }
-    .user-bar a:hover, .user-bar button:hover { color:var(--accent); }
+    /* תפריט צד (☰): נכנס מהצד של הכפתור — ימין ב-RTL, שמאל ב-LTR */
+    .brand { display:flex; align-items:center; gap:0.9rem; }
+    .menu-btn { background:transparent; border:1px solid var(--border); color:var(--text); width:40px; height:40px; border-radius:10px; font-size:1.3rem; line-height:1; cursor:pointer; flex-shrink:0; transition:all 0.2s; }
+    .menu-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1050; }
+    .drawer { position:fixed; top:0; bottom:0; inset-inline-start:0; width:min(300px, 85vw); background:var(--surface); border-inline-end:1px solid var(--border); z-index:1060; display:flex; flex-direction:column; padding:1.2rem 1rem; gap:0.3rem; overflow-y:auto; transition:transform 0.25s ease; visibility:hidden; }
+    [dir="rtl"] .drawer { transform:translateX(100%); }
+    [dir="ltr"] .drawer { transform:translateX(-100%); }
+    .drawer.open { transform:none; visibility:visible; }
+    .drawer-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.8rem; }
+    .drawer-logo { font-family:'Bebas Neue',sans-serif; font-size:1.5rem; letter-spacing:2px; color:var(--accent); }
+    .drawer-user { font-size:0.78rem; color:var(--muted); padding:0.3rem 0.6rem 0.9rem; border-bottom:1px solid var(--border); margin-bottom:0.4rem; word-break:break-all; }
+    .drawer-item { display:flex; align-items:center; gap:0.7rem; width:100%; background:none; border:none; color:var(--text); font-family:'Heebo',sans-serif; font-size:0.95rem; padding:0.7rem 0.6rem; border-radius:8px; cursor:pointer; text-align:start; text-decoration:none; }
+    .drawer-item:hover { background:var(--card); color:var(--accent); }
+    .drawer-item .ico { width:1.4rem; text-align:center; }
+    .drawer-lang { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.6rem; font-size:0.95rem; }
+    .drawer-sep { border-top:1px solid var(--border); margin:0.4rem 0; }
 
     .app-footer { max-width:960px; margin:0 auto; padding:0 2rem 2rem; text-align:center; position:relative; z-index:1; }
     .cookie-link { background:none; border:none; color:#4a4a5a; font-family:'Heebo',sans-serif; font-size:0.7rem; text-decoration:underline; cursor:pointer; }
@@ -148,18 +162,33 @@
 
 <header>
   <div class="header-inner">
-    <div class="logo">SPOILERFREE<span data-i18n="tagline">לוח משחקים ותקצירים</span></div>
-    <div class="header-tools">
-      <select class="lang-select" id="lang-select" aria-label="Language">
-        <option value="he">🌐 עברית</option>
-        <option value="en">🌐 English</option>
-        <option value="es">🌐 Español</option>
-        <option value="fr">🌐 Français</option>
-      </select>
-      <div class="user-bar" id="user-bar"></div>
+    <div class="brand">
+      <button class="menu-btn" id="menu-btn" aria-label="Menu" aria-controls="drawer" aria-expanded="false">☰</button>
+      <div class="logo">SPOILERFREE<span data-i18n="tagline">לוח משחקים ותקצירים</span></div>
     </div>
   </div>
 </header>
+
+<!-- תפריט צד: חשבון, ניהול, עוגיות, שפה, יציאה -->
+<div class="drawer-overlay" id="drawer-overlay" hidden></div>
+<nav class="drawer" id="drawer" aria-label="Menu">
+  <div class="drawer-head">
+    <span class="drawer-logo">SPOILERFREE</span>
+    <button class="modal-close" id="drawer-close" aria-label="Close">✕</button>
+  </div>
+  <div class="drawer-user" id="drawer-user" dir="ltr" hidden></div>
+  <div id="drawer-items"></div>
+  <button class="drawer-item" id="drawer-cookies"><span class="ico">🍪</span><span data-i18n="cookie_settings">הגדרות עוגיות</span></button>
+  <label class="drawer-lang"><span class="ico">🌐</span><span data-i18n="language">שפה</span>
+    <select class="lang-select" id="lang-select" aria-label="Language">
+      <option value="he">עברית</option>
+      <option value="en">English</option>
+      <option value="es">Español</option>
+      <option value="fr">Français</option>
+    </select>
+  </label>
+  <div id="drawer-logout"></div>
+</nav>
 
 <div class="league-tabs">
   <button class="tab" data-league="premier" data-i18n="lg_premier" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
@@ -236,6 +265,7 @@
   "refresh": "↻ רענון", "refreshing": "⏳ מתעדכן...",
   "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
   "password_login": "כניסה בסיסמה", "account": "חשבון", "admin": "ניהול", "logout": "יציאה",
+  "menu": "תפריט", "cookie_settings": "הגדרות עוגיות", "language": "שפה",
   "my_account": "החשבון שלי", "email": "מייל", "joined": "הצטרפת", "last_login": "כניסה אחרונה", "logins": "כניסות",
   "delete_account": "מחיקת החשבון",
   "delete_warning": "המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.",
@@ -270,6 +300,7 @@
   "refresh": "↻ Refresh", "refreshing": "⏳ Updating...",
   "loading": "Loading", "loading_matches": "Loading matches", "close": "Close",
   "password_login": "Password login", "account": "Account", "admin": "Admin", "logout": "Log out",
+  "menu": "Menu", "cookie_settings": "Cookie settings", "language": "Language",
   "my_account": "My account", "email": "Email", "joined": "Joined", "last_login": "Last login", "logins": "Logins",
   "delete_account": "Delete account",
   "delete_warning": "Deletion is permanent: your account and all usage data will be removed. To continue, type your email address.",
@@ -304,6 +335,7 @@
   "refresh": "↻ Actualizar", "refreshing": "⏳ Actualizando...",
   "loading": "Cargando", "loading_matches": "Cargando partidos", "close": "Cerrar",
   "password_login": "Acceso con contraseña", "account": "Cuenta", "admin": "Admin", "logout": "Salir",
+  "menu": "Menú", "cookie_settings": "Configuración de cookies", "language": "Idioma",
   "my_account": "Mi cuenta", "email": "Correo", "joined": "Alta", "last_login": "Último acceso", "logins": "Accesos",
   "delete_account": "Eliminar cuenta",
   "delete_warning": "La eliminación es definitiva: se borrarán tu cuenta y todos los datos de uso. Para continuar, escribe tu correo.",
@@ -338,6 +370,7 @@
   "refresh": "↻ Actualiser", "refreshing": "⏳ Mise à jour...",
   "loading": "Chargement", "loading_matches": "Chargement des matchs", "close": "Fermer",
   "password_login": "Connexion par mot de passe", "account": "Compte", "admin": "Admin", "logout": "Déconnexion",
+  "menu": "Menu", "cookie_settings": "Paramètres des cookies", "language": "Langue",
   "my_account": "Mon compte", "email": "E-mail", "joined": "Inscription", "last_login": "Dernière connexion", "logins": "Connexions",
   "delete_account": "Supprimer le compte",
   "delete_warning": "La suppression est définitive : votre compte et toutes les données d'utilisation seront effacés. Pour continuer, saisissez votre e-mail.",
@@ -546,20 +579,37 @@
       ${ms.map(matchCardHTML).join('')}</div>`;
   }
 
+  // פריטי התפריט לפי המשתמש (נבנה מחדש גם בהחלפת שפה)
   async function loadUserBar() {
     try {
       const me = await apiFetch(`${API}/auth/me`).then(r => r.json());
       ME = me;
-      if (!me.auth_on) return;
-      const bar = document.getElementById('user-bar');
-      const who = document.createElement('span');
-      who.dir = 'ltr';
-      who.textContent = me.email || t('password_login');
-      bar.replaceChildren(who);
-      if (me.email) bar.insertAdjacentHTML('beforeend', `<button onclick="openAccount()">${t('account')}</button>`);
-      if (me.is_admin) bar.insertAdjacentHTML('beforeend', `<a href="/admin/users">${t('admin')}</a>`);
-      bar.insertAdjacentHTML('beforeend', `<button onclick="logout()">${t('logout')}</button>`);
+      const user = document.getElementById('drawer-user');
+      const items = [];
+      if (me.auth_on) {
+        user.textContent = me.email || t('password_login');
+        user.hidden = false;
+      }
+      if (me.email) items.push(`<button class="drawer-item" onclick="closeDrawer(); openAccount()"><span class="ico">👤</span>${t('account')}</button>`);
+      if (me.is_admin) items.push(`<a class="drawer-item" href="/admin/users"><span class="ico">⚙️</span>${t('admin')}</a>`);
+      document.getElementById('drawer-items').innerHTML = items.join('');
+      document.getElementById('drawer-logout').innerHTML = me.auth_on
+        ? `<div class="drawer-sep"></div><button class="drawer-item" onclick="logout()"><span class="ico">↩</span>${t('logout')}</button>`
+        : '';
     } catch (e) {}
+  }
+
+  // ── תפריט צד ───────────────────────────────────────
+  function openDrawer() {
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('drawer-overlay').hidden = false;
+    document.getElementById('menu-btn').setAttribute('aria-expanded', 'true');
+    document.getElementById('drawer-close').focus();
+  }
+  function closeDrawer() {
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('drawer-overlay').hidden = true;
+    document.getElementById('menu-btn').setAttribute('aria-expanded', 'false');
   }
 
   // ── חלון כללי: Cookie settings / חשבון ──────────────
@@ -1192,6 +1242,13 @@
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('cookie-link').addEventListener('click', openCookies);
+  document.getElementById('menu-btn').addEventListener('click', openDrawer);
+  document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+  document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
+  document.getElementById('drawer-cookies').addEventListener('click', () => { closeDrawer(); openCookies(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('drawer').classList.contains('open')) closeDrawer();
+  });
   document.getElementById('sheet-close').addEventListener('click', closeSheet);
   document.getElementById('sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
   document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
