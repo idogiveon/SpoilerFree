@@ -414,6 +414,9 @@ PW_MAX_FAILS      = 5      # טעויות סיסמה רצופות → נעילה
 PW_LOCK_MIN       = 15
 PW_RESET_MIN      = 15     # אחרי כניסה עם קוד — חלון לקביעת/החלפת סיסמה
 PW_ITER           = 200_000
+# הרשמה: ברירת המחדל — מייל + סיסמה, מיד, בלי קוד. EMAIL_CODE_REQUIRED=1 ב-Render
+# → הרשמה רק עם קוד למייל (אם תהיה תנועה חשודה). כתובות מנהל תמיד עם קוד.
+EMAIL_CODE_REQUIRED = os.environ.get("EMAIL_CODE_REQUIRED") == "1"
 # לאן נשלחת הודעה על כל הרשמה חדשה (ברירת מחדל: ADMIN_EMAILS)
 NOTIFY_EMAILS = {e.strip().lower()
                  for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()}
@@ -555,6 +558,13 @@ def _gmail_api_send(msg: EmailMessage) -> bool:
     return True
 
 
+def email_sender_ready() -> bool:
+    """יש דרך אמיתית לשלוח מייל? (קובע אם להציג "שכחתי סיסמה" עם קוד).
+    SMTP לא נחשב ב-Render — החינמי חוסם אותו."""
+    return bool((BREVO_API_KEY and BREVO_SENDER) or gmail_api_ready() or AUTH_DEV
+                or (GMAIL_USER and GMAIL_APP_PASSWORD and not os.environ.get("RENDER")))
+
+
 def _brevo_send(to: str, subject: str, body: str) -> bool:
     r = requests.post("https://api.brevo.com/v3/smtp/email",
                       headers={"api-key": BREVO_API_KEY, "accept": "application/json"},
@@ -633,7 +643,12 @@ LOGIN_I18N = {
            "err_bad_login": "מייל או סיסמה שגויים",
            "err_locked": "יותר מדי ניסיונות — נסה שוב בעוד 15 דקות או היכנס עם קוד",
            "err_pw_short": "הסיסמה צריכה 8 תווים לפחות", "err_pw_long": "הסיסמה ארוכה מדי",
-           "err_pw_reset": "כדי להחליף סיסמה — היכנס עם קוד למייל"},
+           "err_pw_reset": "כדי להחליף סיסמה — היכנס עם קוד למייל",
+           "new_user_simple": "משתמש חדש? הרשמה", "register_title": "הרשמה — מייל וסיסמה",
+           "register_btn": "הרשמה וכניסה", "forgot_admin": "שכחת סיסמה? בקש מהמנהל לאפס אותה",
+           "err_exists": "המייל כבר רשום — היכנס עם הסיסמה",
+           "err_code_required": "הרשמה דורשת קוד למייל",
+           "err_admin_code": "כתובת מנהל דורשת את סיסמת המנהל", "admin_key": "סיסמת מנהל"},
     "en": {"title": "Log in", "enter_email": "Enter your email and password", "password": "Password", "enter": "Log in",
            "new_user": "New here? We'll email you a code", "forgot": "Forgot password",
            "code_intro": "We'll send a 6-digit code to your email", "send_code": "Send code",
@@ -649,7 +664,12 @@ LOGIN_I18N = {
            "err_bad_login": "Wrong email or password",
            "err_locked": "Too many attempts — try again in 15 minutes or log in with a code",
            "err_pw_short": "Password must be at least 8 characters", "err_pw_long": "Password is too long",
-           "err_pw_reset": "To change your password, log in with an email code"},
+           "err_pw_reset": "To change your password, log in with an email code",
+           "new_user_simple": "New here? Sign up", "register_title": "Sign up — email and password",
+           "register_btn": "Sign up and log in", "forgot_admin": "Forgot your password? Ask the admin to reset it",
+           "err_exists": "This email is already registered — log in with your password",
+           "err_code_required": "Signing up requires an email code",
+           "err_admin_code": "Admin addresses require the admin password", "admin_key": "Admin password"},
     "es": {"title": "Entrar", "enter_email": "Escribe tu correo y contraseña", "password": "Contraseña", "enter": "Entrar",
            "new_user": "¿Nuevo? Te enviamos un código por correo", "forgot": "Olvidé mi contraseña",
            "code_intro": "Te enviaremos un código de 6 dígitos por correo", "send_code": "Enviar código",
@@ -665,7 +685,13 @@ LOGIN_I18N = {
            "err_bad_login": "Correo o contraseña incorrectos",
            "err_locked": "Demasiados intentos — inténtalo en 15 minutos o entra con un código",
            "err_pw_short": "La contraseña debe tener al menos 8 caracteres", "err_pw_long": "La contraseña es demasiado larga",
-           "err_pw_reset": "Para cambiar la contraseña, entra con un código por correo"},
+           "err_pw_reset": "Para cambiar la contraseña, entra con un código por correo",
+           "new_user_simple": "¿Nuevo? Regístrate", "register_title": "Registro — correo y contraseña",
+           "register_btn": "Registrarme y entrar", "forgot_admin": "¿Olvidaste tu contraseña? Pide al administrador que la restablezca",
+           "err_exists": "Este correo ya está registrado — entra con tu contraseña",
+           "err_code_required": "El registro requiere un código por correo",
+           "err_admin_code": "Las direcciones de administrador requieren la contraseña de administrador",
+           "admin_key": "Contraseña de administrador"},
     "fr": {"title": "Connexion", "enter_email": "Saisissez votre e-mail et votre mot de passe", "password": "Mot de passe",
            "enter": "Se connecter", "new_user": "Nouveau ? Nous vous envoyons un code par e-mail",
            "forgot": "Mot de passe oublié", "code_intro": "Nous vous enverrons un code à 6 chiffres par e-mail",
@@ -683,7 +709,13 @@ LOGIN_I18N = {
            "err_bad_login": "E-mail ou mot de passe incorrect",
            "err_locked": "Trop de tentatives — réessayez dans 15 minutes ou connectez-vous avec un code",
            "err_pw_short": "Le mot de passe doit comporter au moins 8 caractères", "err_pw_long": "Mot de passe trop long",
-           "err_pw_reset": "Pour changer de mot de passe, connectez-vous avec un code reçu par e-mail"},
+           "err_pw_reset": "Pour changer de mot de passe, connectez-vous avec un code reçu par e-mail",
+           "new_user_simple": "Nouveau ? Inscrivez-vous", "register_title": "Inscription — e-mail et mot de passe",
+           "register_btn": "S'inscrire et se connecter", "forgot_admin": "Mot de passe oublié ? Demandez à l'administrateur de le réinitialiser",
+           "err_exists": "Cet e-mail est déjà inscrit — connectez-vous avec votre mot de passe",
+           "err_code_required": "L'inscription nécessite un code reçu par e-mail",
+           "err_admin_code": "Les adresses administrateur exigent le mot de passe administrateur",
+           "admin_key": "Mot de passe administrateur"},
 }
 
 # מייל הקוד בשפת המשתמש. הנושא מסתיים בקוד (רואים אותו בהתראה בטלפון).
@@ -723,6 +755,7 @@ button:disabled{opacity:0.5}
 margin-top:0.8rem;width:auto;padding:0.2rem;text-decoration:underline}
 .err{color:#ff4757;font-size:0.85rem;margin-top:0.8rem;min-height:1.2em}
 .ok{color:#00e5a0}
+.hint{font-size:0.78rem;color:#6b6b80;margin:0.8rem 0 0}
 button.cookie-link{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
 width:auto;background:none;color:#4a4a5a;font-weight:400;font-size:0.7rem;
 padding:0.2rem;text-decoration:underline}
@@ -749,8 +782,19 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
   <input type="email" id="email" placeholder="you@example.com" autocomplete="username" dir="ltr">
   <input type="password" id="login-pw" autocomplete="current-password" dir="ltr">
   <button id="login-btn" onclick="pwLogin()" data-i18n="enter">כניסה</button>
-  <button class="link" onclick="codeMode('new')" data-i18n="new_user">משתמש חדש? נשלח לך קוד למייל</button>
-  <button class="link" onclick="codeMode('reset')" data-i18n="forgot">שכחתי סיסמה</button>
+  <button class="link" id="new-user-btn" onclick="newUser()">משתמש חדש? הרשמה</button>
+  <button class="link" id="forgot-btn" onclick="codeMode('reset')" data-i18n="forgot">שכחתי סיסמה</button>
+  <p class="hint" id="forgot-admin" data-i18n="forgot_admin" hidden>שכחת סיסמה? בקש מהמנהל לאפס אותה</p>
+</div>
+
+<div id="step-register" hidden>
+  <p data-i18n="register_title">הרשמה — מייל וסיסמה</p>
+  <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="username" dir="ltr">
+  <input type="password" id="reg-pw" autocomplete="new-password" dir="ltr">
+  <input type="password" id="reg-pw2" autocomplete="new-password" dir="ltr">
+  <input type="password" id="reg-admin-key" autocomplete="off" dir="ltr" hidden>
+  <button id="reg-btn" onclick="register()" data-i18n="register_btn">הרשמה וכניסה</button>
+  <button class="link" onclick="back()" data-i18n="back">חזרה</button>
 </div>
 
 <div id="step-email" hidden>
@@ -793,6 +837,9 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 const $ = id => document.getElementById(id);
 // ── שפה (אותה בחירה כמו באפליקציה — נשמרת במכשיר) ──
 const L = __LOGIN_I18N__;
+// code_required: הרשמה רק עם קוד למייל; can_send: יש שליחת מיילים ("שכחתי סיסמה")
+const CFG = __LOGIN_CFG__;
+if (!CFG.can_send) { $('forgot-btn').hidden = true; $('forgot-admin').hidden = false; }
 let LANG = 'he';
 try { LANG = localStorage.getItem('sf:lang') || 'he'; } catch (e) {}
 if (!L[LANG]) LANG = 'he';
@@ -806,6 +853,10 @@ function applyLang() {
   $('login-pw').placeholder = t('password');
   $('new-pw').placeholder = t('new_password');
   $('new-pw2').placeholder = t('confirm_password');
+  $('reg-pw').placeholder = t('new_password');
+  $('reg-pw2').placeholder = t('confirm_password');
+  $('reg-admin-key').placeholder = t('admin_key');
+  $('new-user-btn').textContent = t(CFG.code_required ? 'new_user' : 'new_user_simple');
   $('lang-select').value = LANG;
 }
 $('lang-select').addEventListener('change', e => {
@@ -822,7 +873,7 @@ applyLang();
 // מסכים: מייל+סיסמה (ברירת מחדל) · בקשת קוד (משתמש חדש / שכחתי) · קוד · קביעת סיסמה
 let MODE = 'new';
 function show(id) {
-  for (const s of ['step-login','step-email','step-code','step-setpw','step-legacy']) $(s).hidden = s !== id;
+  for (const s of ['step-login','step-register','step-email','step-code','step-setpw','step-legacy']) $(s).hidden = s !== id;
   $('err').textContent = '';
 }
 function back() { show('step-login'); $('email').focus(); }
@@ -831,6 +882,26 @@ function codeMode(m) {
   MODE = m;
   $('code-email').value = $('email').value.trim();
   show('step-email'); $('code-email').focus();
+}
+function newUser() {
+  if (CFG.code_required) { codeMode('new'); return; }
+  $('reg-email').value = $('email').value.trim();
+  show('step-register'); $('reg-email').focus();
+}
+async function register() {
+  const email = $('reg-email').value.trim(), a = $('reg-pw').value, b = $('reg-pw2').value;
+  if (!email || !a) return;
+  if (a !== b) { $('err').textContent = t('pw_mismatch'); return; }
+  $('reg-btn').disabled = true; $('err').textContent = '';
+  try {
+    await post('/auth/register', {email, password: a, lang: LANG, admin_key: $('reg-admin-key').value});
+    go();
+  } catch (e) {
+    $('err').textContent = e.message;
+    // כתובת מנהל — השדה מופיע רק כשהשרת מבקש (לא חושפים מראש מי המנהל)
+    if (e.message === t('err_admin_code')) { $('reg-admin-key').hidden = false; $('reg-admin-key').focus(); }
+  }
+  finally { $('reg-btn').disabled = false; }
 }
 async function pwLogin() {
   const email = $('email').value.trim(), password = $('login-pw').value;
@@ -890,6 +961,7 @@ $('email').addEventListener('keydown', e => { if (e.key === 'Enter') $('login-pw
 $('login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') pwLogin(); });
 $('code-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
 $('new-pw2').addEventListener('keydown', e => { if (e.key === 'Enter') setPw(); });
+$('reg-pw2').addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
 $('code').addEventListener('input', e => { if (e.target.value.trim().length === 6) verify(); });
 $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') legacy(); });
@@ -899,6 +971,8 @@ $('email').focus();
 
 def render_login_page() -> str:
     page = LOGIN_PAGE.replace("__LOGIN_I18N__", json.dumps(LOGIN_I18N, ensure_ascii=False))
+    page = page.replace("__LOGIN_CFG__", json.dumps({"code_required": EMAIL_CODE_REQUIRED,
+                                                     "can_send": email_sender_ready()}))
     if not APP_PASSWORD:
         page = re.sub(r"<!--LEGACY-->.*?<!--/LEGACY-->", "", page, flags=re.S)
     return page
@@ -977,18 +1051,24 @@ async function load() {
       ? `<button class="no" onclick="setStatus('${e}','blocked')">חסום</button>`
       : `<button class="go" onclick="setStatus('${e}','approved')">אשר</button>` +
         (u.status === 'pending' ? `<button class="no" onclick="setStatus('${e}','blocked')">דחה</button>` : '');
+    const reset = u.has_password ? `<button onclick="resetPw('${e}')">איפוס סיסמה</button>` : '';
     const lg = (u.top_leagues || []).map(l => LEAGUES[l] || esc(l)).join(', ') || '<span class="muted">—</span>';
     return `<tr><td dir="ltr">${e}${u.is_admin ? ' ⭐' : ''}</td>
       <td><span class="st ${u.status}">${ST[u.status] || u.status}</span></td>
       <td>${when(u.created_at)}</td><td>${when(u.last_login)}</td>
       <td>${u.login_count || 0}</td><td>${u.app_open || 0}</td><td>${u.match_open || 0}</td>
       <td>${u.highlight_play || 0}</td><td>${lg}</td><td>${when(u.last_active)}</td>
-      <td>${u.is_admin ? '' : btns}</td></tr>`;
+      <td>${u.is_admin ? '' : btns + reset}</td></tr>`;
   }).join('') || '<tr><td colspan="11" class="muted">אין משתמשים עדיין</td></tr>';
 }
 async function setStatus(email, status) {
   const r = await fetch('/admin/api/users/' + encodeURIComponent(email), {
     method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})});
+  if (!r.ok) alert('נכשל'); load();
+}
+async function resetPw(email) {
+  if (!confirm('לאפס את הסיסמה של ' + email + '? המשתמש יירשם שוב עם אותו מייל וסיסמה חדשה.')) return;
+  const r = await fetch('/admin/api/users/' + encodeURIComponent(email) + '/reset_password', {method:'POST'});
   if (!r.ok) alert('נכשל'); load();
 }
 async function loadTiming() {
@@ -4017,6 +4097,52 @@ def auth_verify(payload: dict = Body(...)):
                                      "need_password": not (user and user["password_hash"])})
 
 
+@app.post("/auth/register")
+def auth_register(payload: dict = Body(...)):
+    """הרשמה מיידית: מייל + סיסמה, בלי קוד (כל עוד EMAIL_CODE_REQUIRED כבוי).
+    מייל רשום עם סיסמה — תפוס. כתובת מנהל — רק עם סיסמת המנהל."""
+    if EMAIL_CODE_REQUIRED:
+        raise HTTPException(403, "הרשמה דורשת קוד למייל")
+    email = _email_from(payload)
+    pw = str(payload.get("password") or "")
+    if len(pw) < PW_MIN_LEN:
+        raise HTTPException(400, "הסיסמה צריכה 8 תווים לפחות")
+    if len(pw) > 200:
+        raise HTTPException(400, "הסיסמה ארוכה מדי")
+    if email in ADMIN_EMAILS:
+        # כתובת מנהל: רק עם סיסמת המנהל (APP_PASSWORD, ידועה רק לבעלים) —
+        # אחרת כל אחד היה נרשם עם הכתובת ומקבל הרשאות מנהל
+        key = str(payload.get("admin_key") or "")
+        if not (APP_PASSWORD and hmac.compare_digest(key.encode(), APP_PASSWORD.encode())):
+            raise HTTPException(403, "כתובת מנהל דורשת את סיסמת המנהל")
+    now = _now()
+    conn = get_db()
+    u = conn.execute("SELECT status, password_hash FROM users WHERE email=?", (email,)).fetchone()
+    if u and u["status"] == "blocked":
+        conn.close()
+        raise HTTPException(403, BLOCKED_MSG)
+    if u and u["password_hash"]:
+        conn.close()
+        raise HTTPException(409, "המייל כבר רשום — היכנס עם הסיסמה")
+    new_user = u is None
+    if new_user:
+        conn.execute(
+            "INSERT INTO users (email, status, is_admin, created_at, approved_at, login_count) "
+            "VALUES (?, 'approved', 0, ?, ?, 0)", (email, now.isoformat(), now.isoformat()))
+    else:
+        # בלי סיסמה (ממתין מהמנגנון הישן / אופס ע"י המנהל) — נרשם מחדש
+        conn.execute("UPDATE users SET status='approved', approved_at=COALESCE(approved_at, ?) "
+                     "WHERE email=?", (now.isoformat(), email))
+    conn.execute("UPDATE users SET password_hash=?, pw_fails=0, pw_locked_until=NULL, "
+                 "pw_reset_until=NULL WHERE email=?", (_pw_hash(pw), email))
+    token = _start_session(conn, email, now, "register")
+    conn.commit()
+    conn.close()
+    if new_user:
+        _notify_registration(email, payload.get("lang"))
+    return _session_response(token, {"ok": True})
+
+
 _DUMMY_PW_HASH = _pw_hash(secrets.token_hex(8))   # זמן תגובה זהה גם למייל לא קיים
 
 
@@ -4217,6 +4343,10 @@ def admin_api_users(request: Request):
     require_admin(request)
     conn = get_db()
     users = [{k: r[k] for k in r.keys()} for r in conn.execute("SELECT * FROM users").fetchall()]
+    for u in users:   # לעולם לא שולחים hash של סיסמה לדפדפן
+        u["has_password"] = bool(u.pop("password_hash", None))
+        for k in ("pw_fails", "pw_locked_until", "pw_reset_until"):
+            u.pop(k, None)
     counts = conn.execute("SELECT email, type, COUNT(*) AS c, MAX(ts) AS last "
                           "FROM events GROUP BY email, type").fetchall()
     leagues = conn.execute("SELECT email, league, COUNT(*) AS c FROM events "
@@ -4340,6 +4470,24 @@ def admin_api_update_user(request: Request, email: str, payload: dict = Body(...
         send_email(email, "אושרת ל-SpoilerFree ⚽",
                    f"החשבון שלך אושר!\n\nלכניסה: {APP_URL}\n"
                    f"הכנס את המייל הזה ותקבל קוד כניסה.\n")
+    return {"ok": True}
+
+
+@app.post("/admin/api/users/{email}/reset_password")
+def admin_api_reset_password(request: Request, email: str):
+    """"שכחתי סיסמה" בלי מיילים: המנהל מאפס, והמשתמש נרשם שוב עם אותו מייל
+    וסיסמה חדשה (ההיסטוריה והמועדפים נשמרים). מנותק מכל המכשירים."""
+    require_admin(request)
+    email = unquote(email).strip().lower()
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
+        conn.close()
+        raise HTTPException(404, "משתמש לא נמצא")
+    conn.execute("UPDATE users SET password_hash=NULL, pw_fails=0, pw_locked_until=NULL, "
+                 "pw_reset_until=NULL WHERE email=?", (email,))
+    conn.execute("DELETE FROM sessions WHERE email=?", (email,))
+    conn.commit()
+    conn.close()
     return {"ok": True}
 
 
