@@ -1239,7 +1239,8 @@ def init_db():
     """)
     # כניסה עם סיסמה (13.9.26) — עמודות חדשות לטבלה קיימת ב-Turso
     for col in ("password_hash TEXT", "pw_fails INTEGER DEFAULT 0",
-                "pw_locked_until TEXT", "pw_reset_until TEXT"):
+                "pw_locked_until TEXT", "pw_reset_until TEXT",
+                "onboarded_at TEXT"):          # מסכי הפתיחה (#32) הוצגו
         try:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
         except Exception:
@@ -1281,6 +1282,14 @@ def init_db():
             league_key TEXT,
             team       TEXT,
             PRIMARY KEY (email, league_key, team)
+        )
+    """)
+    # ליגות מועדפות (#32) — טבלה נפרדת: favorites שמורה לקבוצות (מפתח אחיד)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS favorite_leagues (
+            email      TEXT,
+            league_key TEXT,
+            PRIMARY KEY (email, league_key)
         )
     """)
     # המרה חד-פעמית של שורות מהגרסה לפי-ליגה (שם מקור → מפתח אחיד)
@@ -4232,9 +4241,34 @@ def auth_logout(request: Request):
 def auth_me(request: Request):
     require_auth(request)
     u = current_user(request) or {}
+    # onboarded: האם כבר הוצגו מסכי הפתיחה (#32). מי שכבר יש לו מועדפים —
+    # לא מציגים לו. בלי חשבון אישי: None (הפרונט לא מציג)
+    onboarded = None
+    if u.get("email"):
+        conn = get_db()
+        r = conn.execute("SELECT onboarded_at FROM users WHERE email=?", (u["email"],)).fetchone()
+        has = (conn.execute("SELECT 1 FROM favorites WHERE email=? LIMIT 1", (u["email"],)).fetchone()
+               or conn.execute("SELECT 1 FROM favorite_leagues WHERE email=? LIMIT 1",
+                               (u["email"],)).fetchone())
+        conn.close()
+        onboarded = bool((r and r["onboarded_at"]) or has)
     return {"auth_on": AUTH_ON, "email": u.get("email"),
             "is_admin": bool(u.get("is_admin")) or not AUTH_ON,
-            "legacy": bool(u.get("legacy"))}
+            "legacy": bool(u.get("legacy")), "onboarded": onboarded}
+
+
+@app.post("/auth/onboarded")
+def auth_onboarded(request: Request):
+    """מסכי הפתיחה הוצגו (סיום או דילוג) — לא יוצגו שוב."""
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if email:
+        conn = get_db()
+        conn.execute("UPDATE users SET onboarded_at=COALESCE(onboarded_at, ?) WHERE email=?",
+                     (_now().isoformat(), email))
+        conn.commit()
+        conn.close()
+    return {"ok": True}
 
 
 @app.post("/events")
@@ -4288,7 +4322,7 @@ def auth_delete_account(request: Request, payload: dict = Body(...)):
     if str(payload.get("confirm") or "").strip().lower() != email:
         raise HTTPException(400, "כדי למחוק, הקלד את כתובת המייל שלך בדיוק")
     conn = get_db()
-    for table in ("events", "sessions", "login_codes", "favorites", "users"):
+    for table in ("events", "sessions", "login_codes", "favorites", "favorite_leagues", "users"):
         conn.execute(f"DELETE FROM {table} WHERE email=?", (email,))
     conn.commit()
     conn.close()
@@ -4306,12 +4340,14 @@ def get_favorites(request: Request):
     require_auth(request)
     email = (current_user(request) or {}).get("email")
     if not email:
-        return {"favorites": [], "per_device": True}
+        return {"favorites": [], "leagues": [], "per_device": True}
     conn = get_db()
     rows = conn.execute("SELECT team FROM favorites WHERE email=? ORDER BY team",
                         (email,)).fetchall()
+    lgs = conn.execute("SELECT league_key FROM favorite_leagues WHERE email=? ORDER BY league_key",
+                       (email,)).fetchall()
     conn.close()
-    return {"favorites": [r["team"] for r in rows]}
+    return {"favorites": [r["team"] for r in rows], "leagues": [r["league_key"] for r in lgs]}
 
 
 @app.post("/favorites")
@@ -4320,6 +4356,19 @@ def set_favorite(request: Request, payload: dict = Body(...)):
     email = (current_user(request) or {}).get("email")
     if not email:
         raise HTTPException(400, "בלי חשבון אישי — המועדפים נשמרים במכשיר")
+    if "league" in payload:   # ליגה מועדפת (#32)
+        lg = str(payload.get("league") or "")
+        if lg not in LEAGUES:
+            raise HTTPException(400, "ליגה לא מוכרת")
+        conn = get_db()
+        if payload.get("on", True):
+            conn.execute("INSERT OR IGNORE INTO favorite_leagues (email, league_key) VALUES (?, ?)",
+                         (email, lg))
+        else:
+            conn.execute("DELETE FROM favorite_leagues WHERE email=? AND league_key=?", (email, lg))
+        conn.commit()
+        conn.close()
+        return {"ok": True}
     # מפתח אחיד — גם אם נשלח שם מקור ("Liverpool FC") הוא מנורמל
     team = team_key(str(payload.get("team") or ""))[:120]
     if not team:
@@ -4336,6 +4385,61 @@ def set_favorite(request: Request, payload: dict = Body(...)):
 
 
 # ── Admin: משתמשים ─────────────────────────────────────
+
+# מסכי הפתיחה (#32): קבוצות פופולריות לכל ליגה, לפי סדר. השמות מותאמים
+# לנתונים דרך team_key (כולל קידומת: "Inter Milan" ↔ "Inter"); ליגה בלי
+# רשימה / עם מעט התאמות — משלימים מהקבוצות שבנתונים.
+POPULAR_TEAMS = {
+    "premier":    ["Arsenal", "Liverpool", "Manchester City", "Manchester United", "Chelsea",
+                   "Tottenham Hotspur"],
+    "israel":     ["Maccabi Tel Aviv", "Maccabi Haifa", "Hapoel Be'er Sheva", "Beitar Jerusalem",
+                   "Hapoel Tel-Aviv", "Maccabi Netanya"],
+    "bundesliga": ["Bayern Munich", "Borussia Dortmund", "Bayer Leverkusen", "RB Leipzig",
+                   "Eintracht Frankfurt"],
+    "laliga":     ["Real Madrid", "Barcelona", "Atlético Madrid", "Athletic Bilbao", "Real Sociedad",
+                   "Sevilla"],
+    "seriea":     ["Juventus", "Inter Milan", "AC Milan", "Napoli", "Roma", "Lazio"],
+    "ligue1":     ["Paris Saint-Germain", "Marseille", "Lyon", "Monaco", "Lille"],
+    "ucl":        ["Real Madrid", "Barcelona", "Bayern Munich", "Liverpool", "Manchester City",
+                   "Paris Saint-Germain", "Arsenal", "Inter Milan"],
+    "uel":        ["Hapoel Be'er Sheva", "AC Milan", "Juventus", "Benfica", "Celtic", "Lyon"],
+    "mls":        ["Inter Miami", "LA Galaxy", "Los Angeles FC"],
+    "argentina":  ["Boca Juniors", "River Plate", "Racing Club", "Independiente"],
+}
+ONBOARD_MIN_TEAMS = 6
+
+
+@app.get("/onboarding/teams")
+def onboarding_teams(request: Request, leagues: str = "", lang: str = "he"):
+    require_auth(request)
+    lang = _lang(lang)
+    wanted = [lg for lg in dict.fromkeys(leagues.split(",")) if lg in LEAGUES]
+    out = {}
+    conn = get_db()
+    for lg in wanted:
+        rows = conn.execute("SELECT DISTINCT home_team AS team FROM matches WHERE league_key=? "
+                            "UNION SELECT DISTINCT away_team FROM matches WHERE league_key=?",
+                            (lg, lg)).fetchall()
+        catalog = {}
+        for r in rows:
+            name = (r["team"] or "").strip()
+            if team_key(name):
+                catalog.setdefault(team_key(name), name)
+        picked = []
+        for name in POPULAR_TEAMS.get(lg, []):
+            k = team_key(name)
+            hit = k if k in catalog else next(
+                (c for c in catalog if k.startswith(c + " ") or c.startswith(k + " ")), None)
+            if hit and hit not in picked:
+                picked.append(hit)
+        if len(picked) < ONBOARD_MIN_TEAMS:
+            rest = sorted((c for c in catalog if c not in picked),
+                          key=lambda c: display_team(catalog[c], lang))
+            picked += rest[:ONBOARD_MIN_TEAMS - len(picked)]
+        out[lg] = [{"key": k, "name": display_team(catalog[k], lang)} for k in picked]
+    conn.close()
+    return {"leagues": out}
+
 
 @app.get("/teams")
 def list_teams(request: Request, lang: str = "he"):
