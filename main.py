@@ -3168,8 +3168,11 @@ def get_matches(request: Request, league_key: str,
     last_fetch = _league_fetched_at(conn, league_key)
     conn.close()
 
-    # ליגה ריקה לגמרי — שליפה ראשונה
-    if not rows and not matchday and not refresh:
+    # ליגה ריקה לגמרי — שליפה ראשונה. לא ב-Render לליגות sportsdb: שם
+    # TheSportsDB חסום, והניסיון תקע את התשובה עד 3×15 שניות (בונדסליגה
+    # "לוקחת הרבה זמן"); הדפדפן מרענן ליגה ריקה בעצמו תוך פחות משנייה.
+    blocked = bool(os.environ.get("RENDER")) and LEAGUES[league_key].get("source") == "sportsdb"
+    if not rows and not matchday and not refresh and not blocked:
         fetch_and_store(league_key)
         conn = get_db()
         rows = conn.execute(query, params).fetchall()
