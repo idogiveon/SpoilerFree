@@ -1292,6 +1292,14 @@ def init_db():
             PRIMARY KEY (email, league_key)
         )
     """)
+    # ליגות מוסתרות — לא מוצגות ב"לפי יום" (משחקי קבוצה מועדפת כן)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hidden_leagues (
+            email      TEXT,
+            league_key TEXT,
+            PRIMARY KEY (email, league_key)
+        )
+    """)
     # המרה חד-פעמית של שורות מהגרסה לפי-ליגה (שם מקור → מפתח אחיד)
     old = conn.execute("SELECT email, league_key, team FROM favorites "
                        "WHERE league_key != ''").fetchall()
@@ -4383,7 +4391,8 @@ def auth_delete_account(request: Request, payload: dict = Body(...)):
     if str(payload.get("confirm") or "").strip().lower() != email:
         raise HTTPException(400, "כדי למחוק, הקלד את כתובת המייל שלך בדיוק")
     conn = get_db()
-    for table in ("events", "sessions", "login_codes", "favorites", "favorite_leagues", "users"):
+    for table in ("events", "sessions", "login_codes", "favorites", "favorite_leagues",
+                  "hidden_leagues", "users"):
         conn.execute(f"DELETE FROM {table} WHERE email=?", (email,))
     conn.commit()
     conn.close()
@@ -4401,14 +4410,17 @@ def get_favorites(request: Request):
     require_auth(request)
     email = (current_user(request) or {}).get("email")
     if not email:
-        return {"favorites": [], "leagues": [], "per_device": True}
+        return {"favorites": [], "leagues": [], "hidden": [], "per_device": True}
     conn = get_db()
     rows = conn.execute("SELECT team FROM favorites WHERE email=? ORDER BY team",
                         (email,)).fetchall()
     lgs = conn.execute("SELECT league_key FROM favorite_leagues WHERE email=? ORDER BY league_key",
                        (email,)).fetchall()
+    hid = conn.execute("SELECT league_key FROM hidden_leagues WHERE email=? ORDER BY league_key",
+                       (email,)).fetchall()
     conn.close()
-    return {"favorites": [r["team"] for r in rows], "leagues": [r["league_key"] for r in lgs]}
+    return {"favorites": [r["team"] for r in rows], "leagues": [r["league_key"] for r in lgs],
+            "hidden": [r["league_key"] for r in hid]}
 
 
 @app.post("/favorites")
@@ -4417,6 +4429,20 @@ def set_favorite(request: Request, payload: dict = Body(...)):
     email = (current_user(request) or {}).get("email")
     if not email:
         raise HTTPException(400, "בלי חשבון אישי — המועדפים נשמרים במכשיר")
+    if "hide_league" in payload:   # ליגה מוסתרת — מסתירים = גם לא מועדפת
+        lg = str(payload.get("hide_league") or "")
+        if lg not in LEAGUES:
+            raise HTTPException(400, "ליגה לא מוכרת")
+        conn = get_db()
+        if payload.get("on", True):
+            conn.execute("INSERT OR IGNORE INTO hidden_leagues (email, league_key) VALUES (?, ?)",
+                         (email, lg))
+            conn.execute("DELETE FROM favorite_leagues WHERE email=? AND league_key=?", (email, lg))
+        else:
+            conn.execute("DELETE FROM hidden_leagues WHERE email=? AND league_key=?", (email, lg))
+        conn.commit()
+        conn.close()
+        return {"ok": True}
     if "league" in payload:   # ליגה מועדפת (#32)
         lg = str(payload.get("league") or "")
         if lg not in LEAGUES:

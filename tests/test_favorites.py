@@ -46,7 +46,7 @@ def test_different_teams_different_keys(a, b):
 
 def test_add_list_remove_normalizes(auth_on):
     admin = login(auth_on, ADMIN)
-    assert admin.get("/favorites").json() == {"favorites": [], "leagues": []}
+    assert admin.get("/favorites").json() == {"favorites": [], "leagues": [], "hidden": []}
     admin.post("/favorites", json={"team": "Liverpool FC", "on": True})        # שם מקור → מנורמל
     admin.post("/favorites", json={"team": "liverpool", "on": True})           # אותה קבוצה — פעם אחת
     admin.post("/favorites", json={"team": "Newell's Old Boys", "on": True})
@@ -107,5 +107,5 @@ def test_without_personal_account_favorites_are_per_device(auth_on, monkeypatch)
     monkeypatch.setattr(main, "APP_PASSWORD", "pw")
     c = client()
     c.post("/login", json={"password": "pw"})
-    assert c.get("/favorites").json() == {"favorites": [], "leagues": [], "per_device": True}
+    assert c.get("/favorites").json() == {"favorites": [], "leagues": [], "hidden": [], "per_device": True}
     assert c.post("/favorites", json={"team": "Barcelona"}).status_code == 400
