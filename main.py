@@ -17,7 +17,7 @@ import smtplib
 import threading
 from email.message import EmailMessage
 import unicodedata
-from html import unescape as _unescape
+from html import unescape as _unescape, escape as _html_escape
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -384,6 +384,14 @@ LEAGUES = {
 GMAIL_USER         = os.environ.get("GMAIL_USER", "").strip()
 # Google מציגה את סיסמת האפליקציה עם רווחים ("abcd efgh ijkl mnop") — מסירים
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "").strip()
+# Gmail API (HTTPS) — Render החינמי חוסם SMTP (25/465/587) מספטמבר 2025.
+# GMAIL_CLIENT_ID/SECRET מ-Google Cloud; ה-refresh token נשמר ב-DB אחרי
+# "חיבור Gmail" בעמוד הניהול (או GMAIL_REFRESH_TOKEN ב-Render).
+GMAIL_CLIENT_ID     = os.environ.get("GMAIL_CLIENT_ID", "").strip()
+GMAIL_CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET", "").strip()
+GMAIL_SCOPES   = "https://www.googleapis.com/auth/gmail.send openid email"
+GMAIL_CALLBACK = "/admin/gmail/callback"
+_gmail_token = {"value": None, "exp": 0.0}   # access token בזיכרון (שעה תוקף)
 ADMIN_EMAILS = {e.strip().lower()
                 for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 APP_URL  = os.environ.get("APP_URL", "https://spoilerfree.onrender.com").rstrip("/")
@@ -484,20 +492,82 @@ def require_admin(request: Request):
         raise HTTPException(403, "למנהלים בלבד")
 
 
+def _meta_get(key: str):
+    conn = get_db()
+    row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else None
+
+
+def _meta_set(key: str, value: str):
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+
+def _gmail_refresh_token():
+    return os.environ.get("GMAIL_REFRESH_TOKEN", "").strip() or _meta_get("gmail_refresh_token")
+
+
+def gmail_api_ready() -> bool:
+    return bool(GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and _gmail_refresh_token())
+
+
+def _gmail_access_token():
+    """access token מה-refresh token; נשמר בזיכרון עד 5 דק' לפני שפג."""
+    if _gmail_token["value"] and time.time() < _gmail_token["exp"]:
+        return _gmail_token["value"]
+    rt = _gmail_refresh_token()
+    if not (GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and rt):
+        return None
+    r = requests.post("https://oauth2.googleapis.com/token", data={
+        "client_id": GMAIL_CLIENT_ID, "client_secret": GMAIL_CLIENT_SECRET,
+        "refresh_token": rt, "grant_type": "refresh_token"}, timeout=15)
+    j = r.json()
+    if r.status_code != 200 or "access_token" not in j:
+        # invalid_grant = החיבור בוטל/פג — צריך "חיבור Gmail" מחדש בעמוד הניהול
+        print(f"[mail] gmail token refresh failed: {j.get('error')}")
+        return None
+    _gmail_token.update(value=j["access_token"],
+                        exp=time.time() + int(j.get("expires_in", 3600)) - 300)
+    return j["access_token"]
+
+
+def _gmail_api_send(msg: EmailMessage) -> bool:
+    import base64
+    token = _gmail_access_token()
+    if not token:
+        return False
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    r = requests.post("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                      headers={"Authorization": f"Bearer {token}"}, json={"raw": raw}, timeout=15)
+    if r.status_code != 200:
+        print(f"[mail] gmail api send failed: {r.status_code} {r.text[:200]}")
+        return False
+    return True
+
+
 def send_email(to: str, subject: str, body: str) -> bool:
-    """שליחה דרך Gmail ייעודי (SMTP + סיסמת אפליקציה מ-Render)."""
-    if not (GMAIL_USER and GMAIL_APP_PASSWORD):
+    """שליחה מה-Gmail הייעודי: Gmail API ב-HTTPS כשמחובר (Render החינמי חוסם
+    SMTP), אחרת SMTP עם סיסמת אפליקציה (מקומי / שרת בתשלום)."""
+    api = gmail_api_ready()
+    if not (api or (GMAIL_USER and GMAIL_APP_PASSWORD)):
         if AUTH_DEV:
             print(f"[mail:dev] to={to} | {subject}\n{body}")
             return True
         print(f"[mail] not configured — cannot send to {to}")
         return False
+    sender = (_meta_get("gmail_sender") if api else None) or GMAIL_USER
     msg = EmailMessage()
-    msg["From"] = f"SpoilerFree <{GMAIL_USER}>"
+    if sender:
+        msg["From"] = f"SpoilerFree <{sender}>"
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
     try:
+        if api:
+            return _gmail_api_send(msg)
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as s:
             s.login(GMAIL_USER, GMAIL_APP_PASSWORD)
             s.send_message(msg)
@@ -837,7 +907,8 @@ button.no{border-color:#ff4757;color:#ff4757}
 .muted{color:#6b6b80}
 </style></head><body>
 <h1>SPOILERFREE — משתמשים</h1>
-<div class="sub"><a href="/">← חזרה לאפליקציה</a></div>
+<div class="sub"><a href="/">← חזרה לאפליקציה</a> ·
+<a href="/admin/gmail/connect">חיבור Gmail לשליחת קודים</a> · <a href="/debug/mail">בדיקת מייל</a></div>
 <div class="kpis" id="kpis"></div>
 <div class="wrap"><table>
 <thead><tr><th>מייל</th><th>סטטוס</th><th>נרשם</th><th>כניסה אחרונה</th>
@@ -2843,6 +2914,60 @@ def health_rss():
             "ms": round((time.perf_counter() - t0) * 1000)}
 
 
+def _admin_msg(text: str, status: int = 200):
+    return HTMLResponse(
+        '<body style="background:#0a0a0f;color:#e8e8f0;font-family:sans-serif;padding:2rem" dir="rtl">'
+        f'<p>{text}</p><p><a style="color:#00e5a0" href="/admin/users">← לעמוד הניהול</a></p></body>',
+        status_code=status)
+
+
+@app.get("/admin/gmail/connect")
+def admin_gmail_connect(request: Request):
+    """חד-פעמי: המנהל נכנס עם חשבון ה-Gmail השולח ומאשר "שליחת מיילים".
+    Google חוזרת ל-callback עם קוד → ה-refresh token נשמר ב-DB (לא מוצג)."""
+    require_admin(request)
+    if not (GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET):
+        return _admin_msg("חסרים GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET ב-Render.", 400)
+    from urllib.parse import urlencode
+    state = secrets.token_urlsafe(24)
+    _meta_set("gmail_oauth_state", f"{state}|{int(time.time()) + 600}")
+    params = {"client_id": GMAIL_CLIENT_ID, "redirect_uri": APP_URL + GMAIL_CALLBACK,
+              "response_type": "code", "scope": GMAIL_SCOPES,
+              "access_type": "offline", "prompt": "consent", "state": state}
+    if GMAIL_USER:
+        params["login_hint"] = GMAIL_USER
+    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params))
+
+
+@app.get(GMAIL_CALLBACK)
+def admin_gmail_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    require_admin(request)
+    if error:
+        return _admin_msg(f"Google החזירה שגיאה: {_html_escape(error)}", 400)
+    saved, _, exp = (_meta_get("gmail_oauth_state") or "|0").partition("|")
+    if not (state and saved and hmac.compare_digest(state, saved) and time.time() < int(exp or 0)):
+        return _admin_msg("הקישור פג תוקף — התחל שוב מ\"חיבור Gmail\".", 400)
+    _meta_set("gmail_oauth_state", "|0")          # חד-פעמי
+    r = requests.post("https://oauth2.googleapis.com/token", data={
+        "code": code, "client_id": GMAIL_CLIENT_ID, "client_secret": GMAIL_CLIENT_SECRET,
+        "redirect_uri": APP_URL + GMAIL_CALLBACK, "grant_type": "authorization_code"}, timeout=15)
+    j = r.json()
+    if "refresh_token" not in j:
+        return _admin_msg(f"לא התקבל אישור קבוע מ-Google ({_html_escape(str(j.get('error', '')))}). "
+                          "נסה שוב.", 400)
+    email = None
+    if j.get("id_token"):
+        import base64
+        part = j["id_token"].split(".")[1]
+        email = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))).get("email")
+    _meta_set("gmail_refresh_token", j["refresh_token"])
+    if email:
+        _meta_set("gmail_sender", email)
+    _gmail_token.update(value=None, exp=0.0)
+    return _admin_msg(f"✓ Gmail מחובר ({_html_escape(email or '')}). "
+                      "מעכשיו קודי הכניסה נשלחים דרך Gmail API.")
+
+
 @app.get("/debug/mail")
 def debug_mail(request: Request):
     """אבחון שליחת מיילים (למנהלים): המשתנים מוגדרים? Render מגיע ל-Gmail?
@@ -2853,6 +2978,10 @@ def debug_mail(request: Request):
               "password_set": bool(GMAIL_APP_PASSWORD),
               "password_length": len(GMAIL_APP_PASSWORD),          # צריך להיות 16
               "password_had_spaces": " " in os.environ.get("GMAIL_APP_PASSWORD", "")}
+    report["gmail_api"] = {"client_set": bool(GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET),
+                           "connected": bool(_gmail_refresh_token()),
+                           "sender": _meta_get("gmail_sender"),
+                           "token_ok": bool(_gmail_access_token()) if gmail_api_ready() else None}
     for port in (465, 587):
         try:
             socket.create_connection(("smtp.gmail.com", port), timeout=8).close()
