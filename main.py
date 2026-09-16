@@ -136,20 +136,26 @@ LEAGUES = {
         "sources": [
             # לפי סדר מהירות ההעלאה: ספורט 1 (אותו יום) → ערוץ הספורט
             # (אחרי חצות) → הערוץ הרשמי של הליגה (24-72 שעות, גיבוי)
+            # il_both_teams: שתי הקבוצות חייבות להופיע בכותרת. בלי זה כל
+            # סרטון עם המילה "תקציר" בערוץ התאים לכל משחק — והמשתמש קיבל
+            # במשחק הפועל ב"ש–הפועל פ"ת תקצירים של משחקים אחרים (16.9.26)
             {"id": "sport1", "name": "ספורט 1",
              "channel_id": "UC_wkUEeEC4HlcfI5xanWjBQ",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True,
+             "hebrew_names": True, "il_both_teams": True,
              "allow_embed": False},
             {"id": "sport5", "name": "ערוץ הספורט",
              "channel_id": "UCyXf5cz6E9IIL40aivg7tOw",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True,
+             "hebrew_names": True, "il_both_teams": True,
              "allow_embed": False},
+            # "מחזור 4 | תקציר: בית"ר ירושלים - מכבי פ"ת 1-3" — שתי הקבוצות
+            # בכותרת (גם בקיצור). "המשחק המלא" = 90 דקות, לא תקציר
             {"id": "ipfl", "name": "ליגת העל",
              "channel_id": "UCxjaVFauWASy0CuJfHKZeiw",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True,
+             "hebrew_names": True, "il_both_teams": True,
+             "title_exclude": ["המשחק המלא"],
              "allow_embed": False},
             # ערוצים לא רשמיים (העלאות פיראטיות) — לפעמים מקדימים את הרשמיים.
             # il_both_teams: רק "תקציר" + שתי הקבוצות בשם מלא (is_il_both_teams)
@@ -1374,6 +1380,14 @@ def init_db():
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('clubs_seed_version', ?)",
                      (str(SEED_VERSION),))
         print(f"[seed] clubs reseeded to version {SEED_VERSION}")
+
+    # ניקוי חד-פעמי (16.9.26): תקצירים של ליגת העל שנשמרו לפני הכלל המחמיר
+    # הצביעו על משחקים אחרים — תוצאה שמורה מוגשת כמו שהיא, אז מוחקים פעם אחת
+    if not conn.execute("SELECT 1 FROM meta WHERE key='israel_cache_v2'").fetchone():
+        conn.execute("DELETE FROM highlight_cache WHERE source_id IN ('sport1','sport5','ipfl') "
+                     "AND match_id IN (SELECT id FROM matches WHERE league_key='israel')")
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('israel_cache_v2', '1')")
+        print("[seed] cleared Israeli highlight cache (strict both-teams rule)")
 
     # ניקוי משחקים מלפני תחילת השלב (min_date) — למשל מוקדמות הצ'מפיונס
     for lk, cfg in LEAGUES.items():
