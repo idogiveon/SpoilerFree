@@ -129,6 +129,9 @@
     .fav-btn { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:100px; padding:0.15rem 0.6rem; font-size:0.72rem; cursor:pointer; font-family:'Heebo',sans-serif; }
     .fav-btn:hover { border-color:#ffc107; color:#ffc107; }
     .fav-group .date-label .weekday { color:#ffc107; }
+    /* תאריך לכל משחק מועדף (בתצוגת ליגה) */
+    .fav-date { display:flex; gap:0.6rem; align-items:center; font-size:0.72rem; color:var(--muted); letter-spacing:1px; margin:0.7rem 0 0.3rem; }
+    .fav-date .weekday { color:#ffc107; font-weight:700; }
     .header-tools { display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; }
     .lang-select { background:var(--surface); border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.75rem; padding:0.2rem 0.4rem; border-radius:6px; cursor:pointer; }
     .team-name { font-size:0.95rem; font-weight:700; line-height:1.2; }
@@ -977,10 +980,24 @@
     try { await apiFetch(`${API}/auth/onboarded`, { method: 'POST' }); } catch (e) {}
   }
 
+  // מועדפים: בתצוגת ליגה הם מכמה ימים שונים תחת כותרת אחת — לכל משחק גם
+  // התאריך (אחרת לא ברור אם הוא היה, קורה או יקרה). ב"לפי יום" כולם מאותו יום
   function favGroupHTML(ms) {
+    const byDay = currentLeague === '__byday';
+    const sorted = [...ms].sort((a, b) =>
+      (parseDateStr(a.date) - parseDateStr(b.date)) || String(a.time).localeCompare(String(b.time)));
     return `<div class="date-group fav-group">
       <div class="date-label"><span class="weekday">⭐ ${t('favorites')}</span></div>
-      ${ms.map(matchCardHTML).join('')}</div>`;
+      ${sorted.map(m => (byDay ? '' : favDateHTML(m.date)) + matchCardHTML(m)).join('')}</div>`;
+  }
+
+  function favDateHTML(date) {
+    const today = isToday(date), yesterday = isYesterday(date);
+    return `<div class="fav-date">
+      <span class="weekday">${dayName(parseDateStr(date))}</span><span>${date}</span>
+      ${today ? `<span class="is-today">${t('today')}</span>` : ''}
+      ${yesterday ? `<span class="is-today" style="background:var(--muted)">${t('yesterday')}</span>` : ''}
+    </div>`;
   }
 
   // פריטי התפריט לפי המשתמש (נבנה מחדש גם בהחלפת שפה)
