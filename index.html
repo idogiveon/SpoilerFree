@@ -1069,8 +1069,12 @@
     }
 
     showMatchdayNav(true);
-    matchdayList = [...new Set(withMd.map(m => parseInt(m.matchday)))]
-                     .sort((a, b) => a - b);
+    const present = [...new Set(withMd.map(m => parseInt(m.matchday)))].sort((a, b) => a - b);
+    // ליגות sportsdb: כל המחזורים מ-1 ועד האחרון שקיים. מחזור שאף פעם לא
+    // נשלף נמשך לפי דרישה (ב-MLS היו רק מחזור 1 ו-24 ומעלה)
+    matchdayList = SPORTSDB_LEAGUES[league] && present.length
+      ? Array.from({ length: present[present.length - 1] }, (_, i) => i + 1)
+      : present;
     if (!(background && matchdayList.includes(currentMatchday))) {
       // "המחזור הרלוונטי": הראשון שיש בו משחק שטרם נגמר.
       // אם הכל נגמר (סוף עונה / נתונים ישנים) — המחזור האחרון.
@@ -1088,7 +1092,45 @@
   function renderMatchday(scroll = true) {
     const ms = (leagueData[currentLeague] || [])
       .filter(m => parseInt(m.matchday) === currentMatchday);
+    // מחזור ריק בליגת sportsdb — כנראה מעולם לא נשלף; מושכים אותו עכשיו
+    if (!ms.length && SPORTSDB_LEAGUES[currentLeague]) {
+      loadMatchday(currentLeague, currentMatchday);
+      return;
+    }
     renderMatches(ms, scroll);
+  }
+
+  // משיכת מחזור בודד לפי דרישה (בקשה אחת למקור), ושמירה לתמיד
+  const mdTried = new Set();
+  async function loadMatchday(league, md) {
+    const key = `${league}:${md}`;
+    if (mdTried.has(key)) { renderMatches([], false); return; }
+    mdTried.add(key);
+    document.getElementById('matches-container').innerHTML =
+      `<div class="loading">${t('loading_matches')}</div>`;
+    try {
+      const cfg = SPORTSDB_LEAGUES[league];
+      const events = [];
+      for (const id of cfg.ids) {
+        const r = await fetch('https://www.thesportsdb.com/api/v1/json/123/' +
+          `eventsround.php?id=${id}&r=${md}&s=${cfg.season}`);
+        const j = await r.json();
+        events.push(...((j && j.events) || []));
+      }
+      if (events.length) {
+        // purge:false — מחזור ישן נוסף לנתונים, לא מחליף אותם
+        await apiFetch(`${API}/refresh/${league}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events, purge: false }),
+        });
+        const data = await apiFetch(`${API}/matches/${league}?lang=${LANG}`).then(r => r.json());
+        cachePut(league, data);
+        leagueData[league] = data.matches;
+        if (league === currentLeague && currentMatchday === md) renderMatchday(false);
+        return;
+      }
+    } catch (e) {}
+    if (league === currentLeague && currentMatchday === md) renderMatches([], false);
   }
 
   async function openLeague(league) {
