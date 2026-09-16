@@ -80,8 +80,12 @@ def test_prefetch_searches_recent_finished_matches_once(db, monkeypatch):
     assert main.prefetch_highlights_once() == 0          # כבר בקאש — לא מחפש שוב
 
 
-def test_prefetch_respects_daily_brake(db, monkeypatch):
+def test_prefetch_over_the_budget_only_uses_the_free_feed(db, monkeypatch):
+    """מעל תקציב הרקע הבדיקה נמשכת — אבל רק מהפיד החינמי, בלי מכסה."""
     _row(db, "recent", datetime.now(timezone.utc) - timedelta(hours=10))
     main._yt_units(main.YT_DAILY_BRAKE)
-    monkeypatch.setattr(main, "search_youtube", lambda *a, **k: (_ for _ in ()).throw(AssertionError()))
-    assert main.prefetch_highlights_once() == 0
+    modes = []
+    monkeypatch.setattr(main, "search_youtube",
+                        lambda *a, **k: modes.append(k.get("free_only")) or [])
+    main.prefetch_highlights_once()
+    assert modes and all(m is True for m in modes)

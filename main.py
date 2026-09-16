@@ -2771,7 +2771,8 @@ def search_youtube(home: str, away: str, match_date: str,
                    implicit_team: str = None,
                    headline: bool = False,
                    il_both: bool = False,
-                   date_in_title: bool = False) -> list:
+                   date_in_title: bool = False,
+                   free_only: bool = False) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not channel_id:
         return []
@@ -2821,6 +2822,10 @@ def search_youtube(home: str, away: str, match_date: str,
 
     # 2. API בתשלום — רק כשה-RSS לא יכול להכריע, ורק מתחת לבלם היומי
     if results is None:
+        if free_only:
+            # בדיקת רקע: רק המקור החינמי. ה-RSS לא הכריע → "לא יודעים"
+            # (בדיקות רקע שרפו 9,000 יחידות ביום, 15–16.9.26)
+            return None
         if not YOUTUBE_API_KEY:
             # ה-RSS לא הכריע (תקלה / ערוץ עמוס) ואין API — לא יודעים.
             # None = לא נשמר כ"אין תקציר" (החזרת [] "קיבעה" משחקים שלמים
@@ -3413,7 +3418,7 @@ def _mark_first_seen(conn, match_id, source_id, seen, published=None):
                  (match_id, source_id, seen, published))
 
 
-def _source_highlights(row, source) -> dict:
+def _source_highlights(row, source, free_only: bool = False) -> dict:
     """תקציר ממקור אחד למשחק: מהקאש, או חיפוש ושמירה בקאש.
     משותף ל-/highlights ולחיפוש-מראש ברקע."""
     match_id    = row["id"]
@@ -3470,6 +3475,7 @@ def _source_highlights(row, source) -> dict:
         headline=source.get("headline_titles", False),
         il_both=source.get("il_both_teams", False),
         date_in_title=source.get("title_date", False),
+        free_only=free_only,
     )
     if videos is None:
         # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך
@@ -3539,6 +3545,9 @@ PREFETCH_MAX_MATCHES = 20
 # #10 מי מעלה ראשון: בליגות האלה גם "לא נמצא" נבדק שוב בכל סבב (לפי
 # _not_found_retry — כל 30 דק' ביומיים הראשונים), כדי למדוד מתי כל מקור עלה
 TIMING_LEAGUES = {"israel"}
+# תקציב מכסה יומי לבדיקות רקע. מעליו הרקע עובד רק מהמקור החינמי, והשאר
+# נשמר למשחקים שמשתמשים פותחים בפועל (הבלם הכללי הוא YT_DAILY_BRAKE)
+PREFETCH_UNIT_BUDGET = 1500
 
 
 def prefetch_highlights_once() -> int:
@@ -3560,15 +3569,17 @@ def prefetch_highlights_once() -> int:
         todo = [s for s in get_sources_for_match(row)
                 if s.get("channel_id") and ((row["id"], s["id"]) not in have
                                             or (recheck and not have[(row["id"], s["id"])]))]
-        if _yt_units_today() >= YT_DAILY_BRAKE:
-            todo = []
+        paid_ok = _yt_units_today() < PREFETCH_UNIT_BUDGET
         # אתרים (ספורט 1/5): בלי מכסה — נבדקים בכל סבב עד שנמצא קישור
         webs = [w for w in LEAGUES.get(row["league_key"], {}).get("web_sources", [])
                 if (row["id"], f"web_{w['name']}") not in have]
         if not todo and not webs:
             continue
         for s in todo:
-            _source_highlights(row, s)
+            # בדיקה חוזרת (מעקב "מי מעלה ראשון") — תמיד חינם בלבד;
+            # בדיקה ראשונה למקור — בתשלום רק בתוך תקציב הרקע
+            first_time = (row["id"], s["id"]) not in have
+            _source_highlights(row, s, free_only=not (first_time and paid_ok))
         for w in webs:
             _web_link(row, w)
         done += 1
