@@ -270,7 +270,17 @@ LEAGUES = {
         # אין ערוץ יוטיוב רשמי שמעלה תקצירים של כולם (אומת ידנית 5/9/26) —
         # התקצירים מפוזרים בערוצי הקבוצות (באיחור יום-יומיים).
         # המקור: ספורט 5, המשדרת בישראל — כתבה/VOD ישירים.
-        "sources": [],
+        "sources": [
+            # TV2 Sport (נורווגיה), מהמשתמש 16.9.26: מעלים תקצירים של
+            # בודו/גלימט וויקינג, שאין להן ערוץ עם תקצירים. הכותרת היא
+            # "Bodø/Glimt 2 - 2 Slavia" או "... - Høydepunkter" — שתי
+            # הקבוצות + תוצאה/מילת תקציר
+            {"id": "tv2_no", "name": "TV2 Sport",
+             "channel_id": "UC9QZZRUajPEoo1Q-V3MfvnQ",
+             "search_template": "{home} {away}",
+             "require_team_match": True,
+             "allow_embed": False},
+        ],
         # ערוצי המועדונים ביוטיוב — שם התקצירים עולים הכי מהר (לרוב באותו לילה).
         # מפתח = שם הקבוצה ב-TheSportsDB. אומתו 13.9.26 מול ה-RSS הציבורי של
         # כל ערוץ: הועלה תקציר של מחזור 1, או תקציר מליגה מקומית באותו פורמט.
@@ -301,6 +311,12 @@ LEAGUES = {
             # שחטאר — אוקראינית, עם תאריך המשחק (CLUB_TITLE_RULES), לפעמים באיחור
             "Paris Saint-Germain": "UCt9a_qP9CqHCNwilf-iULag",
             "Shakhtar Donetsk":   "UCmPCqUih--EyT2oxUn72MtA",
+            # מהמשתמש (16.9.26): סלביה מעלים תקציר עם תוצאה בכותרת
+            # ("Slavia - RC Lens 2:3"); לאנס ולאסק לא מעלים תקצירים כרגע —
+            # הערוץ עולה לבדיקה חינם דרך ה-RSS, ליום שבו כן יעלו
+            "Slavia Prague":      "UCPi3_GbTljPZ6b2Laiw-Z5g",
+            "Lens":               "UCE-f1Taamum6q2S-Ve4koSw",
+            "LASK":               "UC989Kq_d33oi_wwR5NsRZLw",
             "Sporting CP":        "UCnJj6L93JX3Jrhzv81ayywA",
             "Fenerbahçe":         "UCgqlho3-8a6FmDqQm7Q6gJw",
             "Slovan Bratislava":  "UC7ldMqVVX6CD6NMZaqsihTw",
@@ -2534,10 +2550,13 @@ def is_match_highlight(title: str, home: str, away: str,
                      # הולנדית, איטלקית, פורטוגזית
                      "ozet", "hafta", "samenvatting", "sintesi",
                      "resumo", "melhores momentos",
+                     # נורווגית (TV2 Sport), צ'כית (סלביה פראג)
+                     "hoydepunkter", "sammendrag", "sestrih",
                      # סלובקית (Slovan Bratislava: "ZOSTRIH | PSG – ŠK Slovan")
                      "zostrih"])
-    # ערוץ מועדון: תוצאה בכותרת = תקציר ("RETOUR EN FORCE ... I PSG 6-1 BRATISLAVA")
-    if implicit_team and re.search(r"\d{1,2}\s*[-–:]\s*\d{1,2}", t):
+    # תוצאה בכותרת = תקציר, כששתי הקבוצות מזוהות ("Fredrikstad 1 - 1
+    # Sarpsborg 08" ב-TV2 הנורווגי) או בערוץ של מועדון ("PSG 6-1 BRATISLAVA")
+    if (has_both or implicit_team) and re.search(r"\d{1,2}\s*[-–:]\s*\d{1,2}", t):
         highlight = True
     return has_both and highlight and not exclude
 
@@ -3982,10 +4001,16 @@ def debug_match(request: Request, q: str):
     התקצירים שהמשחק מקבל, ומה שמור בקאש לכל מקור (אבחון "ערוץ לא נכון")."""
     require_admin(request)
     conn = get_db()
+    # q יכול להיות שתי קבוצות ("Tottenham Everton"); מציגים קודם משחקים
+    # שכבר שוחקו — הם אלה שיש להם תקצירים לאבחן
+    words = [w for w in q.split() if w][:3]
+    where = " AND ".join(["(home_team LIKE ? OR away_team LIKE ?)"] * len(words)) or "1=1"
+    params = [p for w in words for p in (f"%{w}%", f"%{w}%")]
+    today = _now().strftime("%Y-%m-%d")
     rows = conn.execute(
-        "SELECT * FROM matches WHERE home_team LIKE ? OR away_team LIKE ? "
-        "ORDER BY date_utc DESC LIMIT 5",
-        (f"%{q}%", f"%{q}%")
+        f"SELECT * FROM matches WHERE {where} "
+        "ORDER BY (date_utc <= ?) DESC, CASE WHEN date_utc <= ? THEN date_utc END DESC, "
+        "date_utc ASC LIMIT 5", (*params, today, today)
     ).fetchall()
     out = []
     for r in rows:

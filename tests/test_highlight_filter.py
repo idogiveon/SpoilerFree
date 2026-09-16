@@ -41,10 +41,14 @@ def _row(home, away):
 
 def test_ucl_sources_both_clubs():
     s = main.get_sources_for_match(_row("Liverpool", "Atlético Madrid"))
-    assert [x["club_team"] for x in s] == ["Liverpool", "Atlético Madrid"]
+    # קודם ערוצי המועדונים, ואחריהם מקורות הליגה (TV2 הנורווגי)
+    assert [x["club_team"] for x in s if x.get("club_team")] == ["Liverpool", "Atlético Madrid"]
+    assert [x["id"] for x in s if not x.get("club_team")] == ["tv2_no"]
     assert all(x["channel_id"].startswith("UC") for x in s)
 
 
 def test_ucl_sources_one_or_none():
-    assert [x["club_team"] for x in main.get_sources_for_match(_row("Napoli", "Arsenal"))] == ["Arsenal"]
-    assert main.get_sources_for_match(_row("Galatasaray", "Porto")) == []
+    one = main.get_sources_for_match(_row("Napoli", "Arsenal"))
+    assert [x["club_team"] for x in one if x.get("club_team")] == ["Arsenal"]
+    # לשתי קבוצות בלי ערוץ מועדון נשאר מקור הליגה בלבד
+    assert [x["id"] for x in main.get_sources_for_match(_row("Galatasaray", "Porto"))] == ["tv2_no"]

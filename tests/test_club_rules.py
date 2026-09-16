@@ -18,8 +18,12 @@ def test_psg_title_with_score():
     assert not ok("Six goals to kick off our Champions League campaign! 💪 #PSG #UCL")
 
 
-def test_score_rule_only_on_club_channels():
-    assert not main.is_match_highlight("PSG 6-1 BRATISLAVA", "Paris Saint-Germain", "Slovan Bratislava")
+def test_score_counts_when_both_teams_are_identified():
+    """תוצאה + שתי הקבוצות = תקציר בכל ערוץ (TV2 הנורווגי כותב רק תוצאה).
+    תוצאה בלי היריבה — רק בערוץ של המועדון עצמו."""
+    assert main.is_match_highlight("PSG 6-1 BRATISLAVA", "Paris Saint-Germain", "Slovan Bratislava")
+    assert not main.is_match_highlight("CHAMPIONS LEAGUE Kick-off 26-27! ⚽️🔴🔵",
+                                       "Paris Saint-Germain", "Slovan Bratislava")
 
 
 def test_shakhtar_date_rule(monkeypatch):
