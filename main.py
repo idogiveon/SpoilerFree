@@ -2822,7 +2822,10 @@ def search_youtube(home: str, away: str, match_date: str,
     # 2. API בתשלום — רק כשה-RSS לא יכול להכריע, ורק מתחת לבלם היומי
     if results is None:
         if not YOUTUBE_API_KEY:
-            return []
+            # ה-RSS לא הכריע (תקלה / ערוץ עמוס) ואין API — לא יודעים.
+            # None = לא נשמר כ"אין תקציר" (החזרת [] "קיבעה" משחקים שלמים
+            # כשה-RSS של יוטיוב נפל, 16.9.26)
+            return None
         if _yt_units_today() >= YT_DAILY_BRAKE:
             # None = לא נשמר בקאש כ"לא נמצא" — יחפש שוב אחרי האיפוס היומי
             print(f"[yt] daily brake {YT_DAILY_BRAKE} reached — no API for {channel_id}")
@@ -3389,8 +3392,8 @@ def refresh_from_client(request: Request, league_key: str,
 
 
 def _not_found_retry(row):
-    """אחרי כמה זמן לחפש שוב כש"לא נמצא" — לפי גיל המשחק. None = לא מחפשים
-    שוב (משחק בן שבוע+ — התקציר כבר לא יעלה; "חפש שוב" עדיין עובד)."""
+    """אחרי כמה זמן לחפש שוב כש"לא נמצא" — לפי גיל המשחק. גם משחק ישן נבדק
+    שוב פעם בשבוע: תקלה זמנית (RSS נפל) לא "מקבעת" משחק בלי תקציר."""
     try:
         kick = datetime.fromisoformat(f"{row['date_utc']}T{row['time_utc']}+00:00")
     except Exception:
@@ -3400,7 +3403,7 @@ def _not_found_retry(row):
         return timedelta(minutes=30)
     if match_age < timedelta(days=7):
         return timedelta(hours=6)
-    return None
+    return timedelta(days=7)
 
 
 def _mark_first_seen(conn, match_id, source_id, seen, published=None):
