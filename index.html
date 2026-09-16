@@ -77,10 +77,14 @@
     .ob-skip { background:none; border:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-family:'Heebo',sans-serif; font-size:0.8rem; }
 
     /* אזור הניווט (ליגות + "לפי יום") — פאנל נפרד, מובחן מהפיד שמתחתיו */
-    .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; padding:0.9rem 1rem; max-width:calc(960px - 4rem); margin:1rem auto 1.75rem; position:relative; z-index:1; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
+    /* אזור הניווט: "לפי יום" בשורה נפרדת, ומתחתיו הליגות */
+    .nav-panel { max-width:calc(960px - 4rem); margin:1rem auto 2.25rem; padding:0.9rem 1rem; position:relative; z-index:1; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
+    .view-switch { display:flex; padding-bottom:0.8rem; margin-bottom:0.8rem; border-bottom:1px solid var(--border); }
+    .view-switch .tab { text-align:center; font-size:0.9rem; padding:0.5rem 1.6rem; }
+    .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; }
     .tab[data-league="__byday"] { border-color:var(--accent); color:var(--accent); font-weight:700; }
-    .tab[data-league="__byday"].active { color:#000; }
-    .tab.is-hidden { opacity:0.4; text-decoration:line-through; }
+    .tab[data-league="__byday"].active { background:var(--accent); color:#000; }
+    .tab.is-hidden { display:none; }          /* ליגה שהוסרה — לא מופיעה כלל */
     .tab { padding:0.4rem 1rem; border-radius:100px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
     .tab:hover { border-color:var(--accent); color:var(--accent); }
     .tab.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:700; }
@@ -169,8 +173,11 @@
     .empty { text-align:center; padding:4rem; color:var(--muted); }
 
     @media (max-width:600px) {
-      header,main,.league-tabs,.matchday-nav { padding-right:1rem; padding-left:1rem; }
-      .league-tabs { margin-left:0.75rem; margin-right:0.75rem; padding:0.7rem; }
+      header,main,.matchday-nav { padding-right:1rem; padding-left:1rem; }
+      .nav-panel { margin-left:0.75rem; margin-right:0.75rem; padding:0.7rem; }
+      .matchday-nav { margin-top:0.25rem; }
+      /* בטלפון "לפי יום" תופס שורה שלמה — הפרדה ברורה מכפתורי הליגות */
+      .view-switch .tab { flex:1; }
       .team-name { font-size:0.82rem; }
       .venue,.highlight-badge,.live-badge { display:none; }
     }
@@ -208,6 +215,10 @@
   <div id="drawer-logout"></div>
 </nav>
 
+<div class="nav-panel">
+<div class="view-switch">
+  <button class="tab active" data-league="__byday" data-i18n="byday" data-prefix="📅 ">📅 לפי יום</button>
+</div>
 <div class="league-tabs">
   <button class="tab" data-league="premier" data-i18n="lg_premier" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
   <button class="tab" data-league="championship" data-i18n="lg_championship" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
@@ -220,7 +231,7 @@
   <button class="tab" data-league="uel" data-i18n="lg_uel" data-prefix="🟠 ">🟠 ליגה אירופית</button>
   <button class="tab" data-league="mls" data-i18n="lg_mls" data-prefix="🇺🇸 ">🇺🇸 MLS</button>
   <button class="tab" data-league="argentina" data-i18n="lg_argentina" data-prefix="🇦🇷 ">🇦🇷 ארגנטינה</button>
-  <button class="tab active" data-league="__byday" data-i18n="byday" data-prefix="📅 " style="margin-inline-start:auto; border-style:dashed">📅 לפי יום</button>
+</div>
 </div>
 
 <div class="matchday-nav hidden" id="matchday-nav">
@@ -288,6 +299,7 @@
   "fav_search": "חפש קבוצה להוספה…", "fav_add": "הוסף", "fav_remove": "הסר", "fav_no_results": "לא נמצאו קבוצות",
   "fav_leagues": "ליגות מועדפות", "fav_teams": "קבוצות מועדפות",
   "hidden_leagues": "הסתרת ליגות", "hidden_tab": "מוסתרת מהתצוגה לפי יום",
+  "leagues_screen": "ליגות", "leagues_hint": "ליגות מסומנות מוצגות באתר. ליגה שתבטל לא תופיע בכפתורים למעלה ולא בתצוגה לפי יום.",
   "hidden_hint": "ליגות מסומנות לא יוצגו בתצוגה לפי יום (משחקי הקבוצות המועדפות שלך כן).",
   "ob_title1": "ברוך הבא! באילו ליגות אתה מתעניין?",
   "ob_hint1": "הן יופיעו ראשונות בתצוגה לפי יום. אפשר לשנות בכל רגע ב-☰ ← מועדפים.",
@@ -333,6 +345,7 @@
   "fav_search": "Search a team to add…", "fav_add": "Add", "fav_remove": "Remove", "fav_no_results": "No teams found",
   "fav_leagues": "Favorite leagues", "fav_teams": "Favorite teams",
   "hidden_leagues": "Hide leagues", "hidden_tab": "Hidden from the day view",
+  "leagues_screen": "Leagues", "leagues_hint": "Checked leagues are shown. A league you uncheck disappears from the buttons above and from the day view.",
   "hidden_hint": "Marked leagues won't show in the day view (your favorite teams' matches still do).",
   "ob_title1": "Welcome! Which leagues do you follow?",
   "ob_hint1": "They'll show first in the day view. You can change this anytime in ☰ → Favorites.",
@@ -378,6 +391,7 @@
   "fav_search": "Busca un equipo para añadir…", "fav_add": "Añadir", "fav_remove": "Quitar", "fav_no_results": "No se encontraron equipos",
   "fav_leagues": "Ligas favoritas", "fav_teams": "Equipos favoritos",
   "hidden_leagues": "Ocultar ligas", "hidden_tab": "Oculta en la vista por día",
+  "leagues_screen": "Ligas", "leagues_hint": "Las ligas marcadas se muestran. La que desmarques desaparece de los botones de arriba y de la vista por día.",
   "hidden_hint": "Las ligas marcadas no aparecerán en la vista por día (los partidos de tus equipos favoritos sí).",
   "ob_title1": "¡Bienvenido! ¿Qué ligas sigues?",
   "ob_hint1": "Aparecerán primero en la vista por día. Puedes cambiarlo cuando quieras en ☰ → Favoritos.",
@@ -423,6 +437,7 @@
   "fav_search": "Cherchez une équipe à ajouter…", "fav_add": "Ajouter", "fav_remove": "Retirer", "fav_no_results": "Aucune équipe trouvée",
   "fav_leagues": "Ligues favorites", "fav_teams": "Équipes favorites",
   "hidden_leagues": "Masquer des ligues", "hidden_tab": "Masquée dans la vue par jour",
+  "leagues_screen": "Ligues", "leagues_hint": "Les ligues cochées sont affichées. Une ligue décochée disparaît des boutons ci-dessus et de la vue par jour.",
   "hidden_hint": "Les ligues cochées n'apparaîtront pas dans la vue par jour (les matchs de vos équipes favorites, si).",
   "ob_title1": "Bienvenue ! Quelles ligues suivez-vous ?",
   "ob_hint1": "Elles s'afficheront en premier dans la vue par jour. Modifiable à tout moment dans ☰ → Favoris.",
@@ -654,13 +669,17 @@
     } catch (e) {}
   }
 
-  // טאב של ליגה מוסתרת — מעומעם (עדיין אפשר להיכנס אליה)
+  // ליגה שהוסרה לא מופיעה בשורת הכפתורים בכלל (ולא ב"לפי יום").
+  // אם המשתמש נמצא בה כשהוא מסיר אותה — חוזרים ל"לפי יום"
   function markHiddenTabs() {
     document.querySelectorAll('.tab[data-league]').forEach(b => {
-      const h = HIDDEN_LEAGUES.has(b.dataset.league);
-      b.classList.toggle('is-hidden', h);
-      b.title = h ? t('hidden_tab') : '';
+      const hidden = b.dataset.league !== '__byday' && HIDDEN_LEAGUES.has(b.dataset.league);
+      b.classList.toggle('is-hidden', hidden);
     });
+    if (HIDDEN_LEAGUES.has(currentLeague)) {
+      const byday = document.querySelector('.tab[data-league="__byday"]');
+      if (byday) byday.click();
+    }
   }
 
   function rerender() {
@@ -770,6 +789,25 @@
     }));
   }
 
+  // ── מסך "ליגות": אילו ליגות מוצגות באתר ──────────────
+  // מסומן = מוצגת. אותה רשימה כמו ההסתרה בעמוד המועדפים
+  function openLeaguePicker() {
+    openSheet(`<h2>🏆 ${t('leagues_screen')}</h2><p>${t('leagues_hint')}</p>
+      <div class="chips" id="lg-pick"></div>`);
+    renderLeaguePicker();
+  }
+  function renderLeaguePicker() {
+    const el = document.getElementById('lg-pick');
+    if (!el) return;
+    const shown = new Set(allLeagues().filter(l => !HIDDEN_LEAGUES.has(l)));
+    el.innerHTML = chipsHTML(allLeagues().map(l => [l, t('lg_' + l)]), shown);
+    el.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+      // מסומן = מוצגת; לחיצה על ליגה מוצגת מסתירה אותה, ולהפך
+      toggleHideLeague(c.dataset.val, !HIDDEN_LEAGUES.has(c.dataset.val));
+      renderLeaguePicker();
+    }));
+  }
+
   // ── מסכי פתיחה (#32): ליגות מועדפות → קבוצות פופולריות ──
   // פעם אחת לחשבון (מי שכבר יש לו מועדפים — לא). דילוג / סגירה = הוצג.
   let ONBOARDING = false;
@@ -836,6 +874,7 @@
         user.hidden = false;
       }
       items.push(`<button class="drawer-item" onclick="closeDrawer(); openFavorites()"><span class="ico">⭐</span>${t('favorites')}</button>`);
+      items.push(`<button class="drawer-item" onclick="closeDrawer(); openLeaguePicker()"><span class="ico">🏆</span>${t('leagues_screen')}</button>`);
       if (me.email) items.push(`<button class="drawer-item" onclick="closeDrawer(); openAccount()"><span class="ico">👤</span>${t('account')}</button>`);
       if (me.is_admin) items.push(`<a class="drawer-item" href="/admin/users"><span class="ico">⚙️</span>${t('admin')}</a>`);
       document.getElementById('drawer-items').innerHTML = items.join('');
