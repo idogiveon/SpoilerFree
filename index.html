@@ -145,6 +145,7 @@
     .modal-overlay.open .modal { transform:translateY(0); }
     .modal-header { padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
     .modal-title { font-size:1rem; font-weight:700; }
+    .match-score { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--accent); letter-spacing:2px; margin-top:0.3rem; }
     .modal-close { background:transparent; border:none; color:var(--muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px; transition:all 0.2s; }
     .modal-close:hover { color:var(--text); background:var(--border); }
 
@@ -252,6 +253,7 @@
   <div class="status-bar">
     <div class="match-count" id="match-count"></div>
     <div class="sync-note" id="sync-note"></div>
+    <button class="refresh-btn" id="scores-btn"></button>
     <button class="refresh-btn" id="refresh-btn">↻ רענון</button>
   </div>
   <div id="matches-container"><div class="loading">טוען משחקים</div></div>
@@ -274,6 +276,7 @@
       <div>
         <div class="modal-title" id="modal-title"></div>
         <div class="fav-row" id="modal-favs"></div>
+        <div class="match-score" id="modal-score"></div>
       </div>
       <button class="modal-close" id="modal-close">✕</button>
     </div>
@@ -300,6 +303,10 @@
   "fav_leagues": "ליגות מועדפות", "fav_teams": "קבוצות מועדפות",
   "hidden_leagues": "הסתרת ליגות", "hidden_tab": "מוסתרת מהתצוגה לפי יום",
   "leagues_screen": "ליגות", "leagues_hint": "ליגות מסומנות מוצגות באתר. ליגה שתבטל לא תופיע בכפתורים למעלה ולא בתצוגה לפי יום.",
+  "settings": "הגדרות", "scores_title": "הצגת תוצאות", "scores_show": "הצג תוצאות", "scores_hide": "הסתר תוצאות",
+  "scores_hint": "ברירת המחדל היא בלי תוצאות. הכפתור שלמעלה חל על התצוגה הפתוחה בלבד.",
+  "scores_off": "בלי תוצאות", "scores_all": "תוצאות בכל האתר", "scores_match": "רק בחלון המשחק",
+  "score_none": "אין תוצאה",
   "hidden_hint": "ליגות מסומנות לא יוצגו בתצוגה לפי יום (משחקי הקבוצות המועדפות שלך כן).",
   "ob_title1": "ברוך הבא! באילו ליגות אתה מתעניין?",
   "ob_hint1": "הן יופיעו ראשונות בתצוגה לפי יום. אפשר לשנות בכל רגע ב-☰ ← מועדפים.",
@@ -321,6 +328,7 @@
   "web_note": "🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד",
   "no_source": "🎬 מקור תקצירים לליגה זו עדיין לא הוגדר", "no_source_hint": "בקרוב — צריך למצוא את הערוץ הרשמי ביוטיוב",
   "not_uploaded": "התקציר עדיין לא הועלה ליוטיוב", "try_again": "↻ נסה שוב",
+  "cant_check": "לא ניתן לבדוק כרגע — נסה שוב בעוד כמה דקות",
   "choose_version": "בחר גרסה לצפייה", "opens_youtube": "↗ = נפתח ביוטיוב בטאב חדש",
   "search_again": "↻ חפש שוב (מנקה קאש)", "search_error": "שגיאה בחיפוש תקציר",
   "no_matches_day": "אין משחקים בתאריך זה", "no_matches_day_hint": "מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה",
@@ -346,6 +354,10 @@
   "fav_leagues": "Favorite leagues", "fav_teams": "Favorite teams",
   "hidden_leagues": "Hide leagues", "hidden_tab": "Hidden from the day view",
   "leagues_screen": "Leagues", "leagues_hint": "Checked leagues are shown. A league you uncheck disappears from the buttons above and from the day view.",
+  "settings": "Settings", "scores_title": "Showing scores", "scores_show": "Show scores", "scores_hide": "Hide scores",
+  "scores_hint": "Scores are off by default. The button above applies to the open view only.",
+  "scores_off": "No scores", "scores_all": "Scores everywhere", "scores_match": "Only in the match window",
+  "score_none": "No score",
   "hidden_hint": "Marked leagues won't show in the day view (your favorite teams' matches still do).",
   "ob_title1": "Welcome! Which leagues do you follow?",
   "ob_hint1": "They'll show first in the day view. You can change this anytime in ☰ → Favorites.",
@@ -367,6 +379,7 @@
   "web_note": "🔗 Website links — open the first result; the page title may contain spoilers",
   "no_source": "🎬 No highlights source for this league yet", "no_source_hint": "Coming soon",
   "not_uploaded": "The highlights aren't on YouTube yet", "try_again": "↻ Try again",
+  "cant_check": "Can't check right now — try again in a few minutes",
   "choose_version": "Choose a version to watch", "opens_youtube": "↗ = opens on YouTube in a new tab",
   "search_again": "↻ Search again", "search_error": "Couldn't search for highlights",
   "no_matches_day": "No matches on this date", "no_matches_day_hint": "From the leagues we follow",
@@ -392,6 +405,10 @@
   "fav_leagues": "Ligas favoritas", "fav_teams": "Equipos favoritos",
   "hidden_leagues": "Ocultar ligas", "hidden_tab": "Oculta en la vista por día",
   "leagues_screen": "Ligas", "leagues_hint": "Las ligas marcadas se muestran. La que desmarques desaparece de los botones de arriba y de la vista por día.",
+  "settings": "Ajustes", "scores_title": "Mostrar resultados", "scores_show": "Mostrar resultados", "scores_hide": "Ocultar resultados",
+  "scores_hint": "Los resultados están desactivados por defecto. El botón de arriba afecta solo a la vista abierta.",
+  "scores_off": "Sin resultados", "scores_all": "Resultados en todo el sitio", "scores_match": "Solo en la ventana del partido",
+  "score_none": "Sin resultado",
   "hidden_hint": "Las ligas marcadas no aparecerán en la vista por día (los partidos de tus equipos favoritos sí).",
   "ob_title1": "¡Bienvenido! ¿Qué ligas sigues?",
   "ob_hint1": "Aparecerán primero en la vista por día. Puedes cambiarlo cuando quieras en ☰ → Favoritos.",
@@ -413,6 +430,7 @@
   "web_note": "🔗 Enlaces web — abren el primer resultado; el título de la página puede contener spoilers",
   "no_source": "🎬 Todavía no hay fuente de resúmenes para esta liga", "no_source_hint": "Próximamente",
   "not_uploaded": "El resumen aún no está en YouTube", "try_again": "↻ Reintentar",
+  "cant_check": "No se puede comprobar ahora — inténtalo en unos minutos",
   "choose_version": "Elige una versión", "opens_youtube": "↗ = se abre en YouTube en otra pestaña",
   "search_again": "↻ Buscar de nuevo", "search_error": "Error al buscar el resumen",
   "no_matches_day": "No hay partidos en esta fecha", "no_matches_day_hint": "De las ligas que seguimos",
@@ -438,6 +456,10 @@
   "fav_leagues": "Ligues favorites", "fav_teams": "Équipes favorites",
   "hidden_leagues": "Masquer des ligues", "hidden_tab": "Masquée dans la vue par jour",
   "leagues_screen": "Ligues", "leagues_hint": "Les ligues cochées sont affichées. Une ligue décochée disparaît des boutons ci-dessus et de la vue par jour.",
+  "settings": "Réglages", "scores_title": "Afficher les scores", "scores_show": "Afficher les scores", "scores_hide": "Masquer les scores",
+  "scores_hint": "Les scores sont désactivés par défaut. Le bouton ci-dessus s'applique à la vue ouverte uniquement.",
+  "scores_off": "Sans scores", "scores_all": "Scores sur tout le site", "scores_match": "Seulement dans la fenêtre du match",
+  "score_none": "Pas de score",
   "hidden_hint": "Les ligues cochées n'apparaîtront pas dans la vue par jour (les matchs de vos équipes favorites, si).",
   "ob_title1": "Bienvenue ! Quelles ligues suivez-vous ?",
   "ob_hint1": "Elles s'afficheront en premier dans la vue par jour. Modifiable à tout moment dans ☰ → Favoris.",
@@ -459,6 +481,7 @@
   "web_note": "🔗 Liens web — ouvrent le premier résultat ; le titre de la page peut contenir des spoilers",
   "no_source": "🎬 Pas encore de source de résumés pour cette ligue", "no_source_hint": "Bientôt",
   "not_uploaded": "Le résumé n'est pas encore sur YouTube", "try_again": "↻ Réessayer",
+  "cant_check": "Impossible de vérifier pour l'instant — réessayez dans quelques minutes",
   "choose_version": "Choisissez une version", "opens_youtube": "↗ = s'ouvre sur YouTube dans un nouvel onglet",
   "search_again": "↻ Rechercher à nouveau", "search_error": "Erreur lors de la recherche du résumé",
   "no_matches_day": "Aucun match à cette date", "no_matches_day_hint": "Parmi les ligues suivies",
@@ -603,6 +626,59 @@
   const FAV_LEAGUES_LOCAL = 'sf:favleagues';
   let HIDDEN_LEAGUES = new Set();  // ליגות מוסתרות — לא מוצגות ב"לפי יום"
   const HIDDEN_LEAGUES_LOCAL = 'sf:hiddenleagues';
+
+  // ── תוצאות ─────────────────────────────────────────
+  // ברירת המחדל בכל מכשיר חדש: כבוי. off / all (כל האתר) / match (רק בחלון)
+  let SCORES_DEFAULT = 'off';
+  const SCORES_LOCAL = 'sf:scores';
+  let showScores = false;          // התצוגה הפתוחה בלבד; מתאפס במעבר תצוגה
+  const scoresQ = () => (showScores ? '&scores=1' : '');
+  const scoreOrTime = (m, isLive) =>
+    (showScores && m.home_score != null && m.away_score != null)
+      ? `${m.home_score} : ${m.away_score}`
+      : (isLive ? 'LIVE' : m.time);
+
+  async function loadScorePref() {
+    try {
+      if (serverFavs()) {
+        SCORES_DEFAULT = (await apiFetch(`${API}/prefs`).then(r => r.json())).scores_default || 'off';
+      } else {
+        SCORES_DEFAULT = localStorage.getItem(SCORES_LOCAL) || 'off';
+      }
+    } catch (e) {}
+    showScores = SCORES_DEFAULT === 'all';
+    updateScoresBtn();
+  }
+
+  async function setScorePref(mode) {
+    SCORES_DEFAULT = mode;
+    showScores = mode === 'all';
+    updateScoresBtn();
+    rerender();
+    try {
+      if (serverFavs()) {
+        await apiFetch(`${API}/prefs`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scores_default: mode }),
+        });
+      } else {
+        localStorage.setItem(SCORES_LOCAL, mode);
+      }
+    } catch (e) {}
+  }
+
+  function updateScoresBtn() {
+    const btn = document.getElementById('scores-btn');
+    if (btn) btn.textContent = showScores ? t('scores_hide') : t('scores_show');
+  }
+
+  // הכפתור חל על התצוגה הפתוחה בלבד — טעינה מחדש כדי לקבל/לא לקבל תוצאות
+  async function toggleScores() {
+    showScores = !showScores;
+    updateScoresBtn();
+    if (currentLeague === '__byday') await loadDay();
+    else await openLeague(currentLeague);
+  }
 
   async function loadFavorites() {
     try {
@@ -789,6 +865,45 @@
     }));
   }
 
+  // ── תוצאה בחלון המשחק: מוצגת רק בבקשה (או לפי ברירת המחדל) ──
+  async function renderMatchScore(matchId, isOver) {
+    const el = document.getElementById('modal-score');
+    if (!el) return;
+    el.innerHTML = '';
+    if (!isOver) return;
+    if (SCORES_DEFAULT === 'off' && !showScores) {
+      el.innerHTML = `<button class="fav-btn" id="reveal-score">👁 ${t('scores_show')}</button>`;
+      document.getElementById('reveal-score')
+        .addEventListener('click', () => showMatchScore(matchId));
+      return;
+    }
+    showMatchScore(matchId);
+  }
+
+  async function showMatchScore(matchId) {
+    const el = document.getElementById('modal-score');
+    try {
+      const s = await apiFetch(`${API}/score/${matchId}`).then(r => r.json());
+      el.textContent = s.available ? `${s.home} : ${s.away}` : t('score_none');
+    } catch (e) { el.textContent = ''; }
+  }
+
+  // ── מסך הגדרות: ברירת המחדל של התוצאות ───────────────
+  function openSettings() {
+    const modes = [['off', t('scores_off')], ['all', t('scores_all')], ['match', t('scores_match')]];
+    openSheet(`<h2>⚙️ ${t('settings')}</h2><h3>${t('scores_title')}</h3>
+      <p>${t('scores_hint')}</p><div class="chips" id="score-modes"></div>`);
+    const el = document.getElementById('score-modes');
+    const draw = () => {
+      el.innerHTML = chipsHTML(modes, new Set([SCORES_DEFAULT]));
+      el.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+        setScorePref(c.dataset.val);
+        draw();
+      }));
+    };
+    draw();
+  }
+
   // ── מסך "ליגות": אילו ליגות מוצגות באתר ──────────────
   // מסומן = מוצגת. אותה רשימה כמו ההסתרה בעמוד המועדפים
   function openLeaguePicker() {
@@ -875,6 +990,7 @@
       }
       items.push(`<button class="drawer-item" onclick="closeDrawer(); openFavorites()"><span class="ico">⭐</span>${t('favorites')}</button>`);
       items.push(`<button class="drawer-item" onclick="closeDrawer(); openLeaguePicker()"><span class="ico">🏆</span>${t('leagues_screen')}</button>`);
+      items.push(`<button class="drawer-item" onclick="closeDrawer(); openSettings()"><span class="ico">⚙️</span>${t('settings')}</button>`);
       if (me.email) items.push(`<button class="drawer-item" onclick="closeDrawer(); openAccount()"><span class="ico">👤</span>${t('account')}</button>`);
       if (me.is_admin) items.push(`<a class="drawer-item" href="/admin/users"><span class="ico">⚙️</span>${t('admin')}</a>`);
       document.getElementById('drawer-items').innerHTML = items.join('');
@@ -997,7 +1113,7 @@
            data-league="${lg}" data-home-key="${esc(homeKey(m))}" data-away-key="${esc(awayKey(m))}">
         <div class="team home"><div class="team-name">${star(homeKey(m))}${home}</div></div>
         <div class="match-meta">
-          <div class="match-time ${timeClass}">${isLive ? 'LIVE' : m.time}</div>
+          <div class="match-time ${timeClass}">${scoreOrTime(m, isLive)}</div>
           <div class="match-vs">VS</div>
           <div class="venue">${m.venue||''}</div>
         </div>
@@ -1162,7 +1278,7 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ events, purge: false }),
         });
-        const data = await apiFetch(`${API}/matches/${league}?lang=${LANG}`).then(r => r.json());
+        const data = await apiFetch(`${API}/matches/${league}?lang=${LANG}${scoresQ()}`).then(r => r.json());
         cachePut(league, data);
         leagueData[league] = data.matches;
         if (league === currentLeague && currentMatchday === md) renderMatchday(false);
@@ -1181,7 +1297,7 @@
 
     let data;
     try {
-      data = await apiFetch(`${API}/matches/${league}?lang=${LANG}`).then(r => r.json());
+      data = await apiFetch(`${API}/matches/${league}?lang=${LANG}${scoresQ()}`).then(r => r.json());
     } catch (err) {
       if (err.message === 'auth' || league !== currentLeague) return;
       if (cached) setSyncNote(t('offline_cached'));
@@ -1231,10 +1347,10 @@
         // sportsdb חסום מ-Render — הדפדפן שולף ושולח לשרת
         const res = await clientRefreshSportsdb(league);
         note = res.fresh ? t('refreshed', { d: res.diag }) : t('refresh_empty');
-        data = await apiFetch(`${API}/matches/${league}?lang=${LANG}`).then(r => r.json());
+        data = await apiFetch(`${API}/matches/${league}?lang=${LANG}${scoresQ()}`).then(r => r.json());
       } else {
         // football-data — שליפה מצד השרת (לא חסום); התשובה כבר מכילה הכל
-        data = await apiFetch(`${API}/matches/${league}?refresh=true&lang=${LANG}`).then(r => r.json());
+        data = await apiFetch(`${API}/matches/${league}?refresh=true&lang=${LANG}${scoresQ()}`).then(r => r.json());
       }
       cachePut(league, data);
       showLeague(league, data.matches, true);
@@ -1322,6 +1438,7 @@
 
     title.textContent = `${home} ${t('vs')} ${away}`;
     renderFavRow();
+    renderMatchScore(matchId, isOver);
 
     // תמיד פונים לשרת — גם אם הרשימה חושבת שהמשחק לא נגמר.
     // הסטטוס ברשימה עלול להיות מיושן; השרת יודע לרענן אוטומטית
@@ -1393,7 +1510,8 @@
             <div class="video-container">
               <div class="spoiler-shield">
                 <div class="shield-icon">🔍</div>
-                <div class="shield-text">${t('not_uploaded')}</div>
+                <div class="shield-text">${(data.sources || []).some(s => s.status === 'api_error')
+                  ? t('cant_check') : t('not_uploaded')}</div>
                 ${webRow}
                 <button class="retry-btn" onclick="retryHighlights('${matchId}')">${t('try_again')}</button>
               </div>
@@ -1492,7 +1610,7 @@
     const container = document.getElementById('matches-container');
     container.innerHTML = `<div class="loading">${t('loading_matches')}</div>`;
     try {
-      const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}?lang=${LANG}`)
+      const data = await apiFetch(`${API}/matches/by_date/${isoDay(currentDay)}?lang=${LANG}${scoresQ()}`)
                      .then(r => r.json());
       renderDayMatches(data.matches);
 
@@ -1555,6 +1673,8 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentLeague = tab.dataset.league;
+      showScores = SCORES_DEFAULT === 'all';   // הכפתור חל על תצוגה אחת בלבד
+      updateScoresBtn();
       if (currentLeague === '__byday') { enterDayView(); track('day_view'); }
       else { exitDayView(); openLeague(currentLeague); track('league_view', { league: currentLeague }); }
     });
@@ -1584,6 +1704,7 @@
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('cookie-link').addEventListener('click', openCookies);
+  document.getElementById('scores-btn').addEventListener('click', toggleScores);
   document.getElementById('menu-btn').addEventListener('click', openDrawer);
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
   document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
@@ -1614,7 +1735,7 @@
   applyStatic();
   enterDayView();
   // המועדפים תלויים במשתמש (חשבון / מכשיר) — אחרי שיודעים מי מחובר
-  loadUserBar().then(loadFavorites).then(rerender).then(maybeOnboard);
+  loadUserBar().then(loadFavorites).then(loadScorePref).then(rerender).then(maybeOnboard);
   track('app_open');
 
   // PWA: הדף נשמר במכשיר ונפתח מיד גם כשהשרת ישן

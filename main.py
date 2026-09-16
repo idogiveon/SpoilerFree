@@ -1212,6 +1212,12 @@ def init_db():
             fetched_at   TEXT
         )
     """)
+    # תוצאות (16.9.26) — לטבלה קיימת. נשלחות רק כשהמשתמש ביקש לראות
+    for col in ("home_score INTEGER", "away_score INTEGER"):
+        try:
+            conn.execute(f"ALTER TABLE matches ADD COLUMN {col}")
+        except Exception:
+            pass   # כבר קיימת
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS clubs (
@@ -1322,6 +1328,15 @@ def init_db():
             PRIMARY KEY (email, league_key)
         )
     """)
+    # העדפות אישיות (scores_default: off / all / match)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS prefs (
+            email TEXT,
+            key   TEXT,
+            value TEXT,
+            PRIMARY KEY (email, key)
+        )
+    """)
     # המרה חד-פעמית של שורות מהגרסה לפי-ליגה (שם מקור → מפתח אחיד)
     old = conn.execute("SELECT email, league_key, team FROM favorites "
                        "WHERE league_key != ''").fetchall()
@@ -1423,7 +1438,9 @@ def map_sportsdb_status(event: dict) -> str:
 
 _OVER_STATUSES = ("FINISHED", "FT", "AET", "PEN", "AP", "Match Finished")
 _MATCH_COLS = ("home_team", "away_team", "home_team_id", "away_team_id",
-               "date_utc", "time_utc", "venue", "matchday", "status")
+               "date_utc", "time_utc", "venue", "matchday", "status",
+               # תוצאות: נשמרות תמיד, נשלחות ללקוח רק לפי בקשה מפורשת
+               "home_score", "away_score")
 
 
 def _sync_league_rows(conn, league_key: str, incoming: dict,
@@ -1447,9 +1464,10 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
             if (guard_status and v["status"] == "SCHEDULED"
                     and old["status"] in ("FINISHED", "LIVE")):
                 v = {**v, "status": old["status"]}
-            if all(old[c] == v[c] for c in _MATCH_COLS):
+            # get: מקורות שלא מביאים כל שדה (למשל בלי תוצאה) עדיין נכתבים
+            if all(old[c] == v.get(c) for c in _MATCH_COLS):
                 continue
-        writes.append((mid, league_key, *(v[c] for c in _MATCH_COLS), now))
+        writes.append((mid, league_key, *(v.get(c) for c in _MATCH_COLS), now))
 
     deletes = []
     if purge and incoming:
@@ -1466,8 +1484,8 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
         conn.executemany("""
             INSERT OR REPLACE INTO matches
             (id, league_key, home_team, away_team, home_team_id, away_team_id,
-             date_utc, time_utc, venue, matchday, status, fetched_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+             date_utc, time_utc, venue, matchday, status, home_score, away_score, fetched_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, writes)
     if incoming and mark_fresh:
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
@@ -1502,9 +1520,16 @@ def _sportsdb_rows(events: list) -> dict:
         prev = rows.get(str(event_id))
         if prev and status == "SCHEDULED" and prev["status"] in ("FINISHED", "LIVE"):
             status = prev["status"]
+        def _score(key):
+            try:
+                return int(e.get(key))
+            except (TypeError, ValueError):
+                return None
+
         rows[str(event_id)] = {
             "home_team": e.get("strHomeTeam"), "away_team": e.get("strAwayTeam"),
             "home_team_id": None, "away_team_id": None,
+            "home_score": _score("intHomeScore"), "away_score": _score("intAwayScore"),
             "date_utc": e.get("dateEvent"),
             "time_utc": e.get("strTime") or "00:00:00",
             "venue": e.get("strVenue") or "", "matchday": matchday,
@@ -1540,10 +1565,12 @@ def fetch_football_data(league_key: str, purge: bool = False):
     rows = {}
     for m in matches:
         utc_dt = datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
+        full = (m.get("score") or {}).get("fullTime") or {}
         rows[str(m["id"])] = {
             "home_team": m["homeTeam"]["name"], "away_team": m["awayTeam"]["name"],
             "home_team_id": str(m["homeTeam"]["id"]),
             "away_team_id": str(m["awayTeam"]["id"]),
+            "home_score": full.get("home"), "away_score": full.get("away"),
             "date_utc": utc_dt.strftime("%Y-%m-%d"),
             "time_utc": utc_dt.strftime("%H:%M:%S"),
             "venue": "", "matchday": m.get("matchday"),
@@ -3276,7 +3303,8 @@ def login(payload: dict = Body(...)):
 
 @app.get("/matches/{league_key}")
 def get_matches(request: Request, league_key: str,
-                refresh: bool = False, matchday: int = None, lang: str = "he"):
+                refresh: bool = False, matchday: int = None, lang: str = "he",
+                scores: bool = False):
     lang = _lang(lang)
     require_auth(request)
     if league_key not in LEAGUES:
@@ -3328,6 +3356,9 @@ def get_matches(request: Request, league_key: str,
             "league":   league_name,
             "is_over":  likely_over(row),
             "status":   row["status"],
+            # תוצאה נשלחת רק כשהמשתמש ביקש לראות (אחרת אין מה לדלוף למסך)
+            **({"home_score": row["home_score"], "away_score": row["away_score"]}
+               if scores and likely_over(row) else {}),
         })
 
     # מדד טריות: מתי הליגה רועננה לאחרונה. הפרונט משתמש בזה
@@ -3345,7 +3376,8 @@ def get_matches(request: Request, league_key: str,
 
 
 @app.get("/matches/by_date/{date_il}")
-def get_matches_by_date(request: Request, date_il: str, lang: str = "he"):
+def get_matches_by_date(request: Request, date_il: str, lang: str = "he",
+                        scores: bool = False):
     """כל המשחקים מכל הליגות בתאריך נתון בשעון ישראל (YYYY-MM-DD),
     ממוינים לפי סדר הליגות ואז שעת פתיחה. קורא מה-DB בלבד —
     רענון נתונים נעשה בטאבי הליגות."""
@@ -3388,6 +3420,8 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he"):
             "league_key": lk,
             "is_over":    likely_over(row),
             "status":     row["status"],
+            **({"home_score": row["home_score"], "away_score": row["away_score"]}
+               if scores and likely_over(row) else {}),
             # הפתיחה עברה מזמן אבל לא מסומן כגמור — הדפדפן ירענן את הליגה
             "needs_refresh": not is_over(row["status"]) and kickoff_passed(row),
         })
@@ -4471,7 +4505,7 @@ def auth_delete_account(request: Request, payload: dict = Body(...)):
         raise HTTPException(400, "כדי למחוק, הקלד את כתובת המייל שלך בדיוק")
     conn = get_db()
     for table in ("events", "sessions", "login_codes", "favorites", "favorite_leagues",
-                  "hidden_leagues", "users"):
+                  "hidden_leagues", "prefs", "users"):
         conn.execute(f"DELETE FROM {table} WHERE email=?", (email,))
     conn.commit()
     conn.close()
@@ -4605,6 +4639,56 @@ def onboarding_teams(request: Request, leagues: str = "", lang: str = "he"):
         out[lg] = [{"key": k, "name": display_team(catalog[k], lang)} for k in picked]
     conn.close()
     return {"leagues": out}
+
+
+# ── תוצאות: ברירת מחדל אישית ───────────────────────────
+# off (ברירת המחדל בכל מכשיר חדש) / all (בכל האתר) / match (רק בחלון המשחק)
+SCORES_MODES = ("off", "all", "match")
+
+
+@app.get("/prefs")
+def get_prefs(request: Request):
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if not email:
+        return {"scores_default": "off", "per_device": True}
+    conn = get_db()
+    row = conn.execute("SELECT value FROM prefs WHERE email=? AND key='scores_default'",
+                       (email,)).fetchone()
+    conn.close()
+    return {"scores_default": row["value"] if row else "off"}
+
+
+@app.post("/prefs")
+def set_prefs(request: Request, payload: dict = Body(...)):
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    mode = str(payload.get("scores_default") or "")
+    if mode not in SCORES_MODES:
+        raise HTTPException(400, "ערך לא תקין")
+    if not email:
+        raise HTTPException(400, "בלי חשבון אישי — ההעדפה נשמרת במכשיר")
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO prefs (email, key, value) VALUES (?, 'scores_default', ?)",
+                 (email, mode))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/score/{match_id}")
+def get_score(request: Request, match_id: str):
+    """תוצאה של משחק בודד — רק כשהמשתמש ביקש לראות אותה במפורש."""
+    require_auth(request)
+    conn = get_db()
+    row = conn.execute("SELECT home_score, away_score, status FROM matches WHERE id=?",
+                       (match_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "משחק לא נמצא")
+    if row["home_score"] is None or row["away_score"] is None:
+        return {"available": False}
+    return {"available": True, "home": row["home_score"], "away": row["away_score"]}
 
 
 @app.get("/teams")
