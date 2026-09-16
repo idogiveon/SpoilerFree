@@ -20,7 +20,8 @@ def test_not_found_retry_grows_with_match_age(db):
     now = datetime.now(timezone.utc)
     assert main._not_found_retry(_row(db, "a", now - timedelta(days=1))) == timedelta(minutes=30)
     assert main._not_found_retry(_row(db, "b", now - timedelta(days=3))) == timedelta(hours=6)
-    assert main._not_found_retry(_row(db, "c", now - timedelta(days=10))) is None
+    # משחק ישן — פעם בשבוע, כדי שתקלה זמנית לא תקבע "אין תקציר" לנצח
+    assert main._not_found_retry(_row(db, "c", now - timedelta(days=10))) == timedelta(days=7)
 
 
 def test_old_not_found_is_not_searched_again(db, monkeypatch):

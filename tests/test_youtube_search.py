@@ -110,8 +110,9 @@ def test_free_rss_still_works_above_brake(monkeypatch, db):
     assert [v["video_id"] for v in res] == ["v1"]
 
 
-def test_rss_failure_without_key_returns_empty(monkeypatch):
-    assert search(monkeypatch, None) == []
+def test_rss_failure_without_key_is_unknown_not_empty(monkeypatch):
+    """RSS נפל ואין מפתח API — None ("לא יודעים"), ולא [] שנשמר כ"אין תקציר"."""
+    assert search(monkeypatch, None) is None
 
 
 def test_retry_guard_keeps_fresh_cache(db):
