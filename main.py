@@ -372,6 +372,37 @@ LEAGUES = {
              "allow_embed": False},
         ],
     },
+    "eredivisie": {
+        "name": "ליגה הולנדית",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4337"],
+        "sportsdb_season": "2026-2027",
+        # אין ערוץ ליגה שמעלה תקצירים (sportdigital כמעט ריק, אומת 16.9.26
+        # מול המשתמש) — כל מועדון בערוץ שלו. אייאקס כותבים את שתי הקבוצות
+        # ("Highlights Ajax - Willem II"), פ.ס.וו לא כותבים את היריבה
+        # ("HIGHLIGHTS | A proper PSV night") — הכלל של ערוץ מועדון מכסה זאת
+        "sources": [],
+        "club_channels": {
+            "Ajax":             "UCGpf7WX7R1one-NwOvg_PbQ",
+            "PSV Eindhoven":    "UC_2ynsXrRrKP8zYrU7Hc06A",
+            "Feyenoord":        "UCg_DGzRRIQlXpHxCrMMiAIQ",
+            "AZ Alkmaar":       "UCTCO3NaW_heI8H6U7f43Now",
+            "Twente":           "UCywIk9gmEzBbjE7cGT0FG8Q",
+            "Utrecht":          "UC4dZheVrm6gwxta9HQwoaHg",
+            "Go Ahead Eagles":  "UCViFZLCLYXB7vEURzFmqB1Q",
+            "Groningen":        "UCq1wKt7hVuuOi83D4pvWKBA",
+            "NEC Nijmegen":     "UCF4UEYKNui8ytU9vC9h58fg",
+            "Excelsior":        "UC8GEwTPDCufQfF7j95WRq4w",
+            "Willem II":        "UCl4YVKOIdzEMHymvgtdk96w",
+            "Cambuur":          "UCHKOOZBmIHUYYRi-uX0ZFRA",
+            "ADO Den Haag":     "UCJcHVyyO6Hio-NAQupty87Q",
+            "Sparta Rotterdam": "UC8jk5fdSMwHt6-cLYXTAYuA",
+            "Heerenveen":       "UCAm1W5LwDRIVo4sCfjsImWg",
+            "Fortuna Sittard":  "UC7IboGldjNiCzPGHlkX9XXQ",
+            "PEC Zwolle":       "UCQ9ElvawvfGZip6ZtUvo2hQ",
+            "Telstar":          "UCGnPfJzkzqY1fVpqlURigjg",
+        },
+    },
     "argentina": {
         "name": "ליגה ארגנטינאית",
         "source": "sportsdb",
@@ -2180,6 +2211,12 @@ TEAM_NAMES = {
         "Dinamo Zagreb": "דינמו זאגרב", "Ferencváros": "פרנצווארוש", "Jagiellonia Białystok": "יאגיילוניה ביאליסטוק",
         "Lech Poznań": "לך פוזנן", "Levski Sofia": "לבסקי סופיה", "Lillestrøm": "לילסטרום",
         "NEC Nijmegen": "NEC ניימכן", "OFI": "אופי כרתים", "Omonia Nicosia": "אומוניה ניקוסיה",
+        # הליגה ההולנדית (16.9.26)
+        "ADO Den Haag": "אדו האג", "Cambuur": "קמבור", "Excelsior": "אקסלסיור",
+        "Fortuna Sittard": "פורטונה סיטארד", "Go Ahead Eagles": "חו אהד איגלס",
+        "Groningen": "חרונינגן", "Heerenveen": "חירנפן", "PEC Zwolle": "פ.א.צ זוולה",
+        "Sparta Rotterdam": "ספרטה רוטרדם", "Telstar": "טלסטאר", "Twente": "טוונטה",
+        "Utrecht": "אוטרכט", "Willem II": "וילם II",
         "Sparta Prague": "ספרטה פראג", "Sturm Graz": "שטורם גראץ", "Sunderland": "סנדרלנד",
         "Torreense": "טוריינסה", "Union Saint-Gilloise": "יוניון סן ז'ילואז", "Viktoria Plzeň": "ויקטוריה פלזן",
         # MLS
@@ -2492,10 +2529,27 @@ GENERIC_TEAM_WORDS = {
 }
 
 
+# מילים שאומרות "זה תקציר משחק", בלי הגנריות ("goals", "match", "vs")
+_STRONG_HIGHLIGHT = ("highlight", "תקציר", "resumen", "zusammenfassung", "samenvatting",
+                     "sammendrag", "hoydepunkter", "sestrih", "ozet", "sintesi",
+                     "resumo", "melhores momentos")
+
+
+def _within_days(published: str, match_date: str, days: int) -> bool:
+    """הסרטון עלה ביום המשחק ועד X ימים אחריו."""
+    try:
+        gap = (datetime.fromisoformat(published[:10]).date()
+               - datetime.fromisoformat(match_date).date()).days
+    except (ValueError, TypeError):
+        return False
+    return 0 <= gap <= days
+
+
 def is_match_highlight(title: str, home: str, away: str,
                        home_alt: str = None, away_alt: str = None,
                        require_team: bool = False,
-                       implicit_team: str = None) -> bool:
+                       implicit_team: str = None,
+                       loose_club: bool = False) -> bool:
     """home_alt/away_alt: שמות חלופיים (עברית) לזיהוי בכותרת.
     require_team: חובה לזהות קבוצה בכותרת גם כשיש מילת "תקציר" —
     למקורות רב-ליגתיים (ONE), מונע וידאו מליגה לא נכונה."""
@@ -2566,6 +2620,14 @@ def is_match_highlight(title: str, home: str, away: str,
                    "pressekonferenz", "persconferentie",
                    # קבוצות נוער / תוכן נלווה מאותו ערוץ ואותו יריב
                    "u19", "uyl", "youth league", "watchparty", "re-live",
+                   # לא הקבוצה הבוגרת: נשים, עתודה ונוער. בערוץ של מועדון הם
+                   # עולים באותו סופ"ש ("HIGHLIGHTS | AZ Vrouwen - PSV Vrouwen")
+                   "vrouwen", "women", "féminin", "feminin", "femenino",
+                   "jong psv", "jong ajax", "jong az", "jong utrecht", "beloften",
+                   # קליפ של שער בודד / קומפילציה של שחקן — גם כשכתוב HIGHLIGHTS
+                   # ("HIGHLIGHTS | De vierde goal in vijf wedstrijden voor ...")
+                   "goal of the month", "goal van", "goal in vijf", "goal in vier",
+                   "goal in drie", "goals in drie", "vote for",
                    "vlog", "uncut", "backstage",
                    # תוכנית אולפן לפני המשחק (Man City, Shakhtar, Wrexham)
                    "matchday live", "match day live"])
@@ -2599,6 +2661,12 @@ def is_match_highlight(title: str, home: str, away: str,
     # Sarpsborg 08" ב-TV2 הנורווגי) או בערוץ של מועדון ("PSG 6-1 BRATISLAVA")
     if (has_both or implicit_team) and re.search(r"\d{1,2}\s*[-–:]\s*\d{1,2}", t):
         highlight = True
+
+    # ערוץ מועדון שלא כותב את היריבה כלל ("HIGHLIGHTS | A proper PSV night"):
+    # חייבת מילת תקציר אמיתית — לא "goals"/"vs" הגנריות, שמופיעות גם
+    # בסרטוני שערי החודש ובקומפילציות של שחקן. המתקשר מגביל ליום המשחק/למחרת
+    if loose_club and implicit_team and not exclude and any(w in t for w in _STRONG_HIGHLIGHT):
+        return True
     return has_both and highlight and not exclude
 
 
@@ -2854,8 +2922,14 @@ def search_youtube(home: str, away: str, match_date: str,
             aw = list(dict.fromkeys([away_alt or away] + _he_names(away)))
             return any(is_headline_highlight(title, h, a, published, match_date)
                        for h in hs for a in aw)
-        return is_match_highlight(title, home, away, home_alt, away_alt,
-                                  require_team, implicit_team)
+        if is_match_highlight(title, home, away, home_alt, away_alt,
+                              require_team, implicit_team):
+            return True
+        # ערוץ של מועדון בלבד, וכשהכלל הרגיל לא מצא: מילת תקציר + עלה ביום
+        # המשחק או למחרת (פ.ס.וו לא כותבים את שם היריבה)
+        return bool(implicit_team) and _within_days(published, match_date, 1) and \
+            is_match_highlight(title, home, away, home_alt, away_alt,
+                               require_team, implicit_team, loose_club=True)
 
     def _video(video_id: str, title: str, published: str = "") -> dict:
         tl = title.lower()
