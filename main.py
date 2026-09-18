@@ -155,7 +155,8 @@ LEAGUES = {
              "channel_id": "UCxjaVFauWASy0CuJfHKZeiw",
              "search_template": "תקציר {home} {away}",
              "hebrew_names": True, "il_both_teams": True,
-             "title_exclude": ["המשחק המלא"],
+             # גם בגרסה האנגלית: "Matchday 4 | Full Match: ..." (90 דקות)
+             "title_exclude": ["המשחק המלא", "full match"],
              "allow_embed": False},
             # ערוצים לא רשמיים (העלאות פיראטיות) — לפעמים מקדימים את הרשמיים.
             # il_both_teams: רק "תקציר" + שתי הקבוצות בשם מלא (is_il_both_teams)
@@ -2428,6 +2429,43 @@ def is_il_both_teams(title: str, home_he: str, away_he: str,
     return _web_team_in(home_he, t) and _web_team_in(away_he, t)
 
 
+def _en_norm(s: str) -> str:
+    """אנגלית להשוואה: בלי גרשים, נקודות ומקפים, רווח אחד בין מילים."""
+    s = re.sub(r"[’'`.\-–]", " ", (s or "").lower())
+    return " ".join(s.split())
+
+
+# קידומות מועדון ישראליות באנגלית — "Hapoel Ironi Kiryat Shmona" מופיע
+# בכותרות גם כ-"Ironi Kiryat Shmona"
+_IL_EN_PREFIXES = ("hapoel", "maccabi", "beitar", "bnei", "ironi", "ms", "fc")
+
+
+def _en_team_in(name_en: str, title_norm: str) -> bool:
+    """שם מלא של הקבוצה (מנורמל), או בלי קידומת אחת — ולא מילה בודדת."""
+    full = _en_norm(name_en)
+    if not full:
+        return False
+    forms = [full]
+    words = full.split()
+    if len(words) >= 3 and words[0] in _IL_EN_PREFIXES:
+        forms.append(" ".join(words[1:]))
+    return any(len(f) >= 6 and f in title_norm for f in forms)
+
+
+def is_il_both_teams_en(title: str, home_en: str, away_en: str,
+                        published: str = "", match_date: str = "") -> bool:
+    """אותו כלל מחמיר, לכותרות באנגלית: מילת תקציר או תוצאה, שתי הקבוצות
+    בשמן המלא, ועד 3 ימים אחרי המשחק."""
+    t = _en_norm(title)
+    if "highlight" not in t and not re.search(r"\d+\s*-\s*\d+", t):
+        return False
+    if any(x in t for x in ("full match", "all the goals", "only goals", "u19", "u21", "women")):
+        return False
+    if published and match_date and not _within_days(published, match_date, 3):
+        return False
+    return _en_team_in(home_en, t) and _en_team_in(away_en, t)
+
+
 def find_web_highlight(pages: list, link_pattern: str,
                        home_names: list, away_names: list, base: str = ""):
     """URL ישיר לכתבת התקציר באתר, או None. שתי הקבוצות חייבות להופיע
@@ -2914,9 +2952,13 @@ def search_youtube(home: str, away: str, match_date: str,
             return False
         if date_in_title:  # ערוץ מועדון שכותב את תאריך המשחק (שחטאר: "(10.09.2026)")
             return datetime.fromisoformat(match_date).strftime("%d.%m.%Y") in title
-        if il_both:    # ערוצים ישראליים לא רשמיים — כלל מחמיר
-            return is_il_both_teams(title, home_alt or home, away_alt or away,
-                                    published, match_date)
+        if il_both:    # ערוצים ישראליים — שתי הקבוצות חייבות להופיע בכותרת
+            # עברית, ומ-9.26 גם אנגלית ("Hapoel Be'er Sheva vs. Hapoel Petah
+            # Tikva 2-0 Match Highlights"). לא נופלים למסנן הכללי — הוא מסתפק
+            # ב"Hapoel" ומתאים כל משחק של הפועל לכל משחק אחר
+            return (is_il_both_teams(title, home_alt or home, away_alt or away,
+                                     published, match_date)
+                    or is_il_both_teams_en(title, home, away, published, match_date))
         if headline:   # ONE — כותרות חדשותיות בעברית, כל כתיב מוכר ("בארסה")
             hs = list(dict.fromkeys([home_alt or home] + _he_names(home)))
             aw = list(dict.fromkeys([away_alt or away] + _he_names(away)))
