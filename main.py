@@ -355,6 +355,25 @@ LEAGUES = {
             "Benfica":        "UC8zrah5cNf2c3jKKeD_Z3fw",
             "Celtic":         "UCBN-bb-hE7jYlcp4exwXRsQ",
             "AC Milan":       "UCKcx1uK38H4AOkmfv4ywlrg",
+            # אומתו 18.9.26: הערוצים האלה באמת מעלים תקציר של משחק הליגה
+            # האירופית ("HIGHLIGHTS | Europa League 26-27 | J1 | Real
+            # Sociedad 1 - 2 AFC Bournemouth"). ערוצים של דינמו זאגרב,
+            # אולימפיאקוס, פרנצוורוש, ליון, בשיקטאש והפועל ב"ש נבדקו ואין בהם
+            # תקצירים — רק ראיונות ומסיבות עיתונאים, אז הם לא נכנסים
+            "Anderlecht":     "UCIr5bpTRrkwJprfaG1owIZw",
+            "Celta Vigo":     "UCCJLVZYqRb_85b2Flpg04cg",
+            "Real Sociedad":  "UCfeqewEKWQ8CXY8OiXoMxxw",
+            "Sturm Graz":     "UCcReHK9o6bc5NT2cj4mpJKQ",
+            "Marseille":      "UCoKweTwEeA-D9vuSVw_Z_DQ",
+            "Red Bull Salzburg":     "UCNXjAsLzro7bnZVWqnnkgsg",
+            "Rennes":                "UC96bdUrtQVEqx_OmKwFAgXg",
+            "Sparta Prague":         "UCJcXzTZcKukYq9O4ZBtVxdw",
+            "Viktoria Plzeň":        "UCemUcP3Rwmz6d9yrW1Vn3tw",
+            "Union Saint-Gilloise":  "UCk9RAl0uUwjYbTaFQMFaX5g",
+            "Bayer Leverkusen":      "UCSMZmPVql528Cph9WPvt0GA",
+            # כבר מוגדרים אצלנו בליגה ההולנדית
+            "AZ Alkmaar":     "UCTCO3NaW_heI8H6U7f43Now",
+            "NEC Nijmegen":   "UCF4UEYKNui8ytU9vC9h58fg",
         },
     },
     "mls": {
@@ -2542,6 +2561,8 @@ TEAM_ALIASES = {
     "Manchester City": ["man city"],
     "Manchester United": ["man utd", "man united"],
     "Bodø/Glimt": ["glimt"],
+    # ליגה אירופית — השם הרשמי בכותרות המועדונים
+    "Rennes": ["rennais"],
     # צ'מפיונשיפ — הקיצורים של Sky Sports
     "Wolverhampton Wanderers": ["wolves"],
     "Queens Park Rangers": ["qpr"],
@@ -2659,9 +2680,11 @@ def is_match_highlight(title: str, home: str, away: str,
                    # קבוצות נוער / תוכן נלווה מאותו ערוץ ואותו יריב
                    "u19", "uyl", "youth league", "watchparty", "re-live",
                    # לא הקבוצה הבוגרת: נשים, עתודה ונוער. בערוץ של מועדון הם
-                   # עולים באותו סופ"ש ("HIGHLIGHTS | AZ Vrouwen - PSV Vrouwen")
+                   # עולים באותו סופ"ש ("HIGHLIGHTS | AZ Vrouwen - PSV Vrouwen",
+                   # "HIGHLIGHTS U23: RSCA Futures", "Juventus Next Gen")
                    "vrouwen", "women", "féminin", "feminin", "femenino",
                    "jong psv", "jong ajax", "jong az", "jong utrecht", "beloften",
+                   "u20", "u23", "next gen", "primavera", "futures", "serie c",
                    # קליפ של שער בודד / קומפילציה של שחקן — גם כשכתוב HIGHLIGHTS
                    # ("HIGHLIGHTS | De vierde goal in vijf wedstrijden voor ...")
                    "goal of the month", "goal van", "goal in vijf", "goal in vier",
