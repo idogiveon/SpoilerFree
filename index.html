@@ -82,6 +82,8 @@
     .view-switch { display:flex; padding-bottom:0.8rem; margin-bottom:0.8rem; border-bottom:1px solid var(--border); }
     .view-switch .tab { text-align:center; font-size:0.9rem; padding:0.5rem 1.6rem; }
     .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; }
+    /* הפיד נשאר נקי: הליגות נפתחות רק בלחיצה על "ליגות" */
+    .league-tabs.collapsed { display:none; }
     .tab[data-league="__byday"] { border-color:var(--accent); color:var(--accent); font-weight:700; }
     .tab[data-league="__byday"].active { background:var(--accent); color:#000; }
     .tab.is-hidden { display:none; }          /* ליגה שהוסרה — לא מופיעה כלל */
@@ -222,8 +224,9 @@
 <div class="nav-panel">
 <div class="view-switch">
   <button class="tab active" data-league="__byday" data-i18n="byday" data-prefix="📅 ">📅 לפי יום</button>
+  <button class="tab" id="leagues-toggle" aria-expanded="false">🏆 ליגות</button>
 </div>
-<div class="league-tabs">
+<div class="league-tabs collapsed" id="league-tabs">
   <button class="tab" data-league="premier" data-i18n="lg_premier" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
   <button class="tab" data-league="championship" data-i18n="lg_championship" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
   <button class="tab" data-league="israel" data-i18n="lg_israel" data-prefix="🇮🇱 ">🇮🇱 ליגת העל</button>
@@ -791,6 +794,7 @@
 
   function rerender() {
     markHiddenTabs();
+    updateLeaguesToggle();   // גם בהחלפת שפה — הכפתור נושא שם ליגה
     if (currentLeague === '__byday') { if (lastDayMatches) renderDayMatches(lastDayMatches); }
     else if (leagueData[currentLeague]) showLeague(currentLeague, leagueData[currentLeague], true);
   }
@@ -964,7 +968,7 @@
     openSheet(`<h2>👋 ${t('ob_title1')}</h2><p>${t('ob_hint1')}</p>
       <div class="chips" id="ob-leagues">${chipsHTML(allLeagues().map(l => [l, t('lg_' + l)]), picked)}</div>
       <div class="ob-actions"><button class="ob-skip" id="ob-skip">${t('ob_skip')}</button>
-        <button class="ob-next" id="ob-next">${t('ob_next')}</button></div>`);
+        <button class="ob-next" id="ob-next">${t('ob_next')}</button></div>`, false);
     bindChips(document.getElementById('ob-leagues'), picked);
     document.getElementById('ob-skip').onclick = finishOnboarding;
     document.getElementById('ob-next').onclick = () => onboardTeams(picked);
@@ -972,7 +976,7 @@
   async function onboardTeams(leagues) {
     for (const l of leagues) if (!FAV_LEAGUES.has(l)) toggleFavLeague(l, true);
     if (!leagues.size) return finishOnboarding();
-    openSheet(`<div class="loading">${t('loading')}</div>`);
+    openSheet(`<div class="loading">${t('loading')}</div>`, false);
     let data = { leagues: {} };
     try {
       data = await apiFetch(`${API}/onboarding/teams?leagues=${[...leagues].join(',')}&lang=${LANG}`)
@@ -986,7 +990,7 @@
             <div class="chips">${chipsHTML(ts.map(x => [x.key, x.name]), chosen)}</div>`).join('')
         : `<p>${t('ob_no_teams')}</p>`) +
       `<div class="ob-actions"><button class="ob-skip" id="ob-skip">${t('ob_skip')}</button>
-        <button class="ob-next" id="ob-done">${t('ob_done')}</button></div>`);
+        <button class="ob-next" id="ob-done">${t('ob_done')}</button></div>`, false);
     document.querySelectorAll('#sheet-body .chips').forEach(el => bindChips(el, chosen));
     document.getElementById('ob-skip').onclick = finishOnboarding;
     document.getElementById('ob-done').onclick = async () => {
@@ -1062,8 +1066,10 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g,
     c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 
-  function openSheet(html) {
+  // showClose=false: במסכי הפתיחה יש כבר "דלג", ושני כפתורי יציאה זה רעש
+  function openSheet(html, showClose = true) {
     document.getElementById('sheet-body').innerHTML = html;
+    document.getElementById('sheet-close').hidden = !showClose;
     document.getElementById('sheet').hidden = false;
   }
   function closeSheet() {
@@ -1760,11 +1766,31 @@
 
   // ── Events ─────────────────────────────────────────
 
-  document.querySelectorAll('.tab').forEach(tab => {
+  // כשהרשימה סגורה, הכפתור הוא גם החיווי לאיפה אנחנו — אחרת הטאב הפעיל
+  // מוסתר ואי אפשר לדעת איזו ליגה נבחרה
+  function updateLeaguesToggle() {
+    const btn = document.getElementById('leagues-toggle');
+    const inLeague = currentLeague !== '__byday';
+    btn.textContent = '🏆 ' + (inLeague ? t('lg_' + currentLeague) : t('leagues_screen'));
+    btn.classList.toggle('active', inLeague);
+  }
+
+  function toggleLeagueTabs(open) {
+    const row = document.getElementById('league-tabs');
+    const isOpen = open === undefined ? row.classList.contains('collapsed') : open;
+    row.classList.toggle('collapsed', !isOpen);
+    document.getElementById('leagues-toggle').setAttribute('aria-expanded', String(isOpen));
+  }
+
+  document.getElementById('leagues-toggle').addEventListener('click', () => toggleLeagueTabs());
+
+  document.querySelectorAll('.tab[data-league]').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentLeague = tab.dataset.league;
+      toggleLeagueTabs(false);   // בחרת — הרשימה נסגרת והפיד חוזר להיות נקי
+      updateLeaguesToggle();
       showScores = SCORES_DEFAULT === 'all';   // הכפתור חל על תצוגה אחת בלבד
       updateScoresBtn();
       if (currentLeague === '__byday') { enterDayView(); track('day_view'); }
@@ -1815,6 +1841,7 @@
     LANG = e.target.value;
     try { localStorage.setItem('sf:lang', LANG); } catch (err) {}
     applyStatic();
+    updateLeaguesToggle();
     updateRefreshBtn();
     loadUserBar();
     setSyncNote('');
