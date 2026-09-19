@@ -4,13 +4,19 @@ import re
 HTML = open("index.html", encoding="utf-8").read()
 
 
-def test_byday_is_its_own_row_above_the_leagues():
+def test_byday_and_leagues_are_the_only_two_buttons_in_the_feed():
+    """הפיד נשאר נקי: בשורה העליונה "לפי יום" ו"ליגות" בלבד, ורשימת
+    הליגות נפתחת רק בלחיצה."""
     panel = re.search(r'<div class="nav-panel">(.*?)<div class="matchday-nav', HTML, re.S).group(1)
     switch = re.search(r'<div class="view-switch">(.*?)</div>', panel, re.S).group(1)
-    assert 'data-league="__byday"' in switch                     # "לפי יום" לבד בשורה שלו
-    leagues = re.search(r'<div class="league-tabs">(.*?)</div>', panel, re.S).group(1)
+    assert 'data-league="__byday"' in switch
+    assert 'id="leagues-toggle"' in switch
+    assert switch.count("<button") == 2
+    leagues = re.search(r'<div class="league-tabs collapsed" id="league-tabs">(.*?)</div>',
+                        panel, re.S).group(1)
     assert 'data-league="__byday"' not in leagues
     assert leagues.count('class="tab"') >= 11                    # כל הליגות
+    assert ".league-tabs.collapsed { display:none; }" in HTML
 
 
 def test_hidden_league_button_is_not_displayed():
