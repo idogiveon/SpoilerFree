@@ -36,10 +36,13 @@ def test_health_is_public_json():
     assert client().get("/health").json()["status"].startswith("SpoilerFree")
 
 
-def test_login_page_has_cookie_settings_not_privacy_note(auth_on):
+def test_login_page_says_what_is_kept_and_links_to_the_full_text(auth_on):
+    """שורה אחת קצרה במסך עצמו (בקשת משתמש, 19.9.26); ההסבר המלא
+    נשאר ב-Cookie settings ולא מציף את מסך הכניסה."""
     html = client().get("/").text
     assert "Cookie settings" in html
-    assert "מה נשמר" not in html
+    assert 'data-i18n="privacy_note"' in html
+    assert html.count('data-i18n="privacy_note"') == 1
 
 
 def test_cookies_text_is_public_and_mentions_usage_and_deletion():
