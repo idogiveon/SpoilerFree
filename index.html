@@ -309,7 +309,7 @@
   "byday": "לפי יום", "matchday": "מחזור {n}", "back_today": "חזרה להיום",
   "arrow_prev": "→", "arrow_next": "←",
   "refresh": "↻ רענון", "refreshing": "⏳ מתעדכן...",
-  "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
+  "saving": "שומר...", "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
   "password_login": "כניסה בסיסמה", "account": "חשבון", "admin": "ניהול", "logout": "יציאה",
   "menu": "תפריט", "cookie_settings": "הגדרות עוגיות", "language": "שפה",
   "my_favorites": "המועדפים שלי", "fav_empty": "עוד אין מועדפים — חפש קבוצה למטה והוסף",
@@ -362,7 +362,7 @@
   "byday": "By day", "matchday": "Matchday {n}", "back_today": "Back to today",
   "arrow_prev": "←", "arrow_next": "→",
   "refresh": "↻ Refresh", "refreshing": "⏳ Updating...",
-  "loading": "Loading", "loading_matches": "Loading matches", "close": "Close",
+  "saving": "Saving...", "loading": "Loading", "loading_matches": "Loading matches", "close": "Close",
   "password_login": "Password login", "account": "Account", "admin": "Admin", "logout": "Log out",
   "menu": "Menu", "cookie_settings": "Cookie settings", "language": "Language",
   "my_favorites": "My favorites", "fav_empty": "No favorites yet — search for a team below and add it",
@@ -415,7 +415,7 @@
   "byday": "Por día", "matchday": "Jornada {n}", "back_today": "Volver a hoy",
   "arrow_prev": "←", "arrow_next": "→",
   "refresh": "↻ Actualizar", "refreshing": "⏳ Actualizando...",
-  "loading": "Cargando", "loading_matches": "Cargando partidos", "close": "Cerrar",
+  "saving": "Guardando...", "loading": "Cargando", "loading_matches": "Cargando partidos", "close": "Cerrar",
   "password_login": "Acceso con contraseña", "account": "Cuenta", "admin": "Admin", "logout": "Salir",
   "menu": "Menú", "cookie_settings": "Configuración de cookies", "language": "Idioma",
   "my_favorites": "Mis favoritos", "fav_empty": "Aún no tienes favoritos — busca un equipo abajo y añádelo",
@@ -468,7 +468,7 @@
   "byday": "Par jour", "matchday": "Journée {n}", "back_today": "Revenir à aujourd'hui",
   "arrow_prev": "←", "arrow_next": "→",
   "refresh": "↻ Actualiser", "refreshing": "⏳ Mise à jour...",
-  "loading": "Chargement", "loading_matches": "Chargement des matchs", "close": "Fermer",
+  "saving": "Enregistrement...", "loading": "Chargement", "loading_matches": "Chargement des matchs", "close": "Fermer",
   "password_login": "Connexion par mot de passe", "account": "Compte", "admin": "Admin", "logout": "Déconnexion",
   "menu": "Menu", "cookie_settings": "Paramètres des cookies", "language": "Langue",
   "my_favorites": "Mes favoris", "fav_empty": "Pas encore de favoris — cherchez une équipe ci-dessous et ajoutez-la",
@@ -757,6 +757,25 @@
     } catch (e) {}
   }
 
+  // מסכי הפתיחה שומרים הרבה פריטים בבת אחת. בקשה לכל אחד מהם הייתה
+  // איטית (כל בקשה מסנכרנת מול Turso), ולכן כאן בקשה אחת לכולם.
+  async function saveFavsBulk({ teams = [], leagues = [] }) {
+    for (const lg of leagues) { FAV_LEAGUES.add(lg); HIDDEN_LEAGUES.delete(lg); }
+    for (const k of teams) FAVS.add(k);
+    rerender();
+    if (!serverFavs()) {
+      try {
+        localStorage.setItem(FAVS_LOCAL, JSON.stringify([...FAVS]));
+        localStorage.setItem(FAV_LEAGUES_LOCAL, JSON.stringify([...FAV_LEAGUES]));
+      } catch (e) {}
+      return;
+    }
+    await apiFetch(`${API}/favorites/bulk`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teams, leagues }),
+    });
+  }
+
   async function toggleFav(key) {
     const on = !FAVS.has(key);
     if (on) FAVS.add(key); else FAVS.delete(key);
@@ -986,13 +1005,18 @@
     document.getElementById('ob-next').onclick = () => onboardTeams(picked);
   }
   async function onboardTeams(leagues) {
-    for (const l of leagues) if (!FAV_LEAGUES.has(l)) toggleFavLeague(l, true);
     if (!leagues.size) return finishOnboarding();
     openSheet(`<div class="loading">${t('loading')}</div>`, false);
     let data = { leagues: {} };
     try {
-      data = await apiFetch(`${API}/onboarding/teams?leagues=${[...leagues].join(',')}&lang=${LANG}`)
-        .then(r => r.json());
+      // שמירת הליגות והבאת הקבוצות יוצאות במקביל — היו שש בקשות בזו
+      // אחר זו, וההמתנה בין המסכים הגיעה לכמה שניות
+      const [teams] = await Promise.all([
+        apiFetch(`${API}/onboarding/teams?leagues=${[...leagues].join(',')}&lang=${LANG}`)
+          .then(r => r.json()),
+        saveFavsBulk({ leagues: [...leagues] }).catch(() => {}),
+      ]);
+      data = teams;
     } catch (e) {}
     const chosen = new Set(FAVS);
     const groups = Object.entries(data.leagues || {}).filter(([, ts]) => ts.length);
@@ -1005,8 +1029,13 @@
         <button class="ob-next" id="ob-done">${t('ob_done')}</button></div>`, false);
     document.querySelectorAll('#sheet-body .chips').forEach(el => bindChips(el, chosen));
     document.getElementById('ob-skip').onclick = finishOnboarding;
-    document.getElementById('ob-done').onclick = async () => {
-      for (const k of chosen) if (!FAVS.has(k)) await toggleFav(k);
+    const done = document.getElementById('ob-done');
+    done.onclick = async () => {
+      // ננעל מיד: השמירה לוקחת רגע, וקודם אפשר היה ללחוץ שוב ושוב
+      if (done.disabled) return;
+      done.disabled = true;
+      done.textContent = t('saving');
+      try { await saveFavsBulk({ teams: [...chosen].filter(k => !FAVS.has(k)) }); } catch (e) {}
       finishOnboarding();
     };
   }
