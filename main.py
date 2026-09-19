@@ -1380,45 +1380,161 @@ class _LibsqlCursor:
         return [_LibsqlRow(self._cols, r) for r in self._cur.fetchall()]
 
 
+# ── חיבור Turso משותף לכל התהליך ───────────────────────
+# libsql.connect() מסנכרן מול הענן, וכל בקשה פתחה חיבור משלה — לפעמים
+# כמה, כי אותה בקשה קוראת ל-get_db() יותר מפעם אחת. כל סנכרון הוא סבב
+# רשת, ולכן כל פעולה באתר שילמה על כך. כאן: חיבור אחד, שמסונכרן לכל
+# היותר פעם ב-TURSO_SYNC_SEC. כתיבה עדיין מסנכרנת מיד — היא חייבת
+# להגיע לענן, ומיד אחריה קוראים את מה שנכתב.
+TURSO_SYNC_SEC = float(os.environ.get("TURSO_SYNC_SEC", "20"))
+# מתג חירום: TURSO_SHARED=0 מחזיר חיבור-לכל-בקשה כמו קודם
+TURSO_SHARED   = os.environ.get("TURSO_SHARED", "1") != "0"
+_LIBSQL_LOCK   = threading.RLock()
+_libsql_state  = {"conn": None, "synced_at": 0.0,
+                  "syncs": 0, "skipped": 0, "errors": 0, "rebuilds": 0, "fails": 0}
+
+
+def _libsql_connect():
+    return libsql.connect("turso_replica.db",
+                          sync_url=TURSO_DATABASE_URL,
+                          auth_token=TURSO_AUTH_TOKEN)
+
+
+def _shared_libsql():
+    """החיבור המשותף, מרוענן מהענן לא יותר מפעם ב-TURSO_SYNC_SEC.
+    סנכרון שנכשל לא מפיל כלום — הרפליקה המקומית עדיין קריאה."""
+    st = _libsql_state
+    with _LIBSQL_LOCK:
+        if st["conn"] is None:
+            # אחרי deploy הדיסק ריק, והחיבור הראשון מושך את כל ה-DB
+            st["conn"] = _libsql_connect()
+            st["synced_at"] = time.time()
+            st["syncs"] += 1
+            return st["conn"]
+        now = time.time()
+        if now - st["synced_at"] >= TURSO_SYNC_SEC:
+            try:
+                st["conn"].sync()
+                st["syncs"] += 1
+            except Exception as e:
+                st["errors"] += 1
+                print(f"[turso] sync failed: {e}")
+            st["synced_at"] = now     # גם כישלון ממתין למחזור הבא
+        else:
+            st["skipped"] += 1
+        return st["conn"]
+
+
+# כמה כישלונות רצופים בחיבור המשותף לפני שמוותרים עליו לגמרי. אם
+# libsql האמיתי לא סובל שימוש מכמה threads, האתר יחזור מעצמו להתנהגות
+# הישנה במקום להחזיר שגיאות — בלי שאף אחד יצטרך לגעת ב-Render.
+SHARED_FAIL_LIMIT = 3
+
+
+def _note_shared_failure(err):
+    global TURSO_SHARED
+    _libsql_state["fails"] = _libsql_state.get("fails", 0) + 1
+    print(f"[turso] shared connection failed ({_libsql_state['fails']}): {err}")
+    if _libsql_state["fails"] >= SHARED_FAIL_LIMIT and TURSO_SHARED:
+        TURSO_SHARED = False
+        print("[turso] giving up on the shared connection — "
+              "back to one per request")
+
+
+def _drop_shared_libsql():
+    """חיבור שנשבר — נבנה מחדש בפעם הבאה, במקום להחזיר שגיאות לנצח."""
+    with _LIBSQL_LOCK:
+        old = _libsql_state["conn"]
+        _libsql_state["conn"] = None
+        _libsql_state["rebuilds"] += 1
+    if old is not None:
+        try:
+            old.close()
+        except Exception:
+            pass
+
+
 class _LibsqlConn:
     """עוטף חיבור libsql כך שיתנהג כמו sqlite3 עם row_factory=Row.
-    commit() גם מסנכרן מול הענן, כדי שקריאות עוקבות יראו את הכתיבה."""
+    commit() גם מסנכרן מול הענן, כדי שקריאות עוקבות יראו את הכתיבה.
+    shared=True — החיבור משותף לכל התהליך, ולכן close() לא סוגר אותו,
+    והפעולות ננעלות כדי שלא ירוצו משני threads בו-זמנית."""
 
-    def __init__(self, conn):
+    def __init__(self, conn, shared=False):
         self._conn = conn
+        self._shared = shared
+
+    def _lock(self):
+        return _LIBSQL_LOCK if self._shared else _NULL_LOCK
+
+    def _run(self, make):
+        """נכשל על החיבור המשותף? מנסים פעם אחת על חיבור טרי משלנו.
+        אי אפשר לבדוק כאן את libsql האמיתי (אין לו build ל-3.14), ולכן
+        תקלה בשיתוף מורידה את הבקשה הזו להתנהגות הישנה במקום להיכשל."""
+        with self._lock():
+            try:
+                return make(self._conn)
+            except Exception as first:
+                if not self._shared:
+                    raise
+                _drop_shared_libsql()
+                _note_shared_failure(first)
+                try:
+                    fresh = _libsql_connect()
+                except Exception:
+                    raise first
+                self._conn, self._shared = fresh, False
+                return make(fresh)
 
     def execute(self, sql, params=()):
-        return _LibsqlCursor(self._conn.execute(sql, tuple(params)))
+        p = tuple(params)
+        return self._run(lambda c: _LibsqlCursor(c.execute(sql, p)))
 
     def executemany(self, sql, seq):
-        self._conn.executemany(sql, [tuple(p) for p in seq])
+        rows = [tuple(x) for x in seq]
+        return self._run(lambda c: c.executemany(sql, rows))
 
     def commit(self):
-        self._conn.commit()
-        try:
-            self._conn.sync()
-        except Exception as e:
-            print(f"[turso] sync after commit failed: {e}")
+        self._run(lambda c: c.commit())
+        with self._lock():
+            try:
+                self._conn.sync()
+                _libsql_state["syncs"] += 1
+                _libsql_state["synced_at"] = time.time()
+            except Exception as e:
+                _libsql_state["errors"] += 1
+                print(f"[turso] sync after commit failed: {e}")
 
     def close(self):
+        if self._shared:
+            return          # חיבור משותף — נשאר פתוח לבקשה הבאה
         try:
             self._conn.close()
         except Exception:
             pass
 
 
+class _NullLock:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+_NULL_LOCK = _NullLock()
+
+
 def get_db():
     if TURSO_DATABASE_URL and libsql is not None:
-        # embedded replica: קובץ מקומי (קריאות מהירות) שמסונכרן ל-Turso.
-        # connect() כבר מבצע סנכרון מהענן — אחרי deploy (דיסק ריק) הוא
-        # מושך את כל ה-DB; אחר כך המשיכות אינקרמנטליות וזולות.
+        # embedded replica: קובץ מקומי (קריאות מהירות) שמסונכרן ל-Turso
         try:
-            conn = libsql.connect("turso_replica.db",
-                                  sync_url=TURSO_DATABASE_URL,
-                                  auth_token=TURSO_AUTH_TOKEN)
-            return _LibsqlConn(conn)
+            if TURSO_SHARED:
+                return _LibsqlConn(_shared_libsql(), shared=True)
+            return _LibsqlConn(_libsql_connect())
         except Exception as e:
             # Turso לא זמין? האתר ממשיך על sqlite מקומי במקום ליפול
+            _libsql_state["conn"] = None
             print(f"[turso] connect failed — falling back to local sqlite: {e}")
 
     conn = sqlite3.connect(DB_PATH)
@@ -3601,6 +3717,22 @@ def debug_mail(request: Request):
         except Exception as ex:
             report["login"] = f"error: {type(ex).__name__}"
     return report
+
+
+@app.get("/debug/db")
+def debug_db(request: Request):
+    """כמה סנכרונים מול Turso באמת קרו. skipped = בקשות שנחסכו להן
+    סבב רשת בזכות החיבור המשותף — היחס ביניהם הוא כל העניין."""
+    require_admin(request)
+    st = _libsql_state
+    return {"turso": bool(TURSO_DATABASE_URL and libsql is not None),
+            "shared": TURSO_SHARED, "sync_every_sec": TURSO_SYNC_SEC,
+            "connected": st["conn"] is not None,
+            "syncs": st["syncs"], "skipped": st["skipped"],
+            "sync_errors": st["errors"], "rebuilds": st["rebuilds"],
+            "shared_failures": st.get("fails", 0),
+            "seconds_since_sync": round(time.time() - st["synced_at"], 1)
+                                  if st["synced_at"] else None}
 
 
 @app.get("/debug/quota")
