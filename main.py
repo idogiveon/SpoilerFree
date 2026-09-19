@@ -854,6 +854,11 @@ LOGIN_I18N = {
            "err_locked": "יותר מדי ניסיונות — נסה שוב בעוד 15 דקות או היכנס עם קוד",
            "err_pw_short": "הסיסמה צריכה 8 תווים לפחות", "err_pw_long": "הסיסמה ארוכה מדי",
            "err_pw_reset": "כדי להחליף סיסמה — היכנס עם קוד למייל",
+           "have_account": "כבר יש לך חשבון? התחבר",
+           "reset_title": "איפוס סיסמה",
+           "reset_body": "כתוב לכתובת הזו ונאפס לך את הסיסמה:",
+           "reset_no_addr": "פנה למי שנתן לך את הקישור לאתר.",
+           "privacy_note": "נשמרים המייל שלך, הליגות והקבוצות שבחרת. הסיסמה נשמרת מעורבלת בלבד — גם לנו אין דרך לקרוא אותה.",
            "new_user_simple": "משתמש חדש? הרשמה", "register_title": "הרשמה — מייל וסיסמה",
            "register_btn": "הרשמה וכניסה", "forgot_admin": "שכחת סיסמה? בקש מהמנהל לאפס אותה",
            "err_exists": "המייל כבר רשום — היכנס עם הסיסמה",
@@ -875,6 +880,11 @@ LOGIN_I18N = {
            "err_locked": "Too many attempts — try again in 15 minutes or log in with a code",
            "err_pw_short": "Password must be at least 8 characters", "err_pw_long": "Password is too long",
            "err_pw_reset": "To change your password, log in with an email code",
+           "have_account": "Already have an account? Log in",
+           "reset_title": "Password reset",
+           "reset_body": "Write to this address and we'll reset your password:",
+           "reset_no_addr": "Ask whoever sent you the link to this site.",
+           "privacy_note": "We keep your email and the leagues and teams you pick. Your password is stored hashed — we cannot read it either.",
            "new_user_simple": "New here? Sign up", "register_title": "Sign up — email and password",
            "register_btn": "Sign up and log in", "forgot_admin": "Forgot your password? Ask the admin to reset it",
            "err_exists": "This email is already registered — log in with your password",
@@ -896,6 +906,11 @@ LOGIN_I18N = {
            "err_locked": "Demasiados intentos — inténtalo en 15 minutos o entra con un código",
            "err_pw_short": "La contraseña debe tener al menos 8 caracteres", "err_pw_long": "La contraseña es demasiado larga",
            "err_pw_reset": "Para cambiar la contraseña, entra con un código por correo",
+           "have_account": "¿Ya tienes cuenta? Inicia sesión",
+           "reset_title": "Restablecer contraseña",
+           "reset_body": "Escribe a esta dirección y restableceremos tu contraseña:",
+           "reset_no_addr": "Pregunta a quien te envió el enlace.",
+           "privacy_note": "Guardamos tu correo y las ligas y equipos que elijas. La contraseña se guarda cifrada — nosotros tampoco podemos leerla.",
            "new_user_simple": "¿Nuevo? Regístrate", "register_title": "Registro — correo y contraseña",
            "register_btn": "Registrarme y entrar", "forgot_admin": "¿Olvidaste tu contraseña? Pide al administrador que la restablezca",
            "err_exists": "Este correo ya está registrado — entra con tu contraseña",
@@ -920,6 +935,11 @@ LOGIN_I18N = {
            "err_locked": "Trop de tentatives — réessayez dans 15 minutes ou connectez-vous avec un code",
            "err_pw_short": "Le mot de passe doit comporter au moins 8 caractères", "err_pw_long": "Mot de passe trop long",
            "err_pw_reset": "Pour changer de mot de passe, connectez-vous avec un code reçu par e-mail",
+           "have_account": "Vous avez déjà un compte ? Connectez-vous",
+           "reset_title": "Réinitialiser le mot de passe",
+           "reset_body": "Écrivez à cette adresse et nous le réinitialiserons :",
+           "reset_no_addr": "Demandez à la personne qui vous a envoyé le lien.",
+           "privacy_note": "Nous conservons votre e-mail et les ligues et équipes choisies. Le mot de passe est stocké chiffré — nous ne pouvons pas le lire non plus.",
            "new_user_simple": "Nouveau ? Inscrivez-vous", "register_title": "Inscription — e-mail et mot de passe",
            "register_btn": "S'inscrire et se connecter", "forgot_admin": "Mot de passe oublié ? Demandez à l'administrateur de le réinitialiser",
            "err_exists": "Cet e-mail est déjà inscrit — connectez-vous avec votre mot de passe",
@@ -994,7 +1014,7 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
   <button id="login-btn" onclick="pwLogin()" data-i18n="enter">כניסה</button>
   <button class="link" id="new-user-btn" onclick="newUser()">משתמש חדש? הרשמה</button>
   <button class="link" id="forgot-btn" onclick="codeMode('reset')" data-i18n="forgot">שכחתי סיסמה</button>
-  <p class="hint" id="forgot-admin" data-i18n="forgot_admin" hidden>שכחת סיסמה? בקש מהמנהל לאפס אותה</p>
+  <button class="link" id="forgot-admin" data-i18n="forgot_admin" onclick="askReset()" hidden>שכחת סיסמה? בקש מהמנהל לאפס אותה</button>
 </div>
 
 <div id="step-register" hidden>
@@ -1004,7 +1024,7 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
   <input type="password" id="reg-pw2" autocomplete="new-password" dir="ltr">
   <input type="password" id="reg-admin-key" autocomplete="off" dir="ltr" hidden>
   <button id="reg-btn" onclick="register()" data-i18n="register_btn">הרשמה וכניסה</button>
-  <button class="link" onclick="back()" data-i18n="back">חזרה</button>
+  <button class="link" onclick="show('step-login')" data-i18n="have_account">כבר יש לך חשבון? התחבר</button>
 </div>
 
 <div id="step-email" hidden>
@@ -1035,6 +1055,7 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 </div>
 
 <div class="err" id="err"></div>
+<p class="hint" data-i18n="privacy_note">נשמרים המייל שלך, הליגות והקבוצות שבחרת. הסיסמה נשמרת מעורבלת בלבד — גם לנו אין דרך לקרוא אותה.</p>
 <!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')" data-i18n="legacy_link">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
 </div>
 <button class="cookie-link" onclick="openCookies()">Cookie settings</button>
@@ -1050,9 +1071,20 @@ const L = __LOGIN_I18N__;
 // code_required: הרשמה רק עם קוד למייל; can_send: יש שליחת מיילים ("שכחתי סיסמה")
 const CFG = __LOGIN_CFG__;
 if (!CFG.can_send) { $('forgot-btn').hidden = true; $('forgot-admin').hidden = false; }
-let LANG = 'he';
-try { LANG = localStorage.getItem('sf:lang') || 'he'; } catch (e) {}
-if (!L[LANG]) LANG = 'he';
+// בלי בחירה שמורה — לפי שפת המכשיר. מכשיר בשפה שאין לנו → אנגלית
+function deviceLang() {
+  const tags = navigator.languages && navigator.languages.length
+    ? navigator.languages : [navigator.language || 'en'];
+  for (const tag of tags) {
+    const code = String(tag).toLowerCase().split('-')[0];
+    if (code === 'iw') return 'he';           // קוד ישן לעברית
+    if (L[code]) return code;
+  }
+  return 'en';
+}
+let LANG = null;
+try { LANG = localStorage.getItem('sf:lang'); } catch (e) {}
+if (!LANG || !L[LANG]) LANG = deviceLang();
 const t = k => (L[LANG] || {})[k] ?? L.he[k] ?? k;
 function applyLang() {
   document.documentElement.lang = LANG;
@@ -1175,7 +1207,22 @@ $('reg-pw2').addEventListener('keydown', e => { if (e.key === 'Enter') register(
 $('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
 $('code').addEventListener('input', e => { if (e.target.value.trim().length === 6) verify(); });
 $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') legacy(); });
-$('email').focus();
+// עמוד ברירת המחדל הוא הרשמה — רוב מי שמגיע לכאן עוד לא רשום.
+// כשהרשמה דורשת קוד למייל, המסך הזה לא רלוונטי ונשארים בכניסה.
+if (CFG.code_required) { $('email').focus(); }
+else { show('step-register'); $('reg-email').focus(); }
+
+// "שכחתי סיסמה" בלי שליחת מיילים: מציגים למי לכתוב
+async function askReset() {
+  let addr = '';
+  try { addr = (await fetch('/auth/contact').then(r => r.json())).email || ''; } catch (e) {}
+  $('cookie-body').innerHTML = '<h2>' + t('reset_title') + '</h2><p>'
+    + (addr ? t('reset_body') + '</p><p dir="ltr"><b><a href="mailto:' + addr
+              + '?subject=SpoilerFree">' + addr + '</a></b>'
+       : t('reset_no_addr'))
+    + '</p>';
+  $('cookie-overlay').hidden = false;
+}
 </script></body></html>"""
 
 
@@ -4584,6 +4631,14 @@ def auth_verify(payload: dict = Body(...)):
         _notify_registration(email, payload.get("lang"))
     return _session_response(token, {"ok": True,
                                      "need_password": not (user and user["password_hash"])})
+
+
+@app.get("/auth/contact")
+def auth_contact():
+    """למי לכתוב כשאין שליחת מיילים ושכחת סיסמה. נמסר רק בלחיצה,
+    ולא יושב בקוד המקור של העמוד — פחות מזון לסורקי ספאם."""
+    return {"email": sorted(NOTIFY_EMAILS or ADMIN_EMAILS)[0]
+                     if (NOTIFY_EMAILS or ADMIN_EMAILS) else ""}
 
 
 @app.post("/auth/register")

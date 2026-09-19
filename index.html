@@ -521,9 +521,20 @@
   // ── שפה ────────────────────────────────────────────
   const I18N = JSON.parse(document.getElementById('i18n').textContent);
   const LOCALES = { he: 'he-IL', en: 'en-GB', es: 'es-ES', fr: 'fr-FR' };
-  let LANG = 'he';
-  try { LANG = localStorage.getItem('sf:lang') || 'he'; } catch (e) {}
-  if (!I18N[LANG]) LANG = 'he';
+  // בלי בחירה שמורה — לפי שפת המכשיר. שפה שאין לנו → אנגלית
+  function deviceLang() {
+    const tags = navigator.languages && navigator.languages.length
+      ? navigator.languages : [navigator.language || 'en'];
+    for (const tag of tags) {
+      const code = String(tag).toLowerCase().split('-')[0];
+      if (code === 'iw') return 'he';          // קוד ישן לעברית
+      if (I18N[code]) return code;
+    }
+    return 'en';
+  }
+  let LANG = null;
+  try { LANG = localStorage.getItem('sf:lang'); } catch (e) {}
+  if (!LANG || !I18N[LANG]) LANG = deviceLang();
 
   function t(key, vars = {}) {
     let s = (I18N[LANG] || {})[key] ?? I18N.he[key] ?? key;
