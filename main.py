@@ -444,7 +444,141 @@ LEAGUES = {
              "allow_embed": False},
         ],
     },
+    # ── גביעים ─────────────────────────────────────────
+    # "מחזור" בגביע הוא שלב, ולא רץ מ-1 ומעלה: קאראבאו 26/27 הוא
+    # 128→64→32→16, ואחר כך 125=רבע גמר, 150=חצי, 200=גמר. אומת מול
+    # העונה שעברה בכל חמשת הגביעים (18.9.26). לכן cup=True: הלקוח מציג
+    # שם שלב במקום מספר מחזור, ומסדר לפי תאריך ולא לפי המספר.
+    "carabao": {
+        "name": "גביע קאראבאו",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4570"],
+        "sportsdb_season": "2026-2027",
+        "cup": True,
+        "sources": [
+            # הערוץ הרשמי של ה-EFL מעלה גם ליגה וגם גביע, ולכן חייבים את
+            # שם הגביע בכותרת: "DEBUTANTS SHINE! | Manchester City v
+            # Norwich City Carabao Cup Extended Highlights" (17.9.26).
+            # בלי זה, משחק ליגה בין אותן קבוצות היה מוצג כתקציר הגביע.
+            {"id": "efl_cup", "name": "EFL",
+             "channel_id": "UCCmo_NIuQR5eU4AvBa6sEQQ",
+             "search_template": "{home} {away} Carabao Cup highlights",
+             "title_include": ["carabao"],
+             "allow_embed": False},
+        ],
+    },
+    "facup": {
+        "name": "הגביע האנגלי",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4482"],
+        "sportsdb_season": "2026-2027",
+        "cup": True,
+        "sources": [
+            # "INCREDIBLE Late Drama! | Knowle FC v Worcester City |
+            # Key Moments | Emirates FA Cup 2027" — שתי הקבוצות בכותרת,
+            # אבל "Key Moments" במקום Highlights. מגן הקהילה (Community
+            # Shield) עולה באותו ערוץ והוא תחרות אחרת.
+            {"id": "fa_cup", "name": "The Emirates FA Cup",
+             "channel_id": "UCChcWqwYXCEs657MQ00qVWA",
+             "search_template": "{home} {away} Emirates FA Cup",
+             "title_include": ["fa cup"],
+             "title_exclude": ["community shield", "full match"],
+             "allow_embed": False},
+        ],
+    },
+    "dfbpokal": {
+        "name": "הגביע הגרמני",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4485"],
+        "sportsdb_season": "2026-2027",
+        "cup": True,
+        "sources": [
+            # "VfL Osnabrück vs FC Bayern München 1-4 | Highlights |
+            # DFB-Pokal" — כותרות באנגלית, שתי הקבוצות, שם הגביע.
+            # הערוץ מעלה גם בונדסליגה ונבחרת, ומכאן title_include.
+            {"id": "german_football", "name": "German Football",
+             "channel_id": "UC7am34-1rGU_ky1vWYnoOJQ",
+             "search_template": "{home} {away} DFB-Pokal highlights",
+             "title_include": ["pokal"],
+             "allow_embed": False},
+        ],
+    },
+    "copadelrey": {
+        "name": "גביע המלך",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4483"],
+        "sportsdb_season": "2026-2027",
+        "cup": True,
+        "sources": [
+            # ההתאחדות הספרדית: "Resumen Final #CopaDelReyMAPFRE |
+            # Atlético de Madrid - Real Sociedad". הערוץ מעלה גם ליגות
+            # נמוכות ("Resumen #PrimeraFederación"), ומכאן title_include.
+            {"id": "rfef", "name": "RFEF",
+             "channel_id": "UCQBxzdEPXjy05MtpfbdtMxQ",
+             "search_template": "{home} {away} Copa del Rey resumen",
+             "title_include": ["copa"],
+             "allow_embed": False},
+        ],
+    },
+    "coupedefrance": {
+        "name": "הגביע הצרפתי",
+        "source": "sportsdb",
+        "sportsdb_ids": ["4484"],
+        "sportsdb_season": "2026-2027",
+        "cup": True,
+        # אין ערוץ מרכזי: ההתאחדות הצרפתית מעלה רק נבחרות (נבדק 19.9.26).
+        # המקור היחיד הוא ערוצי המועדונים — "OM 3-1 Rennes | Le résumé
+        # de la victoire" ו-"8e CDF | ... face à ..." בערוץ של רן.
+    },
 }
+
+# בגביע משחקות קבוצות מכמה ליגות, והערוצים שלהן כבר אומתו אצלנו. כאן הם
+# מושאלים — מקור אמת אחד לכל ערוץ, בלי שכפול מזהים. השמות הם כפי
+# ש-sportsdb כותב אותם; ההתאמה עצמה נעשית דרך team_key, שסופג הפרשי
+# "FC"/"&"/ניקוד ("Brighton & Hove Albion FC" מול "Brighton and Hove Albion").
+# מועדוני פרמייר ליג 2026-27 — ערוצים אומתו ידנית (29/8/26), 7 תוקנו
+# אחרי אימות /debug/channels (1/9/26). הקוד הוא מקור האמת: בכל עלייה
+# טבלת clubs נבנית מחדש מהרשימה הזו, והגביעים שואלים ממנה ערוצים.
+PREMIER_CLUBS = [
+    ("PL-fd57",   "Arsenal FC",                "Arsenal",        "premier", 1, "UCpryVRk_VDudG8SHXgWcG0w", "57"),
+    ("PL-fd61",   "Chelsea FC",                "Chelsea",        "premier", 1, "UCU2PacFf99vhb3hNiYDmxww", "61"),
+    ("PL-fd64",   "Liverpool FC",              "Liverpool",      "premier", 1, "UC9LQwHZoucFT94I2h6JOcjw", "64"),
+    ("PL-fd65",   "Manchester City FC",        "Man City",       "premier", 1, "UCkzCjdRMrW2vXLx8mvPVLdQ", "65"),
+    ("PL-fd66",   "Manchester United FC",      "Man United",     "premier", 1, "UC6yW44UGJJBvYTlfC7CRg2Q", "66"),
+    ("PL-fd73",   "Tottenham Hotspur FC",      "Spurs",          "premier", 1, "UCEg25rdRZXg32iwai6N6l0w", "73"),
+    ("PL-fd1044", "AFC Bournemouth",           "Bournemouth",    "premier", 2, "UCeOCuVSSweaEj6oVtJZEKQw", "1044"),
+    ("PL-fd58",   "Aston Villa FC",            "Aston Villa",    "premier", 2, "UCICNP0mvtr0prFwGUQIABfQ", "58"),
+    ("PL-fd402",  "Brentford FC",              "Brentford",      "premier", 2, "UCAalMUm3LIf504ItA3rqfug", "402"),
+    ("PL-fd397",  "Brighton & Hove Albion FC", "Brighton",       "premier", 2, "UCf-cpC9WAdOsas19JHipukA", "397"),
+    ("PL-fd1076", "Coventry City FC",          "Coventry",       "premier", 2, "UCch_NWdo3JWKngAyO9XlycA", "1076"),
+    ("PL-fd354",  "Crystal Palace FC",         "Crystal Palace", "premier", 2, "UCWB9N0012fG6bGyj486Qxmg", "354"),
+    ("PL-fd62",   "Everton FC",                "Everton",        "premier", 2, "UCtK4QAczAN2mt2ow_jlGinQ", "62"),
+    ("PL-fd63",   "Fulham FC",                 "Fulham",         "premier", 2, "UC2VLfz92cTT8jHIFOecC-LA", "63"),
+    ("PL-fd322",  "Hull City AFC",             "Hull",           "premier", 2, "UC8MRV5E-Bi5qWomGjOF0ZQg", "322"),
+    ("PL-fd349",  "Ipswich Town FC",           "Ipswich",        "premier", 2, "UCjNwxJec96lMWgCXjEDhXgQ", "349"),
+    ("PL-fd341",  "Leeds United FC",           "Leeds",          "premier", 2, "UCyQcJHDN4uYfPa1DHzKVSnw", "341"),
+    ("PL-fd67",   "Newcastle United FC",       "Newcastle",      "premier", 2, "UCywGl_BPp9QhD0uAcP2HsJw", "67"),
+    ("PL-fd351",  "Nottingham Forest FC",      "Forest",         "premier", 2, "UCyAxjuAr8f_BFDGCO3Htbxw", "351"),
+    ("PL-fd71",   "Sunderland AFC",            "Sunderland",     "premier", 2, "UCrw-7k6yJc0EMJdf-0BAkoQ", "71"),
+]
+
+
+def _register_cup_club_channels() -> None:
+    english = {re.sub(r"^AFC\s+|\s+A?FC$", "", c[1]).strip(): c[5]
+               for c in PREMIER_CLUBS}
+    english.update(LEAGUES["championship"]["club_channels"])
+    LEAGUES["carabao"]["club_channels"] = english
+    LEAGUES["facup"]["club_channels"] = dict(english)
+
+    uel = LEAGUES["uel"]["club_channels"]
+    def borrow(*names):
+        return {n: uel[n] for n in names if n in uel}
+    LEAGUES["copadelrey"]["club_channels"] = borrow("Celta Vigo", "Real Sociedad")
+    LEAGUES["coupedefrance"]["club_channels"] = borrow("Marseille", "Rennes")
+    LEAGUES["dfbpokal"]["club_channels"] = borrow("Bayer Leverkusen")
+
+
+_register_cup_club_channels()
 
 # ── Auth ───────────────────────────────────────────────
 # כניסה אישית: מייל → קוד חד-פעמי (6 ספרות, 10 דקות) → session ל-90 יום.
@@ -1401,28 +1535,7 @@ def init_db():
 
     # מועדוני פרמייר ליג 2026-27 — ערוצים מופו ואומתו ידנית (29/8/26); 7 ערוצים תוקנו אחרי אימות /debug/channels (1/9/26).
     # הקוד הוא מקור האמת: בכל עלייה הטבלה נבנית מחדש מהרשימה הזו.
-    premier_clubs = [
-        ("PL-fd57",   "Arsenal FC",                "Arsenal",        "premier", 1, "UCpryVRk_VDudG8SHXgWcG0w", "57"),
-        ("PL-fd61",   "Chelsea FC",                "Chelsea",        "premier", 1, "UCU2PacFf99vhb3hNiYDmxww", "61"),
-        ("PL-fd64",   "Liverpool FC",              "Liverpool",      "premier", 1, "UC9LQwHZoucFT94I2h6JOcjw", "64"),
-        ("PL-fd65",   "Manchester City FC",        "Man City",       "premier", 1, "UCkzCjdRMrW2vXLx8mvPVLdQ", "65"),
-        ("PL-fd66",   "Manchester United FC",      "Man United",     "premier", 1, "UC6yW44UGJJBvYTlfC7CRg2Q", "66"),
-        ("PL-fd73",   "Tottenham Hotspur FC",      "Spurs",          "premier", 1, "UCEg25rdRZXg32iwai6N6l0w", "73"),
-        ("PL-fd1044", "AFC Bournemouth",           "Bournemouth",    "premier", 2, "UCeOCuVSSweaEj6oVtJZEKQw", "1044"),
-        ("PL-fd58",   "Aston Villa FC",            "Aston Villa",    "premier", 2, "UCICNP0mvtr0prFwGUQIABfQ", "58"),
-        ("PL-fd402",  "Brentford FC",              "Brentford",      "premier", 2, "UCAalMUm3LIf504ItA3rqfug", "402"),
-        ("PL-fd397",  "Brighton & Hove Albion FC", "Brighton",       "premier", 2, "UCf-cpC9WAdOsas19JHipukA", "397"),
-        ("PL-fd1076", "Coventry City FC",          "Coventry",       "premier", 2, "UCch_NWdo3JWKngAyO9XlycA", "1076"),
-        ("PL-fd354",  "Crystal Palace FC",         "Crystal Palace", "premier", 2, "UCWB9N0012fG6bGyj486Qxmg", "354"),
-        ("PL-fd62",   "Everton FC",                "Everton",        "premier", 2, "UCtK4QAczAN2mt2ow_jlGinQ", "62"),
-        ("PL-fd63",   "Fulham FC",                 "Fulham",         "premier", 2, "UC2VLfz92cTT8jHIFOecC-LA", "63"),
-        ("PL-fd322",  "Hull City AFC",             "Hull",           "premier", 2, "UC8MRV5E-Bi5qWomGjOF0ZQg", "322"),
-        ("PL-fd349",  "Ipswich Town FC",           "Ipswich",        "premier", 2, "UCjNwxJec96lMWgCXjEDhXgQ", "349"),
-        ("PL-fd341",  "Leeds United FC",           "Leeds",          "premier", 2, "UCyQcJHDN4uYfPa1DHzKVSnw", "341"),
-        ("PL-fd67",   "Newcastle United FC",       "Newcastle",      "premier", 2, "UCywGl_BPp9QhD0uAcP2HsJw", "67"),
-        ("PL-fd351",  "Nottingham Forest FC",      "Forest",         "premier", 2, "UCyAxjuAr8f_BFDGCO3Htbxw", "351"),
-        ("PL-fd71",   "Sunderland AFC",            "Sunderland",     "premier", 2, "UCrw-7k6yJc0EMJdf-0BAkoQ", "71"),
-    ]
+    premier_clubs = PREMIER_CLUBS
 
     # seed מנוהל-גרסה: מזריעים מחדש רק כשהרשימה בקוד השתנתה (הקפץ את
     # SEED_VERSION אחרי כל עריכה שלה). אחרת — מה שב-DB, כולל מיפויים
@@ -2289,13 +2402,28 @@ def _short_en(name: str) -> str:
     return re.sub(r"^AFC |\s+A?FC$", "", name or "").strip() or (name or "")
 
 
+# המפתחות של TEAM_NAMES הם שמות football-data ("Fulham FC"), ובגביע אותה
+# קבוצה מגיעה מ-sportsdb בשם אחר ("Fulham"). נבנה פעם אחת גם אינדקס מנורמל,
+# אחרת חצי מלוח הגביע היה נשאר באנגלית ליד שמות מתורגמים.
+_TEAM_NAMES_BY_KEY: dict = {}
+
+
+def _names_by_key(lang: str) -> dict:
+    if lang not in _TEAM_NAMES_BY_KEY:
+        _TEAM_NAMES_BY_KEY[lang] = {team_key(k): v
+                                    for k, v in TEAM_NAMES.get(lang, {}).items()}
+    return _TEAM_NAMES_BY_KEY[lang]
+
+
 def display_team(name: str, lang: str = "he") -> str:
     """שם הקבוצה כפי שמוצג למשתמש בשפה שבחר."""
     if not name:
         return name
     if lang == "he":
-        return TEAM_NAMES["he"].get(name) or to_hebrew_team(name)
-    return TEAM_NAMES.get(lang, {}).get(name) or _short_en(name)
+        return (TEAM_NAMES["he"].get(name) or _names_by_key("he").get(team_key(name))
+                or to_hebrew_team(name))
+    return (TEAM_NAMES.get(lang, {}).get(name) or _names_by_key(lang).get(team_key(name))
+            or _short_en(name))
 
 
 # ── מפתח קבוצה אחיד (למועדפים — אותה קבוצה בכל מפעל) ───
@@ -2303,6 +2431,7 @@ def display_team(name: str, lang: str = "he") -> str:
 TEAM_KEY_ALIASES = {
     "tottenham hotspur": "tottenham",
     "brighton hove albion": "brighton",
+    "brighton and hove albion": "brighton",
     "wolverhampton wanderers": "wolves",
     "paris saint germain": "psg",
     "inter": "inter milan",
@@ -2705,6 +2834,9 @@ def is_match_highlight(title: str, home: str, away: str,
     highlight = any(w in t for w in
                     ["highlight", "match", "goals", "extended",
                      "שערים", "sign off", "vs", "v.", "\U0001f19a",
+                     # הגביע האנגלי: "Knowle FC v Worcester City |
+                     # Key Moments | Emirates FA Cup 2027"
+                     "key moments",
                      "fifaworldcup", "full match", "resumen",
                      "zusammenfassung",
                      # ליג 1: הפורמט "TEAM - TEAM () | Week N" בלי מילת
@@ -3153,11 +3285,20 @@ def get_sources_for_match(row) -> list:
         # הליגה. club_team: בערוץ של מועדון, שמו לא חייב להופיע בכותרת.
         cc = league["club_channels"]
         q = f"{row['home_team']} {row['away_team']}"
-        club_sources = [
-            {"id": f"club_{_fixture_slug(team)}", "name": to_hebrew_team(team),
-             "channel_id": cc[team], "allow_embed": False,
-             "query_override": q, "club_team": team, **CLUB_TITLE_RULES.get(team, {})}
-            for team in (row["home_team"], row["away_team"]) if team in cc]
+        # התאמה מנורמלת: בגביע אותה קבוצה מגיעה משמות שונים
+        # ("Brighton & Hove Albion FC" מול "Brighton and Hove Albion")
+        by_key = {team_key(name): (name, cid) for name, cid in cc.items()}
+        club_sources = []
+        for team in (row["home_team"], row["away_team"]):
+            hit = by_key.get(team_key(team))
+            if not hit:
+                continue
+            cfg_name, cid = hit
+            club_sources.append(
+                {"id": f"club_{_fixture_slug(team)}", "name": to_hebrew_team(team),
+                 "channel_id": cid, "allow_embed": False,
+                 "query_override": q, "club_team": team,
+                 **CLUB_TITLE_RULES.get(cfg_name, {})})
         return club_sources + league.get("sources", [])
 
     if "sources" in league:
@@ -3775,7 +3916,11 @@ def prefetch_highlights_once() -> int:
         todo = [s for s in get_sources_for_match(row)
                 if s.get("channel_id") and ((row["id"], s["id"]) not in have
                                             or (recheck and not have[(row["id"], s["id"])]))]
-        paid_ok = _yt_units_today() < PREFETCH_UNIT_BUDGET
+        # סיבוב מוקדם בגביע מביא עשרות משחקי חובבים. בדיקה בתשלום עליהם
+        # הייתה בולעת את תקציב הרקע שהליגות צריכות — ברקע הם חינם בלבד
+        # (משחק שמשתמש פותח בפועל עדיין נבדק במלוא המקורות).
+        is_cup = LEAGUES.get(row["league_key"], {}).get("cup")
+        paid_ok = _yt_units_today() < PREFETCH_UNIT_BUDGET and not is_cup
         # אתרים (ספורט 1/5): בלי מכסה — נבדקים בכל סבב עד שנמצא קישור
         webs = [w for w in LEAGUES.get(row["league_key"], {}).get("web_sources", [])
                 if (row["id"], f"web_{w['name']}") not in have]
