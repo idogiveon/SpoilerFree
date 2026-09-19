@@ -78,3 +78,18 @@ def test_the_badge_is_not_hidden_on_a_phone():
     assert ".venue { display:none; }" in mobile
     assert ".highlight-badge { position:static" in mobile
     assert ".highlight-badge,.live-badge { display:none; }" not in mobile
+
+
+def test_the_debug_view_compares_the_badge_with_what_the_window_finds(db):
+    """הפיד הבטיח תקציר לטוטנהאם–אסטון וילה והחלון אמר "עדיין לא עלה"
+    (19.9.26). כאן רואים בבת אחת מי מהשניים צודק ולמה."""
+    db.execute("INSERT INTO matches (id, league_key, home_team, away_team, date_utc, "
+               "time_utc, status) VALUES ('dbg1', 'israel', 'Maccabi Haifa', "
+               "'Ironi Tiberias', '2026-09-18', '19:00:00', 'FINISHED')")
+    _cache(db, "dbg1", "sport1", '[{"video_id": "v1"}]')      # מקור קיים
+    _cache(db, "dbg1", "club_gone", '[{"video_id": "v2"}]')   # מזהה נטוש
+    db.commit()
+    m = TestClient(main.app).get("/debug/match?q=Maccabi Haifa").json()["matches"][0]
+    assert m["badge"]["feed_says"] == "yes"
+    assert m["badge"]["orphan_rows"] == ["club_gone"]
+    assert m["badge"]["usable_now"] == ["sport1"]
