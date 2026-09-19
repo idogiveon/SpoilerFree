@@ -4591,6 +4591,16 @@ def debug_match(request: Request, q: str):
     for d, r in zip(out, rows):
         d["sources"] = [{"id": s["id"], "name": s["name"], "channel_id": s.get("channel_id")}
                         for s in get_sources_for_match(r)]
+        # החיווי בפיד מול מה שהחלון באמת ימצא. פער ביניהם = שורות קאש
+        # תחת מזהה מקור שהמשחק כבר לא משתמש בו (19.9.26: הפיד הבטיח
+        # תקציר לטוטנהאם–אסטון וילה, והחלון אמר "עדיין לא עלה")
+        live = {c["source_id"] for c in d["cache"]
+                if c["videos"] not in ("[]", "")}
+        mine = {x["id"] for x in d["sources"]}
+        d["badge"] = {"feed_says": _highlight_states(get_db(), [r["id"]]).get(r["id"]),
+                      "cache_with_videos": sorted(live),
+                      "orphan_rows": sorted(live - mine),
+                      "usable_now": sorted(live & mine)}
     return {"matches": out}
 
 
