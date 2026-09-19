@@ -1386,7 +1386,10 @@ class _LibsqlCursor:
 # רשת, ולכן כל פעולה באתר שילמה על כך. כאן: חיבור אחד, שמסונכרן לכל
 # היותר פעם ב-TURSO_SYNC_SEC. כתיבה עדיין מסנכרנת מיד — היא חייבת
 # להגיע לענן, ומיד אחריה קוראים את מה שנכתב.
-TURSO_SYNC_SEC = float(os.environ.get("TURSO_SYNC_SEC", "20"))
+# למה 60 שניות: יש instance אחד, והכתיבות שלו מסנכרנות מיד — כלומר
+# החלון הזה מגן רק מפני כתיבה שנעשתה מחוץ לאתר. ב-20 שניות רוב
+# הבקשות חצו אותו וממילא שילמו סבב רשת (skipped=0 בפרודקשן, 19.9.26).
+TURSO_SYNC_SEC = float(os.environ.get("TURSO_SYNC_SEC", "60"))
 # מתג חירום: TURSO_SHARED=0 מחזיר חיבור-לכל-בקשה כמו קודם
 TURSO_SHARED   = os.environ.get("TURSO_SHARED", "1") != "0"
 _LIBSQL_LOCK   = threading.RLock()
@@ -1434,6 +1437,11 @@ SHARED_FAIL_LIMIT = 3
 def _note_shared_failure(err):
     global TURSO_SHARED
     _libsql_state["fails"] = _libsql_state.get("fails", 0) + 1
+    # הסיבה עצמה: בלי לראות אותה אי אפשר לדעת אם זו בעיית threads
+    # (שתחזור בכל בקשה מקבילה) או תקלת רשת חד-פעמית
+    _libsql_state["last_error"] = f"{type(err).__name__}: {err}"[:200]
+    _libsql_state["last_error_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _libsql_state["last_error_thread"] = threading.current_thread().name
     print(f"[turso] shared connection failed ({_libsql_state['fails']}): {err}")
     if _libsql_state["fails"] >= SHARED_FAIL_LIMIT and TURSO_SHARED:
         TURSO_SHARED = False
@@ -3740,6 +3748,9 @@ def debug_db(request: Request):
             "syncs": st["syncs"], "skipped": st["skipped"],
             "sync_errors": st["errors"], "rebuilds": st["rebuilds"],
             "shared_failures": st.get("fails", 0),
+            "last_error": st.get("last_error"),
+            "last_error_at": st.get("last_error_at"),
+            "last_error_thread": st.get("last_error_thread"),
             "seconds_since_sync": round(time.time() - st["synced_at"], 1)
                                   if st["synced_at"] else None}
 

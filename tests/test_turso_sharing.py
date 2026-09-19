@@ -191,3 +191,15 @@ def test_the_stats_endpoint_shows_what_was_saved(turso, monkeypatch):
     body = TestClient(main.app).get("/debug/db").json()
     assert body["shared"] is True and body["connected"] is True
     assert body["syncs"] == 1 and body["skipped"] == 4
+
+
+def test_the_failure_reason_is_recorded(turso):
+    """בלי הסיבה אי אפשר לדעת אם זו בעיית threads שתחזור בכל בקשה
+    מקבילה, או תקלת רשת חד-פעמית."""
+    conn = main.get_db()
+    main._libsql_state["conn"].fail_next_execute = True
+    conn.execute("SELECT 1")
+    st = main._libsql_state
+    assert "stream closed" in st["last_error"]
+    assert st["last_error"].startswith("RuntimeError")
+    assert st["last_error_at"] and st["last_error_thread"]
