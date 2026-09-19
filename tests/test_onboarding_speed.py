@@ -22,7 +22,7 @@ def test_everything_is_saved_in_one_request(user):
     r = auth_client.post("/favorites/bulk",
                          json={"teams": ["Liverpool FC", "Maccabi Haifa"],
                                "leagues": ["premier", "carabao"]})
-    assert r.json() == {"ok": True, "teams": 2, "leagues": 2}
+    assert r.json() == {"ok": True, "teams": 2, "leagues": 2, "hidden": 0}
     favs = auth_client.get("/favorites").json()
     assert set(favs["favorites"]) == {main.team_key("Liverpool FC"), main.team_key("Maccabi Haifa")}
     assert set(favs["leagues"]) == {"premier", "carabao"}
@@ -90,3 +90,23 @@ def test_a_team_is_offered_under_one_league_only(db):
     data = TestClient(m.app).get("/onboarding/teams?leagues=laliga,ucl").json()["leagues"]
     keys = [t["key"] for ts in data.values() for t in ts]
     assert len(keys) == len(set(keys)), keys
+
+
+def test_what_you_did_not_pick_is_not_shown(user):
+    """מסכי הפתיחה שואלים "באילו ליגות אתה מתעניין" — והתשובה קובעת גם
+    את תצוגת "לפי יום". קודם בחרת ארבע וראית את כולן."""
+    r = user.post("/favorites/bulk", json={"leagues": ["premier", "israel"],
+                                           "hide_leagues": ["mls", "argentina", "premier"]})
+    assert r.json()["hidden"] == 2            # "premier" נבחרה — לא מסתירים אותה
+    favs = user.get("/favorites").json()
+    assert set(favs["hidden"]) == {"mls", "argentina"}
+    assert set(favs["leagues"]) == {"premier", "israel"}
+
+
+def test_the_main_filter_stays_by_league_and_the_list_stays_open():
+    """הכיתוב לא מוחלף בשם הליגה, והרשימה לא נסגרת אחרי בחירה —
+    כך אפשר לעבור בין ליגות בלחיצה אחת."""
+    assert "btn.textContent = '🏆 ' + t('by_league');" in HTML
+    assert "toggleLeagueTabs(currentLeague !== '__byday');" in HTML
+    assert 'id="edit-leagues"' in HTML        # כניסה למסך הליגות מהרשימה
+    assert HTML.count('"by_league":') == 4    # ארבע השפות

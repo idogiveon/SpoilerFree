@@ -4943,6 +4943,10 @@ def set_favorites_bulk(request: Request, payload: dict = Body(...)):
     teams = [k for k in (team_key(str(t or ""))[:120]
                          for t in (payload.get("teams") or [])[:200]) if k]
     leagues = [lg for lg in (payload.get("leagues") or [])[:100] if lg in LEAGUES]
+    # ליגות שהמשתמש לא בחר — לא מוצגות. מסכי הפתיחה שואלים "באילו ליגות
+    # אתה מתעניין", והתשובה צריכה להיות גם מה שרואים בתצוגה לפי יום.
+    hide = [lg for lg in (payload.get("hide_leagues") or [])[:100]
+            if lg in LEAGUES and lg not in leagues]
     conn = get_db()
     for team in teams:
         conn.execute("INSERT OR IGNORE INTO favorites (email, league_key, team) VALUES (?, '', ?)",
@@ -4952,9 +4956,13 @@ def set_favorites_bulk(request: Request, payload: dict = Body(...)):
                      (email, lg))
         # מועדפת = לא מוסתרת (אותה משמעות כמו בשמירה הבודדת)
         conn.execute("DELETE FROM hidden_leagues WHERE email=? AND league_key=?", (email, lg))
+    for lg in hide:
+        conn.execute("INSERT OR IGNORE INTO hidden_leagues (email, league_key) VALUES (?, ?)",
+                     (email, lg))
+        conn.execute("DELETE FROM favorite_leagues WHERE email=? AND league_key=?", (email, lg))
     conn.commit()
     conn.close()
-    return {"ok": True, "teams": len(teams), "leagues": len(leagues)}
+    return {"ok": True, "teams": len(teams), "leagues": len(leagues), "hidden": len(hide)}
 
 
 # ── Admin: משתמשים ─────────────────────────────────────
