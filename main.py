@@ -4931,6 +4931,32 @@ def set_favorite(request: Request, payload: dict = Body(...)):
     return {"ok": True}
 
 
+@app.post("/favorites/bulk")
+def set_favorites_bulk(request: Request, payload: dict = Body(...)):
+    """כל המועדפים בבקשה אחת. חיבור ל-Turso מסנכרן מול הענן, כך
+    שבקשה לכל קבוצה בנפרד שילמה את המחיר הזה שוב ושוב — במסכי
+    הפתיחה זה הצטבר לשניות, והמשתמש לחץ "סיום" שוב ושוב."""
+    require_auth(request)
+    email = (current_user(request) or {}).get("email")
+    if not email:
+        raise HTTPException(400, "בלי חשבון אישי — המועדפים נשמרים במכשיר")
+    teams = [k for k in (team_key(str(t or ""))[:120]
+                         for t in (payload.get("teams") or [])[:200]) if k]
+    leagues = [lg for lg in (payload.get("leagues") or [])[:100] if lg in LEAGUES]
+    conn = get_db()
+    for team in teams:
+        conn.execute("INSERT OR IGNORE INTO favorites (email, league_key, team) VALUES (?, '', ?)",
+                     (email, team))
+    for lg in leagues:
+        conn.execute("INSERT OR IGNORE INTO favorite_leagues (email, league_key) VALUES (?, ?)",
+                     (email, lg))
+        # מועדפת = לא מוסתרת (אותה משמעות כמו בשמירה הבודדת)
+        conn.execute("DELETE FROM hidden_leagues WHERE email=? AND league_key=?", (email, lg))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "teams": len(teams), "leagues": len(leagues)}
+
+
 # ── Admin: משתמשים ─────────────────────────────────────
 
 # מסכי הפתיחה (#32): קבוצות פופולריות לכל ליגה, לפי סדר. השמות מותאמים
@@ -4953,6 +4979,13 @@ POPULAR_TEAMS = {
     "mls":        ["Inter Miami", "LA Galaxy", "Los Angeles FC"],
     "argentina":  ["Boca Juniors", "River Plate", "Racing Club", "Independiente"],
 }
+# גביע = אותן קבוצות גדולות כמו הליגה של אותה מדינה. בלי זה, מסך
+# הפתיחה היה מציע את מוקדמות הגביע האנגלי לפי א"ב.
+for _cup, _league in (("carabao", "premier"), ("facup", "premier"),
+                      ("dfbpokal", "bundesliga"), ("copadelrey", "laliga"),
+                      ("coupedefrance", "ligue1")):
+    POPULAR_TEAMS[_cup] = POPULAR_TEAMS[_league]
+
 ONBOARD_MIN_TEAMS = 6
 
 
@@ -4963,26 +4996,36 @@ def onboarding_teams(request: Request, leagues: str = "", lang: str = "he"):
     wanted = [lg for lg in dict.fromkeys(leagues.split(",")) if lg in LEAGUES]
     out = {}
     conn = get_db()
+    # שאילתה אחת לכל הליגות שנבחרו (היו שתיים לכל ליגה)
+    by_league: dict = {lg: {} for lg in wanted}
+    if wanted:
+        marks = ",".join("?" * len(wanted))
+        for r in conn.execute(
+                f"SELECT league_key, home_team, away_team FROM matches "
+                f"WHERE league_key IN ({marks})", wanted).fetchall():
+            cat = by_league.setdefault(r["league_key"], {})
+            for name in (r["home_team"], r["away_team"]):
+                name = (name or "").strip()
+                if team_key(name):
+                    cat.setdefault(team_key(name), name)
+    # קבוצה מוצעת פעם אחת בלבד. ריאל מדריד הופיעה גם תחת "לה ליגה" וגם
+    # תחת "צ'מפיונס" — שני צ'יפים לאותה בחירה, כך שסימון שניהם ביטל אותה
+    # והמסך הראה שני מצבים סותרים.
+    offered: set = set()
     for lg in wanted:
-        rows = conn.execute("SELECT DISTINCT home_team AS team FROM matches WHERE league_key=? "
-                            "UNION SELECT DISTINCT away_team FROM matches WHERE league_key=?",
-                            (lg, lg)).fetchall()
-        catalog = {}
-        for r in rows:
-            name = (r["team"] or "").strip()
-            if team_key(name):
-                catalog.setdefault(team_key(name), name)
+        catalog = by_league.get(lg, {})
         picked = []
         for name in POPULAR_TEAMS.get(lg, []):
             k = team_key(name)
             hit = k if k in catalog else next(
                 (c for c in catalog if k.startswith(c + " ") or c.startswith(k + " ")), None)
-            if hit and hit not in picked:
+            if hit and hit not in picked and hit not in offered:
                 picked.append(hit)
         if len(picked) < ONBOARD_MIN_TEAMS:
-            rest = sorted((c for c in catalog if c not in picked),
+            rest = sorted((c for c in catalog if c not in picked and c not in offered),
                           key=lambda c: display_team(catalog[c], lang))
             picked += rest[:ONBOARD_MIN_TEAMS - len(picked)]
+        offered.update(picked)
         out[lg] = [{"key": k, "name": display_team(catalog[k], lang)} for k in picked]
     conn.close()
     return {"leagues": out}
