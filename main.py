@@ -1391,7 +1391,7 @@ TURSO_SYNC_SEC = float(os.environ.get("TURSO_SYNC_SEC", "20"))
 TURSO_SHARED   = os.environ.get("TURSO_SHARED", "1") != "0"
 _LIBSQL_LOCK   = threading.RLock()
 _libsql_state  = {"conn": None, "synced_at": 0.0,
-                  "syncs": 0, "skipped": 0, "errors": 0, "rebuilds": 0}
+                  "syncs": 0, "skipped": 0, "errors": 0, "rebuilds": 0, "fails": 0}
 
 
 def _libsql_connect():
@@ -1425,6 +1425,22 @@ def _shared_libsql():
         return st["conn"]
 
 
+# כמה כישלונות רצופים בחיבור המשותף לפני שמוותרים עליו לגמרי. אם
+# libsql האמיתי לא סובל שימוש מכמה threads, האתר יחזור מעצמו להתנהגות
+# הישנה במקום להחזיר שגיאות — בלי שאף אחד יצטרך לגעת ב-Render.
+SHARED_FAIL_LIMIT = 3
+
+
+def _note_shared_failure(err):
+    global TURSO_SHARED
+    _libsql_state["fails"] = _libsql_state.get("fails", 0) + 1
+    print(f"[turso] shared connection failed ({_libsql_state['fails']}): {err}")
+    if _libsql_state["fails"] >= SHARED_FAIL_LIMIT and TURSO_SHARED:
+        TURSO_SHARED = False
+        print("[turso] giving up on the shared connection — "
+              "back to one per request")
+
+
 def _drop_shared_libsql():
     """חיבור שנשבר — נבנה מחדש בפעם הבאה, במקום להחזיר שגיאות לנצח."""
     with _LIBSQL_LOCK:
@@ -1451,25 +1467,36 @@ class _LibsqlConn:
     def _lock(self):
         return _LIBSQL_LOCK if self._shared else _NULL_LOCK
 
-    def _run(self, fn):
+    def _run(self, make):
+        """נכשל על החיבור המשותף? מנסים פעם אחת על חיבור טרי משלנו.
+        אי אפשר לבדוק כאן את libsql האמיתי (אין לו build ל-3.14), ולכן
+        תקלה בשיתוף מורידה את הבקשה הזו להתנהגות הישנה במקום להיכשל."""
         with self._lock():
             try:
-                return fn()
-            except Exception:
-                if self._shared:
-                    _drop_shared_libsql()
-                raise
+                return make(self._conn)
+            except Exception as first:
+                if not self._shared:
+                    raise
+                _drop_shared_libsql()
+                _note_shared_failure(first)
+                try:
+                    fresh = _libsql_connect()
+                except Exception:
+                    raise first
+                self._conn, self._shared = fresh, False
+                return make(fresh)
 
     def execute(self, sql, params=()):
-        return self._run(lambda: _LibsqlCursor(self._conn.execute(sql, tuple(params))))
+        p = tuple(params)
+        return self._run(lambda c: _LibsqlCursor(c.execute(sql, p)))
 
     def executemany(self, sql, seq):
-        rows = [tuple(p) for p in seq]
-        return self._run(lambda: self._conn.executemany(sql, rows))
+        rows = [tuple(x) for x in seq]
+        return self._run(lambda c: c.executemany(sql, rows))
 
     def commit(self):
+        self._run(lambda c: c.commit())
         with self._lock():
-            self._conn.commit()
             try:
                 self._conn.sync()
                 _libsql_state["syncs"] += 1
@@ -3703,6 +3730,7 @@ def debug_db(request: Request):
             "connected": st["conn"] is not None,
             "syncs": st["syncs"], "skipped": st["skipped"],
             "sync_errors": st["errors"], "rebuilds": st["rebuilds"],
+            "shared_failures": st.get("fails", 0),
             "seconds_since_sync": round(time.time() - st["synced_at"], 1)
                                   if st["synced_at"] else None}
 

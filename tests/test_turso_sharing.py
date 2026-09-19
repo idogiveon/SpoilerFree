@@ -125,14 +125,31 @@ def test_a_failed_sync_does_not_take_the_site_down(turso, monkeypatch):
     assert conn.execute("SELECT 1").fetchone()[0] == 1     # והקריאה עובדת
 
 
-def test_a_broken_connection_is_rebuilt_not_kept(turso):
+def test_a_broken_connection_does_not_fail_the_request(turso):
+    """אי אפשר לבדוק כאן את libsql האמיתי, ולכן תקלה בחיבור המשותף
+    מורידה את הבקשה לחיבור משלה במקום להחזיר שגיאה."""
     conn = main.get_db()
     turso.conns[0].fail_next_execute = True
-    with pytest.raises(RuntimeError):
-        conn.execute("SELECT 1")
-    assert main._libsql_state["conn"] is None
-    main.get_db().execute("SELECT 1")
+    assert conn.execute("SELECT 1").fetchone()[0] == 1     # עבר על חיבור טרי
+    assert main._libsql_state["conn"] is None              # המשותף נזרק
     assert turso.log.count("connect") == 2
+
+
+def test_after_three_failures_it_stops_sharing_by_itself(turso, monkeypatch):
+    """אם libsql לא סובל שימוש מכמה threads, האתר חוזר מעצמו להתנהגות
+    הישנה — בלי שאף אחד יצטרך לגעת ב-Render."""
+    for _ in range(main.SHARED_FAIL_LIMIT):
+        conn = main.get_db()
+        main._libsql_state["conn"].fail_next_execute = True
+        conn.execute("SELECT 1")
+    assert main.TURSO_SHARED is False
+    assert main._libsql_state["fails"] == main.SHARED_FAIL_LIMIT
+    before = turso.log.count("connect")
+    c = main.get_db()
+    c.execute("SELECT 1")
+    c.close()
+    assert turso.log.count("connect") == before + 1        # חיבור לכל בקשה
+    assert turso.conns[-1].closed is True
 
 
 def test_the_emergency_switch_restores_a_connection_per_request(turso, monkeypatch):
