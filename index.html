@@ -334,7 +334,7 @@
   "no_source": "🎬 מקור תקצירים לליגה זו עדיין לא הוגדר", "no_source_hint": "בקרוב — צריך למצוא את הערוץ הרשמי ביוטיוב",
   "not_uploaded": "התקציר עדיין לא הועלה ליוטיוב", "try_again": "↻ נסה שוב",
   "cant_check": "לא ניתן לבדוק כרגע — נסה שוב בעוד כמה דקות",
-  "choose_version": "בחר גרסה לצפייה", "opens_youtube": "↗ = נפתח ביוטיוב בטאב חדש",
+  "choose_version": "בחר גרסה לצפייה", "opens_youtube": "↗ = נפתח ביוטיוב",
   "search_again": "↻ חפש שוב (מנקה קאש)", "search_error": "שגיאה בחיפוש תקציר",
   "no_matches_day": "אין משחקים בתאריך זה", "no_matches_day_hint": "מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה",
   "kind_short": "תקציר קצר", "kind_full": "תקציר מלא", "kind_extended": "תקציר מורחב", "kind_regular": "תקציר",
@@ -386,7 +386,7 @@
   "no_source": "🎬 No highlights source for this league yet", "no_source_hint": "Coming soon",
   "not_uploaded": "The highlights aren't on YouTube yet", "try_again": "↻ Try again",
   "cant_check": "Can't check right now — try again in a few minutes",
-  "choose_version": "Choose a version to watch", "opens_youtube": "↗ = opens on YouTube in a new tab",
+  "choose_version": "Choose a version to watch", "opens_youtube": "↗ = opens on YouTube",
   "search_again": "↻ Search again", "search_error": "Couldn't search for highlights",
   "no_matches_day": "No matches on this date", "no_matches_day_hint": "From the leagues we follow",
   "kind_short": "Short highlights", "kind_full": "Full highlights", "kind_extended": "Extended highlights", "kind_regular": "Highlights",
@@ -438,7 +438,7 @@
   "no_source": "🎬 Todavía no hay fuente de resúmenes para esta liga", "no_source_hint": "Próximamente",
   "not_uploaded": "El resumen aún no está en YouTube", "try_again": "↻ Reintentar",
   "cant_check": "No se puede comprobar ahora — inténtalo en unos minutos",
-  "choose_version": "Elige una versión", "opens_youtube": "↗ = se abre en YouTube en otra pestaña",
+  "choose_version": "Elige una versión", "opens_youtube": "↗ = se abre en YouTube",
   "search_again": "↻ Buscar de nuevo", "search_error": "Error al buscar el resumen",
   "no_matches_day": "No hay partidos en esta fecha", "no_matches_day_hint": "De las ligas que seguimos",
   "kind_short": "Resumen corto", "kind_full": "Resumen completo", "kind_extended": "Resumen extendido", "kind_regular": "Resumen",
@@ -490,7 +490,7 @@
   "no_source": "🎬 Pas encore de source de résumés pour cette ligue", "no_source_hint": "Bientôt",
   "not_uploaded": "Le résumé n'est pas encore sur YouTube", "try_again": "↻ Réessayer",
   "cant_check": "Impossible de vérifier pour l'instant — réessayez dans quelques minutes",
-  "choose_version": "Choisissez une version", "opens_youtube": "↗ = s'ouvre sur YouTube dans un nouvel onglet",
+  "choose_version": "Choisissez une version", "opens_youtube": "↗ = s'ouvre sur YouTube",
   "search_again": "↻ Rechercher à nouveau", "search_error": "Erreur lors de la recherche du résumé",
   "no_matches_day": "Aucun match à cette date", "no_matches_day_hint": "Parmi les ligues suivies",
   "kind_short": "Résumé court", "kind_full": "Résumé complet", "kind_extended": "Résumé long", "kind_regular": "Résumé",
@@ -1570,9 +1570,36 @@
     openMatchModal(matchId, currentNames[0], currentNames[1], true);
   }
 
+  // באייפון, PWA שפותח חלון דפדפן משאיר אותו מעל האפליקציה. אחרי שרואים
+  // את התקציר באפליקציית יוטיוב וחוזרים, החלון הזה עדיין שם — ריק, חוסם
+  // את הפיד, ודורש איקס. לכן עוברים ישר לאפליקציית יוטיוב: חזרה מהמעבר
+  // הזה מחזירה לאפליקציה שלנו, בדיוק איפה שהיינו.
+  const IS_IOS_PWA = (() => {
+    const ios = /iP(hone|od|ad)/.test(navigator.userAgent)
+      || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    return ios && (window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches);
+  })();
+
   function openOnYoutube(videoId) {
     track('highlight_play', { match_id: currentMatchId, detail: videoId });
-    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    let noApp = false;
+    try { noApp = localStorage.getItem('no_yt_app') === '1'; } catch (e) {}
+    if (!IS_IOS_PWA || noApp) { window.open(url, '_blank'); return; }
+
+    // אם האפליקציה מותקנת, הדף שלנו יורד מהמסך ואין מה לעשות יותר.
+    // אם לא — נשארנו כאן: נפתח חלון כרגיל, ולא ננסה שוב במכשיר הזה.
+    let switched = false;
+    const onHide = () => { switched = true; };
+    document.addEventListener('visibilitychange', onHide);
+    window.location.href = `youtube://www.youtube.com/watch?v=${videoId}`;
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', onHide);
+      if (switched || document.visibilityState === 'hidden') return;
+      try { localStorage.setItem('no_yt_app', '1'); } catch (e) {}
+      window.open(url, '_blank');
+    }, 1500);
   }
 
   function loadVideo(videoId) {
