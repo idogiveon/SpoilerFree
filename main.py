@@ -3628,6 +3628,22 @@ def login(payload: dict = Body(...)):
     return resp
 
 
+def _highlight_states(conn, match_ids: list) -> dict:
+    """id → "yes" (יש תקציר שמור) / "none" (בדקנו ולא נמצא).
+    משחק שלא נבדק עדיין פשוט לא מופיע כאן — ואז אין מה להבטיח למשתמש.
+    שגיאת API לא נשמרת בקאש, אז "none" הוא באמת "אין", ולא "לא הצלחנו"."""
+    states = {}
+    for i in range(0, len(match_ids), 400):        # SQLite מגביל פרמטרים
+        chunk = match_ids[i:i + 400]
+        marks = ",".join("?" * len(chunk))
+        for r in conn.execute(
+                f"SELECT match_id, MAX(CASE WHEN videos_json NOT IN ('[]', '') "
+                f"THEN 1 ELSE 0 END) AS found FROM highlight_cache "
+                f"WHERE match_id IN ({marks}) GROUP BY match_id", chunk).fetchall():
+            states[r["match_id"]] = "yes" if r["found"] else "none"
+    return states
+
+
 @app.get("/matches/{league_key}")
 def get_matches(request: Request, league_key: str,
                 refresh: bool = False, matchday: int = None, lang: str = "he",
@@ -3650,6 +3666,7 @@ def get_matches(request: Request, league_key: str,
     conn = get_db()
     rows = conn.execute(query, params).fetchall()
     last_fetch = _league_fetched_at(conn, league_key)
+    hl_state = _highlight_states(conn, [r["id"] for r in rows])
     conn.close()
 
     # ליגה ריקה לגמרי — שליפה ראשונה. לא ב-Render לליגות sportsdb: שם
@@ -3682,6 +3699,9 @@ def get_matches(request: Request, league_key: str,
             "matchday": row["matchday"],
             "league":   league_name,
             "is_over":  likely_over(row),
+            # "yes" = יש תקציר שמור, "none" = בדקנו ואין עדיין,
+            # חסר = עוד לא נבדק (ואז לא מבטיחים למשתמש כלום)
+            "highlight": hl_state.get(row["id"]),
             "status":   row["status"],
             # תוצאה נשלחת רק כשהמשתמש ביקש לראות (אחרת אין מה לדלוף למסך)
             **({"home_score": row["home_score"], "away_score": row["away_score"]}
@@ -3727,6 +3747,7 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he",
               conn.execute("SELECT DISTINCT league_key FROM matches").fetchall()}
     empty_leagues = [k for k, v in LEAGUES.items()
                      if v.get("source") == "sportsdb" and k not in seeded]
+    hl_state = _highlight_states(conn, [r["id"] for r in rows])
     conn.close()
 
     order = {k: i for i, k in enumerate(LEAGUES)}
@@ -3758,6 +3779,7 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he",
                if scores and likely_over(row) else {}),
             # הפתיחה עברה מזמן אבל לא מסומן כגמור — הדפדפן ירענן את הליגה
             "needs_refresh": not is_over(row["status"]) and kickoff_passed(row),
+            "highlight": hl_state.get(row["id"]),
         })
     matches.sort(key=lambda m: (order.get(m["league_key"], 99), m["time"]))
     heb = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]

@@ -121,6 +121,9 @@
     .match-card.is-live { border-color:rgba(255,107,107,0.4); }
     .match-card.is-live::before { background:var(--live); }
     .highlight-badge { position:absolute; inset-inline-end:1rem; top:50%; transform:translateY(-50%); font-size:0.68rem; color:var(--accent); letter-spacing:1px; background:rgba(0,229,160,0.08); padding:0.2rem 0.6rem; border-radius:100px; border:1px solid rgba(0,229,160,0.25); }
+    /* בדקנו ואין / עוד לא נבדק — בלי הבטחה, בצבע מאופק */
+    .highlight-badge.is-none, .highlight-badge.is-unknown {
+      color:var(--muted); background:transparent; border-color:var(--border); }
     .live-badge { position:absolute; inset-inline-end:1rem; top:50%; transform:translateY(-50%); font-size:0.68rem; color:var(--live); letter-spacing:1px; background:rgba(255,107,107,0.08); padding:0.2rem 0.6rem; border-radius:100px; border:1px solid rgba(255,107,107,0.25); animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 
@@ -186,7 +189,12 @@
       /* בטלפון "לפי יום" תופס שורה שלמה — הפרדה ברורה מכפתורי הליגות */
       .view-switch .tab { flex:1; }
       .team-name { font-size:0.82rem; }
-      .venue,.highlight-badge,.live-badge { display:none; }
+      .venue { display:none; }
+      .live-badge { display:none; }
+      /* בטלפון אין מקום לצד הכרטיס — החיווי יושב מתחת ל-VS.
+         קודם הוא פשוט הוסתר, וכל הפיד בטלפון היה בלי שום חיווי. */
+      .highlight-badge { position:static; transform:none; display:inline-block;
+        margin-top:0.35rem; font-size:0.6rem; padding:0.1rem 0.45rem; letter-spacing:0; }
     }
   </style>
 </head>
@@ -333,7 +341,7 @@
   "delete_account": "מחיקת החשבון",
   "delete_warning": "המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.",
   "delete_btn": "מחק את החשבון לצמיתות", "account_error": "שגיאה בטעינת החשבון", "delete_failed": "המחיקה נכשלה",
-  "badge": "▶ תקציר", "no_matches": "אין משחקים להצגה", "no_matches_hint": "לחץ \"רענן\" כדי לטעון",
+  "badge": "▶ תקציר", "badge_none": "אין עדיין תקציר", "no_matches": "אין משחקים להצגה", "no_matches_hint": "לחץ \"רענן\" כדי לטעון",
   "n_matches": "{n} משחקים", "today": "היום", "yesterday": "אתמול",
   "offline_cached": "⚠ אין חיבור לשרת — מוצגים נתונים שמורים", "error": "שגיאה",
   "updating_bg": "⏳ מתעדכן ברקע...", "refreshed": "רענון — {d}",
@@ -386,7 +394,7 @@
   "delete_account": "Delete account",
   "delete_warning": "Deletion is permanent: your account and all usage data will be removed. To continue, type your email address.",
   "delete_btn": "Delete my account permanently", "account_error": "Couldn't load your account", "delete_failed": "Deletion failed",
-  "badge": "▶ Highlights", "no_matches": "No matches to show", "no_matches_hint": "Press \"Refresh\" to load",
+  "badge": "▶ Highlights", "badge_none": "No highlights yet", "no_matches": "No matches to show", "no_matches_hint": "Press \"Refresh\" to load",
   "n_matches": "{n} matches", "today": "Today", "yesterday": "Yesterday",
   "offline_cached": "⚠ No connection — showing saved data", "error": "Error",
   "updating_bg": "⏳ Updating in the background...", "refreshed": "Refreshed — {d}",
@@ -439,7 +447,7 @@
   "delete_account": "Eliminar cuenta",
   "delete_warning": "La eliminación es definitiva: se borrarán tu cuenta y todos los datos de uso. Para continuar, escribe tu correo.",
   "delete_btn": "Eliminar mi cuenta definitivamente", "account_error": "No se pudo cargar la cuenta", "delete_failed": "No se pudo eliminar",
-  "badge": "▶ Resumen", "no_matches": "No hay partidos", "no_matches_hint": "Pulsa \"Actualizar\" para cargar",
+  "badge": "▶ Resumen", "badge_none": "Aún sin resumen", "no_matches": "No hay partidos", "no_matches_hint": "Pulsa \"Actualizar\" para cargar",
   "n_matches": "{n} partidos", "today": "Hoy", "yesterday": "Ayer",
   "offline_cached": "⚠ Sin conexión — mostrando datos guardados", "error": "Error",
   "updating_bg": "⏳ Actualizando en segundo plano...", "refreshed": "Actualizado — {d}",
@@ -492,7 +500,7 @@
   "delete_account": "Supprimer le compte",
   "delete_warning": "La suppression est définitive : votre compte et toutes les données d'utilisation seront effacés. Pour continuer, saisissez votre e-mail.",
   "delete_btn": "Supprimer définitivement mon compte", "account_error": "Impossible de charger le compte", "delete_failed": "Échec de la suppression",
-  "badge": "▶ Résumé", "no_matches": "Aucun match à afficher", "no_matches_hint": "Appuyez sur « Actualiser » pour charger",
+  "badge": "▶ Résumé", "badge_none": "Pas encore de résumé", "no_matches": "Aucun match à afficher", "no_matches_hint": "Appuyez sur « Actualiser » pour charger",
   "n_matches": "{n} matchs", "today": "Aujourd'hui", "yesterday": "Hier",
   "offline_cached": "⚠ Pas de connexion — données enregistrées affichées", "error": "Erreur",
   "updating_bg": "⏳ Mise à jour en arrière-plan...", "refreshed": "Actualisé — {d}",
@@ -1206,9 +1214,14 @@
 
   function matchCardHTML(m) {
     const isLive = m.status === 'LIVE';
+    // שלושה מצבים: יש תקציר · בדקנו ואין עדיין · עוד לא נבדק.
+    // קודם הופיע "תקציר" על כל משחק שנגמר, וגם כשלא היה מה להציג.
+    const hlBadge = m.highlight === 'none'
+      ? `<span class="highlight-badge is-none">${t('badge_none')}</span>`
+      : `<span class="highlight-badge${m.highlight === 'yes' ? '' : ' is-unknown'}">${t('badge')}</span>`;
     const badge = isLive
       ? '<span class="live-badge">🔴 LIVE</span>'
-      : (m.is_over ? `<span class="highlight-badge">${t('badge')}</span>` : '');
+      : (m.is_over ? hlBadge : '');
     const timeClass = isLive ? 'live' : (m.is_over ? 'past' : '');
     const cardClass = isLive ? 'is-live' : (m.is_over ? 'is-over' : '');
     // שמות בשפת המשתמש (מהשרת); escape — יש שמות עם ' ו-" (צ'רלטון, Newell's)
@@ -1226,9 +1239,9 @@
           <div class="match-time ${timeClass}">${scoreOrTime(m, isLive)}</div>
           <div class="match-vs">VS</div>
           <div class="venue">${m.venue||''}</div>
+          ${badge}
         </div>
         <div class="team away"><div class="team-name">${star(awayKey(m))}${away}</div></div>
-        ${badge}
       </div>`;
   }
 
