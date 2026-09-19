@@ -1801,9 +1801,18 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
         for mid, old in existing.items():
             if mid in incoming:
                 continue
-            if hard or (old["status"] not in _OVER_STATUSES
-                        and not str(mid).startswith("manual-")):
+            if hard:
                 deletes.append((mid,))
+                continue
+            if old["status"] in _OVER_STATUSES or str(mid).startswith("manual-"):
+                continue
+            # משחק ששריקת הפתיחה שלו כבר נשמעה לא נמחק. דווקא אז המקור
+            # לפעמים לא מחזיר אותו, והוא נעלם מתחת לידיים של מי שצופה בו:
+            # פתיחת מכבי חיפה–עירוני טבריה (19.9.26) גררה רענון, הרענון
+            # מחק את המשחק, והחלון נפתח מחדש על משחק שכבר לא קיים.
+            if kickoff_passed(old, hours=0):
+                continue
+            deletes.append((mid,))
 
     if deletes:
         conn.executemany("DELETE FROM matches WHERE id=?", deletes)
