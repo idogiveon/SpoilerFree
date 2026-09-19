@@ -236,6 +236,11 @@
   <button class="tab" data-league="eredivisie" data-i18n="lg_eredivisie" data-prefix="🇳🇱 ">🇳🇱 ליגה הולנדית</button>
   <button class="tab" data-league="mls" data-i18n="lg_mls" data-prefix="🇺🇸 ">🇺🇸 MLS</button>
   <button class="tab" data-league="argentina" data-i18n="lg_argentina" data-prefix="🇦🇷 ">🇦🇷 ארגנטינה</button>
+  <button class="tab" data-league="carabao" data-i18n="lg_carabao" data-prefix="🏆 ">🏆 גביע קאראבאו</button>
+  <button class="tab" data-league="facup" data-i18n="lg_facup" data-prefix="🏆 ">🏆 הגביע האנגלי</button>
+  <button class="tab" data-league="dfbpokal" data-i18n="lg_dfbpokal" data-prefix="🏆 ">🏆 הגביע הגרמני</button>
+  <button class="tab" data-league="copadelrey" data-i18n="lg_copadelrey" data-prefix="🏆 ">🏆 גביע המלך</button>
+  <button class="tab" data-league="coupedefrance" data-i18n="lg_coupedefrance" data-prefix="🏆 ">🏆 הגביע הצרפתי</button>
 </div>
 </div>
 
@@ -296,6 +301,7 @@
   "lg_premier": "פרמייר ליג", "lg_championship": "צ'מפיונשיפ", "lg_israel": "ליגת העל",
   "lg_bundesliga": "בונדסליגה", "lg_laliga": "לה ליגה", "lg_seriea": "סריה A", "lg_ligue1": "ליג 1",
   "lg_ucl": "צ'מפיונס ליג", "lg_uel": "ליגה אירופית", "lg_mls": "MLS", "lg_argentina": "ארגנטינה",
+  "lg_carabao": "גביע קאראבאו", "lg_facup": "הגביע האנגלי", "lg_dfbpokal": "הגביע הגרמני", "lg_copadelrey": "גביע המלך", "lg_coupedefrance": "הגביע הצרפתי", "rd_final": "גמר", "rd_semi": "חצי גמר", "rd_quarter": "רבע גמר", "rd_last16": "שמינית גמר", "rd_lastn": "שלב ה-{n}", "rd_round": "סיבוב {n}",
   "lg_eredivisie": "ליגה הולנדית",
   "byday": "לפי יום", "matchday": "מחזור {n}", "back_today": "חזרה להיום",
   "arrow_prev": "→", "arrow_next": "←",
@@ -348,6 +354,7 @@
   "lg_premier": "Premier League", "lg_championship": "Championship", "lg_israel": "Israeli League",
   "lg_bundesliga": "Bundesliga", "lg_laliga": "LaLiga", "lg_seriea": "Serie A", "lg_ligue1": "Ligue 1",
   "lg_ucl": "Champions League", "lg_uel": "Europa League", "lg_mls": "MLS", "lg_argentina": "Argentina",
+  "lg_carabao": "Carabao Cup", "lg_facup": "FA Cup", "lg_dfbpokal": "DFB-Pokal", "lg_copadelrey": "Copa del Rey", "lg_coupedefrance": "Coupe de France", "rd_final": "Final", "rd_semi": "Semi-final", "rd_quarter": "Quarter-final", "rd_last16": "Round of 16", "rd_lastn": "Round of {n}", "rd_round": "Round {n}",
   "lg_eredivisie": "Eredivisie",
   "byday": "By day", "matchday": "Matchday {n}", "back_today": "Back to today",
   "arrow_prev": "←", "arrow_next": "→",
@@ -400,6 +407,7 @@
   "lg_premier": "Premier League", "lg_championship": "Championship", "lg_israel": "Liga israelí",
   "lg_bundesliga": "Bundesliga", "lg_laliga": "LaLiga", "lg_seriea": "Serie A", "lg_ligue1": "Ligue 1",
   "lg_ucl": "Champions League", "lg_uel": "Europa League", "lg_mls": "MLS", "lg_argentina": "Argentina",
+  "lg_carabao": "Carabao Cup", "lg_facup": "FA Cup", "lg_dfbpokal": "DFB-Pokal", "lg_copadelrey": "Copa del Rey", "lg_coupedefrance": "Copa de Francia", "rd_final": "Final", "rd_semi": "Semifinal", "rd_quarter": "Cuartos de final", "rd_last16": "Octavos de final", "rd_lastn": "Ronda de {n}", "rd_round": "Ronda {n}",
   "lg_eredivisie": "Eredivisie",
   "byday": "Por día", "matchday": "Jornada {n}", "back_today": "Volver a hoy",
   "arrow_prev": "←", "arrow_next": "→",
@@ -452,6 +460,7 @@
   "lg_premier": "Premier League", "lg_championship": "Championship", "lg_israel": "Ligue israélienne",
   "lg_bundesliga": "Bundesliga", "lg_laliga": "LaLiga", "lg_seriea": "Serie A", "lg_ligue1": "Ligue 1",
   "lg_ucl": "Ligue des champions", "lg_uel": "Ligue Europa", "lg_mls": "MLS", "lg_argentina": "Argentine",
+  "lg_carabao": "Carabao Cup", "lg_facup": "FA Cup", "lg_dfbpokal": "DFB-Pokal", "lg_copadelrey": "Coupe du Roi", "lg_coupedefrance": "Coupe de France", "rd_final": "Finale", "rd_semi": "Demi-finale", "rd_quarter": "Quart de finale", "rd_last16": "Huitième de finale", "rd_lastn": "Tour à {n}", "rd_round": "Tour {n}",
   "lg_eredivisie": "Eredivisie",
   "byday": "Par jour", "matchday": "Journée {n}", "back_today": "Revenir à aujourd'hui",
   "arrow_prev": "←", "arrow_next": "→",
@@ -556,6 +565,19 @@
     eredivisie: { ids: ['4337'], season: '2026-2027' },
     mls:        { ids: ['4346'], season: '2026' },
     argentina:  { ids: ['4406'], season: '2026' },
+    // גביעים: rounds = השלבים בסדר כרונולוגי. אי אפשר לבנות אותם
+    // כ-1..N כמו מחזורי ליגה, כי המספר הוא "כמה קבוצות נשארו" —
+    // 128→64→32→16, ואז 125=רבע, 150=חצי, 200=גמר.
+    carabao:       { ids: ['4570'], season: '2026-2027',
+                     rounds: [128, 64, 32, 16, 125, 150, 200] },
+    facup:         { ids: ['4482'], season: '2026-2027',
+                     rounds: [1, 2, 3, 4, 5, 6, 7, 8, 16, 125, 150, 200] },
+    dfbpokal:      { ids: ['4485'], season: '2026-2027',
+                     rounds: [64, 32, 16, 125, 150, 200] },
+    copadelrey:    { ids: ['4483'], season: '2026-2027',
+                     rounds: [1, 2, 3, 4, 16, 125, 150, 200] },
+    coupedefrance: { ids: ['4484'], season: '2026-2027',
+                     rounds: [1, 2, 3, 4, 5, 6, 7, 8, 16, 125, 150, 200] },
   };
 
   let currentLeague   = '__byday';   // עמוד הפתיחה: "לפי יום"
@@ -1091,13 +1113,24 @@
 
   // ── Matchday nav ───────────────────────────────────
 
+  // גביע = ליגה שיש לה רשימת שלבים. "מחזור 128" היה חסר משמעות,
+  // ולכן המספר מתורגם לשם השלב.
+  const isCup = lg => !!(SPORTSDB_LEAGUES[lg] && SPORTSDB_LEAGUES[lg].rounds);
+  const CUP_ROUND_NAMES = { 200: 'rd_final', 150: 'rd_semi', 125: 'rd_quarter', 16: 'rd_last16' };
+
+  function roundLabel(league, md) {
+    if (!isCup(league)) return t('matchday', { n: md });
+    if (CUP_ROUND_NAMES[md]) return t(CUP_ROUND_NAMES[md]);
+    return md >= 32 ? t('rd_lastn', { n: md }) : t('rd_round', { n: md });
+  }
+
   function buildMatchdaySelect() {
     const sel = document.getElementById('md-select');
     sel.innerHTML = '';
     for (const md of matchdayList) {
       const opt = document.createElement('option');
       opt.value = md;
-      opt.textContent = t('matchday', { n: md });
+      opt.textContent = roundLabel(currentLeague, md);
       sel.appendChild(opt);
     }
     sel.value = currentMatchday;
@@ -1105,7 +1138,7 @@
 
   function updateMatchdayUI() {
     const idx = matchdayList.indexOf(currentMatchday);
-    document.getElementById('md-label').textContent = t('matchday', { n: currentMatchday });
+    document.getElementById('md-label').textContent = roundLabel(currentLeague, currentMatchday);
     document.getElementById('md-select').value = currentMatchday;
     document.getElementById('md-prev').disabled = idx <= 0;
     document.getElementById('md-next').disabled = idx < 0 || idx >= matchdayList.length - 1;
@@ -1250,9 +1283,11 @@
     const present = [...new Set(withMd.map(m => parseInt(m.matchday)))].sort((a, b) => a - b);
     // ליגות sportsdb: כל המחזורים מ-1 ועד האחרון שקיים. מחזור שאף פעם לא
     // נשלף נמשך לפי דרישה (ב-MLS היו רק מחזור 1 ו-24 ומעלה)
-    matchdayList = SPORTSDB_LEAGUES[league] && present.length
-      ? Array.from({ length: present[present.length - 1] }, (_, i) => i + 1)
-      : present;
+    matchdayList = isCup(league)
+      ? SPORTSDB_LEAGUES[league].rounds
+      : (SPORTSDB_LEAGUES[league] && present.length
+          ? Array.from({ length: present[present.length - 1] }, (_, i) => i + 1)
+          : present);
     if (!(background && matchdayList.includes(currentMatchday))) {
       // "המחזור הרלוונטי": הראשון שיש בו משחק שטרם נגמר.
       // אם הכל נגמר (סוף עונה / נתונים ישנים) — המחזור האחרון.
@@ -1416,13 +1451,20 @@
       ]);
       // 3. חלון מחזורים: eventsround עוקף את תקרת eventsseason —
       //    מחזור שלם (~10 משחקים) נכנס מתחת לתקרה
-      let maxRound = 0;
-      for (const e of past) {
-        const r = parseInt(e.intRound || 0);
-        if (r > maxRound) maxRound = r;
+      let rounds;
+      if (cfg.rounds) {
+        // גביע: חלון מספרי סביב השלב האחרון היה מחטיא — אחרי שלב 32
+        // בא שלב 16, ולא 33. מושכים את השלבים עצמם.
+        rounds = cfg.rounds;
+      } else {
+        let maxRound = 0;
+        for (const e of past) {
+          const r = parseInt(e.intRound || 0);
+          if (r > maxRound) maxRound = r;
+        }
+        rounds = [];
+        for (let r = Math.max(1, maxRound - 1); r <= maxRound + 3; r++) rounds.push(r);
       }
-      const rounds = [];
-      for (let r = Math.max(1, maxRound - 1); r <= maxRound + 3; r++) rounds.push(r);
       await Promise.all(rounds.map(r =>
         grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'rounds')));
     }));
