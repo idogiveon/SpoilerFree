@@ -1579,7 +1579,13 @@
     modal.classList.add('open');
 
     apiFetch(`${API}/highlights/${matchId}?lang=${LANG}`)
-      .then(r => r.json())
+      .then(async r => {
+        // שגיאה מהשרת היא לא "אין תקציר": בלי הבדיקה הזו הגוף הוא
+        // {"detail": ...}, ובחלון הופיע "⏳ undefined"
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.detail || 'http ' + r.status);
+        return body;
+      })
       .then(data => {
         if (!data.available) {
           if (data.needs_refresh && !retried) {
@@ -1594,7 +1600,8 @@
             });
             return;
           }
-          const reason = data.reason_code ? t('reason_' + data.reason_code) : data.reason;
+          const reason = (data.reason_code ? t('reason_' + data.reason_code) : data.reason)
+                         || t('search_error');
           body.innerHTML = `<div class="no-highlight-msg">⏳ ${reason}</div>`;
           return;
         }
