@@ -3673,6 +3673,13 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he",
     rows = conn.execute(
         "SELECT * FROM matches WHERE date_utc IN (?, ?)",
         (d_prev, day.isoformat())).fetchall()
+    # ליגה שנוספה עכשיו מתחילה בלי אף שורה, והנתונים מגיעים מהדפדפן —
+    # כך שהיא לא תופיע כאן לעולם, ואף אחד לא "יזריע" אותה אלא אם נכנס
+    # לטאב שלה. הלקוח מרענן ליגות ריקות ברקע.
+    seeded = {r["league_key"] for r in
+              conn.execute("SELECT DISTINCT league_key FROM matches").fetchall()}
+    empty_leagues = [k for k, v in LEAGUES.items()
+                     if v.get("source") == "sportsdb" and k not in seeded]
     conn.close()
 
     order = {k: i for i, k in enumerate(LEAGUES)}
@@ -3708,7 +3715,8 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he",
     matches.sort(key=lambda m: (order.get(m["league_key"], 99), m["time"]))
     heb = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
     return {"date": day.isoformat(), "weekday": heb[day.weekday()],
-            "count": len(matches), "matches": matches}
+            "count": len(matches), "matches": matches,
+            "empty_leagues": empty_leagues}
 
 
 @app.post("/refresh/{league_key}")

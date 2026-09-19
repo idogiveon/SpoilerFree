@@ -588,6 +588,7 @@
   let matchdayList    = [];   // המחזורים שקיימים בפועל בנתונים, ממוינים
   // ליגות שכבר רועננו אוטומטית בביקור הזה — מונע רענון חוזר בכל מעבר טאב
   const autoRefreshed = new Set();
+  let seededThisVisit = false;   // הזרעת ליגות חדשות — פעם אחת לפתיחה
 
   // ── Utils ──────────────────────────────────────────
 
@@ -1722,6 +1723,24 @@
         document.getElementById('match-count').textContent += ` · ⏳ ${t('updating_results')}`;
         Promise.all(stale.map(lk => refreshLeague(lk)))
           .then(() => { if (currentLeague === '__byday') loadDay(); });
+      }
+
+      // ליגה חדשה אין לה אף שורה בשרת, ולכן גם אין לה משחק שיבקש רענון —
+      // בלי זה היא הייתה מופיעה רק למי שנכנס לטאב שלה. שלוש בכל פתיחה,
+      // פעם אחת, כדי לא להציף את TheSportsDB בבקשות.
+      const empty = (data.empty_leagues || [])
+        .filter(lk => !autoRefreshed.has(lk) && !HIDDEN_LEAGUES.has(lk));
+      if (empty.length && !seededThisVisit) {
+        seededThisVisit = true;
+        const batch = empty.slice(0, 5);
+        batch.forEach(lk => autoRefreshed.add(lk));
+        // בזו אחר זו: כל ליגה היא כמה בקשות ל-TheSportsDB, ובמקביל
+        // חמישתן היו נחסמות בקצב. ממילא זה רץ פעם אחת — אחרי שהמשחקים
+        // נשמרו בשרת, כל המכשירים האחרים כבר מוצאים אותם שם.
+        (async () => {
+          for (const lk of batch) await refreshLeague(lk);
+          if (currentLeague === '__byday') loadDay();
+        })();
       }
     } catch (err) {
       if (err.message === 'auth') return;
