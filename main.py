@@ -3780,19 +3780,45 @@ def login(payload: dict = Body(...)):
     return resp
 
 
-def _highlight_states(conn, match_ids: list) -> dict:
-    """id → "yes" (יש תקציר שמור) / "none" (בדקנו ולא נמצא).
-    משחק שלא נבדק עדיין פשוט לא מופיע כאן — ואז אין מה להבטיח למשתמש.
-    שגיאת API לא נשמרת בקאש, אז "none" הוא באמת "אין", ולא "לא הצלחנו"."""
-    states = {}
-    for i in range(0, len(match_ids), 400):        # SQLite מגביל פרמטרים
-        chunk = match_ids[i:i + 400]
+def _highlight_states(conn, rows: list) -> dict:
+    """id → "yes" (יש תקציר שמור) / "none" (בדקנו, אין, והבדיקה עדיין
+    תקפה) / חסר (לא יודעים — ואז לא מבטיחים למשתמש כלום).
+
+    "אין" חייב להיות באותו תוקף שהחלון נותן לו: "לא נמצא" במשחק טרי
+    נבדק שוב אחרי 30 דקות (_not_found_retry). בלי הכלל הזה הפיד הכריז
+    "אין עדיין תקציר" על ברייטון–ארסנל (20.9.26 בבוקר), והחלון — שבדק
+    מחדש — הציג מיד שני תקצירים."""
+    by_id = {r["id"]: r for r in rows}
+    ids = list(by_id)
+    per: dict = {}
+    for i in range(0, len(ids), 400):              # SQLite מגביל פרמטרים
+        chunk = ids[i:i + 400]
         marks = ",".join("?" * len(chunk))
-        for r in conn.execute(
-                f"SELECT match_id, MAX(CASE WHEN videos_json NOT IN ('[]', '') "
-                f"THEN 1 ELSE 0 END) AS found FROM highlight_cache "
-                f"WHERE match_id IN ({marks}) GROUP BY match_id", chunk).fetchall():
-            states[r["match_id"]] = "yes" if r["found"] else "none"
+        for c in conn.execute(
+                f"SELECT match_id, videos_json, found_at FROM highlight_cache "
+                f"WHERE match_id IN ({marks})", chunk).fetchall():
+            per.setdefault(c["match_id"], []).append(c)
+
+    now = datetime.now(timezone.utc)
+    states = {}
+    for mid, cached in per.items():
+        if any(c["videos_json"] not in ("[]", "") for c in cached):
+            states[mid] = "yes"
+            continue
+        retry = _not_found_retry(by_id[mid])
+
+        def still_valid(c):
+            if retry is None:       # לא ייבדק שוב — "אין" נשאר נכון
+                return True
+            try:
+                return now - datetime.fromisoformat(c["found_at"]) <= retry
+            except (ValueError, TypeError):
+                return False
+
+        # כל מקור צריך להיות בתוקף: אחד שפג יישלח לבדיקה חוזרת בפתיחה,
+        # ואולי דווקא הוא ימצא
+        if all(still_valid(c) for c in cached):
+            states[mid] = "none"
     return states
 
 
@@ -3818,7 +3844,7 @@ def get_matches(request: Request, league_key: str,
     conn = get_db()
     rows = conn.execute(query, params).fetchall()
     last_fetch = _league_fetched_at(conn, league_key)
-    hl_state = _highlight_states(conn, [r["id"] for r in rows])
+    hl_state = _highlight_states(conn, rows)
     conn.close()
 
     # ליגה ריקה לגמרי — שליפה ראשונה. לא ב-Render לליגות sportsdb: שם
@@ -3899,7 +3925,7 @@ def get_matches_by_date(request: Request, date_il: str, lang: str = "he",
               conn.execute("SELECT DISTINCT league_key FROM matches").fetchall()}
     empty_leagues = [k for k, v in LEAGUES.items()
                      if v.get("source") == "sportsdb" and k not in seeded]
-    hl_state = _highlight_states(conn, [r["id"] for r in rows])
+    hl_state = _highlight_states(conn, rows)
     conn.close()
 
     order = {k: i for i, k in enumerate(LEAGUES)}
@@ -4013,8 +4039,10 @@ def _source_highlights(row, source, free_only: bool = False) -> dict:
     ).fetchone()
     conn.close()
 
+    had_videos = []
     if cached:
         videos = json.loads(cached["videos_json"])
+        had_videos = videos if isinstance(videos, list) else []
         cache_age_ok = True
         try:
             age = datetime.now(timezone.utc) - datetime.fromisoformat(cached["found_at"])
@@ -4056,6 +4084,15 @@ def _source_highlights(row, source, free_only: bool = False) -> dict:
     if videos is None:
         # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך
         return {**base, "videos": [], "status": "api_error"}
+
+    # בדיקה חוזרת שלא מצאה כלום לא מוחקת את מה שכבר נמצא. הבדיקה הזו
+    # מחפשת גרסה מורחבת, או מוודאת "לא נמצא" — ואין סיבה שתעלים תקציר
+    # קיים. 19.9.26: ברייטון–ארסנל הציג תקציר בפיד, ובפתיחה נאמר
+    # "עדיין לא הועלה ליוטיוב", כי הבדיקה החוזרת דרסה את הקאש בריק.
+    if not videos and had_videos:
+        print(f"[yt] keeping {len(had_videos)} cached video(s) for "
+              f"{match_id}/{source_id} — recheck found none")
+        return {**base, "videos": had_videos, "status": "cached"}
 
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db()
@@ -4597,7 +4634,7 @@ def debug_match(request: Request, q: str):
         live = {c["source_id"] for c in d["cache"]
                 if c["videos"] not in ("[]", "")}
         mine = {x["id"] for x in d["sources"]}
-        d["badge"] = {"feed_says": _highlight_states(get_db(), [r["id"]]).get(r["id"]),
+        d["badge"] = {"feed_says": _highlight_states(get_db(), [r]).get(r["id"]),
                       "cache_with_videos": sorted(live),
                       "orphan_rows": sorted(live - mine),
                       "usable_now": sorted(live & mine)}
