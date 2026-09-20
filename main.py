@@ -4010,6 +4010,17 @@ def refresh_from_client(request: Request, league_key: str,
     return {"ok": True, "received": len(events), "stored": stored}
 
 
+# כמה זמן אחרי המשחק עוד סביר שיעלה תקציר — ולכן כמה זמן הרקע ממשיך
+# לחפש, ובאיזו תדירות. בליגות האירופיות זה כמעט חוזה: משחק בשבת,
+# תקציר עד אותו לילה. בישראל זה לוקח יותר (20.9.26).
+HIGHLIGHT_WINDOW_HOURS = 48
+_SLOW_LEAGUES = {"israel": 5 * 24}
+
+
+def _highlight_window(league_key: str) -> timedelta:
+    return timedelta(hours=_SLOW_LEAGUES.get(league_key, HIGHLIGHT_WINDOW_HOURS))
+
+
 def _not_found_retry(row):
     """אחרי כמה זמן לחפש שוב כש"לא נמצא" — לפי גיל המשחק. גם משחק ישן נבדק
     שוב פעם בשבוע: תקלה זמנית (RSS נפל) לא "מקבעת" משחק בלי תקציר."""
@@ -4018,7 +4029,9 @@ def _not_found_retry(row):
     except Exception:
         return timedelta(minutes=30)
     match_age = datetime.now(timezone.utc) - kick
-    if match_age < timedelta(days=2):
+    # כל עוד התקציר עוד צפוי — בודקים תכופות. הגבול הזה הוא לפי ליגה:
+    # יומיים באירופה, חמישה ימים בישראל
+    if match_age < _highlight_window(row["league_key"]):
         return timedelta(minutes=30)
     if match_age < timedelta(days=7):
         return timedelta(hours=6)
@@ -4176,7 +4189,8 @@ PREFETCH_UNIT_BUDGET = 1500
 
 
 def prefetch_highlights_once() -> int:
-    since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime("%Y-%m-%d")
+    widest = max([_highlight_window(k) for k in LEAGUES] or [timedelta(hours=48)])
+    since = (datetime.now(timezone.utc) - widest).strftime("%Y-%m-%d")
     conn = get_db()
     rows = conn.execute("SELECT * FROM matches WHERE date_utc >= ?", (since,)).fetchall()
     # (משחק, מקור) → האם נמצא משהו
@@ -4189,7 +4203,8 @@ def prefetch_highlights_once() -> int:
     for row in rows:
         if done >= PREFETCH_MAX_MATCHES:
             break
-        if not likely_over(row) or kickoff_passed(row, hours=48):
+        window = _highlight_window(row["league_key"])
+        if not likely_over(row) or kickoff_passed(row, hours=window.total_seconds() / 3600):
             continue
         recheck = row["league_key"] in TIMING_LEAGUES
 
