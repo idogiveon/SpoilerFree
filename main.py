@@ -3263,6 +3263,13 @@ def _uploads_since(channel_id: str, match_date: str):
     return out, complete
 
 
+# כמה ימים אחרי המשחק תקציר עוד יכול לעלות. הגבול הזה הוא שמבדיל בין
+# ניוקאסל–האל של מחזור 5 לניוקאסל–האל של מחזור 24: אותן קבוצות, אותה
+# כותרת, והדבר היחיד שמפריד הוא מתי הסרטון עלה. שבעה ימים מכסים גם
+# ערוצים שמאחרים (שחטאר העלו אחרי שלושה ימים).
+HIGHLIGHT_MAX_DAYS = 7
+
+
 def search_youtube(home: str, away: str, match_date: str,
                    channel_id: str, query: str = None,
                    title_exclude: list = None,
@@ -3280,6 +3287,11 @@ def search_youtube(home: str, away: str, match_date: str,
 
     def _keep(title: str, published: str = "") -> bool:
         tl = title.lower()
+        # אותן שתי קבוצות נפגשות שוב בהמשך העונה, והכותרת זהה. בלי גבול
+        # עליון, חיפוש למשחק של מחזור 5 היה תופס את התקציר של מחזור 24 —
+        # תוצאה של משחק שעוד לא נצפה, כלומר ספוילר.
+        if published and not _within_days(published, match_date, HIGHLIGHT_MAX_DAYS):
+            return False
         # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
         if title_exclude and any(x.lower() in tl for x in title_exclude):
             return False
@@ -4168,9 +4180,10 @@ def prefetch_highlights_once() -> int:
     conn = get_db()
     rows = conn.execute("SELECT * FROM matches WHERE date_utc >= ?", (since,)).fetchall()
     # (משחק, מקור) → האם נמצא משהו
-    have = {(r["match_id"], r["source_id"]): r["videos_json"] not in ("[]", "")
-            for r in conn.execute(
-                "SELECT match_id, source_id, videos_json FROM highlight_cache").fetchall()}
+    have = {(r["match_id"], r["source_id"]): (r["videos_json"] not in ("[]", ""),
+                                             r["found_at"])
+            for r in conn.execute("SELECT match_id, source_id, videos_json, found_at "
+                                  "FROM highlight_cache").fetchall()}
     conn.close()
     done = 0
     for row in rows:
@@ -4179,9 +4192,29 @@ def prefetch_highlights_once() -> int:
         if not likely_over(row) or kickoff_passed(row, hours=48):
             continue
         recheck = row["league_key"] in TIMING_LEAGUES
+
+        def needs_check(source):
+            key = (row["id"], source["id"])
+            if key not in have:
+                return True
+            found, at = have[key]
+            if found:
+                return False
+            if recheck:        # מדידת "מי מעלה ראשון" — בכל סבב
+                return True
+            # "לא נמצא" שפג תוקפו. בלי זה, מקור שהוחזר ריק פעם אחת לא
+            # נבדק שוב לעולם ברקע: משחק פרמייר ליג נבדק אחרי המשחק,
+            # התקציר עלה בלילה, ואף אחד לא חזר אליו (20.9.26)
+            expiry = _not_found_retry(row)
+            if expiry is None:
+                return False
+            try:
+                return datetime.now(timezone.utc) - datetime.fromisoformat(at) > expiry
+            except (ValueError, TypeError):
+                return True
+
         todo = [s for s in get_sources_for_match(row)
-                if s.get("channel_id") and ((row["id"], s["id"]) not in have
-                                            or (recheck and not have[(row["id"], s["id"])]))]
+                if s.get("channel_id") and needs_check(s)]
         # סיבוב מוקדם בגביע מביא עשרות משחקי חובבים. בדיקה בתשלום עליהם
         # הייתה בולעת את תקציב הרקע שהליגות צריכות — ברקע הם חינם בלבד
         # (משחק שמשתמש פותח בפועל עדיין נבדק במלוא המקורות).
