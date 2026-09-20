@@ -48,8 +48,18 @@ def test_web_link_records_first_seen(db, monkeypatch):
     assert f"web_{w['name']}" in _first_seen(db, "t3")
 
 
-def test_prefetch_rechecks_israel_not_found(db, monkeypatch):
-    """ליגת העל: "לא נמצא" ישן מחצי שעה נבדק שוב ברקע — שאר הליגות לא."""
+def _prefetch_calls(db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(main, "search_youtube", lambda home, *a, **k: calls.append(home) or [])
+    monkeypatch.setattr(main, "_web_link", lambda row, w: None)
+    main.prefetch_highlights_once()
+    return calls
+
+
+def test_an_expired_not_found_is_rechecked_in_every_league(db, monkeypatch):
+    """התקציר של משחק אחר הצהריים עולה בלילה. בלי בדיקה חוזרת ברקע,
+    מקור שהוחזר ריק פעם אחת לא נבדק שוב לעולם — ומשחקי פרמייר ליג
+    מאתמול נשארו בלי תקציר עד שמישהו פתח אותם ידנית (20.9.26)."""
     il = _match(db, "t4", datetime.now(timezone.utc) - timedelta(hours=5))
     es = _match(db, "t5", datetime.now(timezone.utc) - timedelta(hours=5),
                 league="laliga", home="Barcelona", away="Getafe")
@@ -58,12 +68,32 @@ def test_prefetch_rechecks_israel_not_found(db, monkeypatch):
         for s in main.get_sources_for_match(row):
             db.execute("INSERT INTO highlight_cache VALUES (?, ?, '[]', ?)", (row["id"], s["id"], old))
     db.commit()
-    calls = []
-    monkeypatch.setattr(main, "search_youtube", lambda home, *a, **k: calls.append(home) or [])
-    monkeypatch.setattr(main, "_web_link", lambda row, w: None)
-    main.prefetch_highlights_once()
-    assert len(calls) == len(main.LEAGUES["israel"]["sources"])
-    assert set(calls) == {"Maccabi Haifa"}
+    assert set(_prefetch_calls(db, monkeypatch)) == {"Maccabi Haifa", "Barcelona"}
+
+
+def test_a_fresh_not_found_is_not_searched_again(db, monkeypatch):
+    """גם ליגת העל, שבה הרקע פונה בכל סבב, לא מגיעה ליוטיוב: שכבת
+    הקאש מכבדת את חלון 30 הדקות של _not_found_retry."""
+    il = _match(db, "t4", datetime.now(timezone.utc) - timedelta(hours=5))
+    es = _match(db, "t5", datetime.now(timezone.utc) - timedelta(hours=5),
+                league="laliga", home="Barcelona", away="Getafe")
+    fresh = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    for row in (il, es):
+        for s in main.get_sources_for_match(row):
+            db.execute("INSERT INTO highlight_cache VALUES (?, ?, '[]', ?)", (row["id"], s["id"], fresh))
+    db.commit()
+    assert _prefetch_calls(db, monkeypatch) == []
+
+
+def test_a_found_highlight_is_not_searched_again(db, monkeypatch):
+    es = _match(db, "t5", datetime.now(timezone.utc) - timedelta(hours=5),
+                league="laliga", home="Barcelona", away="Getafe")
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    for s in main.get_sources_for_match(es):
+        db.execute("INSERT INTO highlight_cache VALUES (?, ?, ?, ?)",
+                   (es["id"], s["id"], '[{"video_id": "x"}]', old))
+    db.commit()
+    assert _prefetch_calls(db, monkeypatch) == []
 
 
 def test_timing_report(db):
