@@ -1,5 +1,7 @@
 """החיווי על הכרטיס (פידבק חיצוני, 19.9.26). קודם הופיע "תקציר" על כל
 משחק שנגמר — גם כשלא היה מה להציג, וגילית את זה רק אחרי לחיצה."""
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 
 import main
@@ -7,16 +9,20 @@ import main
 HTML = open("index.html", encoding="utf-8").read()
 
 
-def _match(db, mid, league="premier"):
+def _match(db, mid, league="premier", hours_ago=3):
+    """משחק ששוחק לפני כמה שעות — בן פחות מיומיים, כמו בפיד האמיתי."""
+    kick = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
     db.execute("INSERT INTO matches (id, league_key, home_team, away_team, date_utc, "
-               "time_utc, status) VALUES (?, ?, 'Arsenal FC', 'Chelsea FC', "
-               "'2026-09-18', '19:00:00', 'FINISHED')", (mid, league))
+               "time_utc, status) VALUES (?, ?, 'Arsenal FC', 'Chelsea FC', ?, ?, "
+               "'FINISHED')",
+               (mid, league, kick.strftime("%Y-%m-%d"), kick.strftime("%H:%M:%S")))
     db.commit()
 
 
-def _cache(db, mid, source, videos_json):
-    db.execute("INSERT INTO highlight_cache VALUES (?, ?, ?, '2026-09-18T22:00:00')",
-               (mid, source, videos_json))
+def _cache(db, mid, source, videos_json, minutes_ago=1):
+    when = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat()
+    db.execute("INSERT INTO highlight_cache VALUES (?, ?, ?, ?)",
+               (mid, source, videos_json, when))
     db.commit()
 
 
@@ -59,8 +65,35 @@ def test_a_match_nobody_checked_promises_nothing(db):
 def test_the_day_view_carries_the_same_state(db):
     _match(db, "b6", league="israel")
     _cache(db, "b6", "sport1", "[]")
-    data = TestClient(main.app).get("/matches/by_date/2026-09-18").json()
-    assert next(m["highlight"] for m in data["matches"] if m["id"] == "b6") == "none"
+    day = main.to_israel_time(
+        (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%d"),
+        "12:00:00")["date"]
+    iso = "-".join(reversed(day.split("/")))
+    data = TestClient(main.app).get(f"/matches/by_date/{iso}").json()
+    assert any(m["id"] == "b6" and m["highlight"] == "none" for m in data["matches"])
+
+
+def test_a_stale_no_promises_nothing(db):
+    """"לא נמצא" במשחק טרי תקף 30 דקות בלבד — אחריהן החלון בודק שוב,
+    ולכן הפיד לא יכול להכריז "אין". ברייטון–ארסנל, 20.9.26 בבוקר:
+    הפיד אמר "אין עדיין תקציר", והחלון הציג מיד שני תקצירים."""
+    _match(db, "b7")
+    _cache(db, "b7", "club_x", "[]", minutes_ago=90)
+    assert _state("b7") is None
+
+
+def test_one_stale_source_is_enough_to_stop_promising(db):
+    _match(db, "b8")
+    _cache(db, "b8", "club_x", "[]", minutes_ago=1)
+    _cache(db, "b8", "club_y", "[]", minutes_ago=90)
+    assert _state("b8") is None
+
+
+def test_an_old_match_keeps_its_no_for_longer(db):
+    """משחק בן שבועות לא נבדק שוב כל חצי שעה — שם "אין" נשאר נכון."""
+    _match(db, "b9", hours_ago=24 * 10)
+    _cache(db, "b9", "club_x", "[]", minutes_ago=60 * 24)
+    assert _state("b9") == "none"
 
 
 def test_the_card_shows_all_three_states():
