@@ -555,6 +555,13 @@
   try { LANG = localStorage.getItem('sf:lang'); } catch (e) {}
   if (!LANG || !I18N[LANG]) LANG = deviceLang();
 
+  // הודעת השרת כתובה בעברית ולא נכתבה למשתמש קצה. היא שימושית לאבחון,
+  // אז היא הולכת לקונסול — ועל המסך מופיעה ההודעה בשפה שנבחרה.
+  function errorHTML(err) {
+    if (err && err.message) console.warn('[api]', err.message);
+    return `<div class="error">${t('error')}</div>`;
+  }
+
   function t(key, vars = {}) {
     let s = (I18N[LANG] || {})[key] ?? I18N.he[key] ?? key;
     for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
@@ -657,6 +664,16 @@
     const r = await fetch(url, opts);
     // fresh=1 עוקף את קאש ה-service worker — אחרת היה מוגש שוב הדף השמור
     if (r.status === 401) { location.href = '/?fresh=' + Date.now(); throw new Error('auth'); }
+    // כל שאר השגיאות: הגוף הוא {"detail": ...}, וכל מי שקרא .json() עליו
+    // קיבל אובייקט שנראה כמו נתונים. כך הופיע "⏳ undefined" בחלון המשחק
+    // (19.9.26) — והיו עוד עשרה מקומות שיכלו להציג את אותה שטות.
+    if (!r.ok) {
+      let detail = '';
+      try { detail = (await r.json()).detail || ''; } catch (e) {}
+      const err = new Error(detail || `http ${r.status}`);
+      err.status = r.status;
+      throw err;
+    }
     return r;
   }
 
@@ -1436,7 +1453,7 @@
       if (err.message === 'auth' || league !== currentLeague) return;
       if (cached) setSyncNote(t('offline_cached'));
       else document.getElementById('matches-container').innerHTML =
-        `<div class="error">${t('error')}: ${err.message}</div>`;
+        errorHTML(err);
       return;
     }
     cachePut(league, data);
@@ -1588,13 +1605,7 @@
     modal.classList.add('open');
 
     apiFetch(`${API}/highlights/${matchId}?lang=${LANG}`)
-      .then(async r => {
-        // שגיאה מהשרת היא לא "אין תקציר": בלי הבדיקה הזו הגוף הוא
-        // {"detail": ...}, ובחלון הופיע "⏳ undefined"
-        const body = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(body.detail || 'http ' + r.status);
-        return body;
-      })
+      .then(r => r.json())
       .then(data => {
         if (!data.available) {
           if (data.needs_refresh && !retried) {
@@ -1822,7 +1833,7 @@
       }
     } catch (err) {
       if (err.message === 'auth') return;
-      container.innerHTML = `<div class="error">${t('error')}: ${err.message}</div>`;
+      container.innerHTML = errorHTML(err);
     }
   }
 
