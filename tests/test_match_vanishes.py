@@ -63,8 +63,10 @@ def test_the_match_is_still_there_right_after_the_refresh(db):
 
 
 def test_an_error_reply_never_reaches_the_screen_as_undefined():
-    """כל שגיאה שאינה 401 הגיעה לחלון כגוף {"detail": ...}."""
-    block = HTML[HTML.index("apiFetch(`${API}/highlights/"):]
-    block = block[:block.index(".then(data => {")]
-    assert "if (!r.ok) throw new Error(" in block
+    """כל שגיאה שאינה 401 הגיעה לכל קורא כגוף {"detail": ...}. הבדיקה
+    עברה ל-apiFetch עצמו, כי היו עוד עשרה מקומות עם אותה חשיפה."""
+    block = HTML[HTML.index("async function apiFetch("):]
+    block = block[:block.index("\n  }")]
+    assert "if (!r.ok) {" in block
+    assert "throw err;" in block
     assert "|| t('search_error');" in HTML
