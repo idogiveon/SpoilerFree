@@ -23,8 +23,10 @@ def test_the_title_and_the_suggestions_are_both_covered():
     top = _css(".video-container.shielded::after")
     assert "top:0" in top and "background:#000" in top
     corner = _css(".video-container.shielded::before")
-    assert "bottom:0" in corner and "inset-inline-end:0" in corner
-    assert "background:#000" in corner
+    assert "bottom:0" in corner and "background:#000" in corner
+    # right פיזי, לא inset-inline-end: הפקדים של יוטיוב תמיד בימין,
+    # וב-RTL המסכה עברה שמאלה והשאירה את ההצעות חשופות (22.9.26)
+    assert "right:0" in corner and "inset-inline-end" not in corner
 
 
 def test_the_masks_are_not_tied_to_hovering():
@@ -90,3 +92,28 @@ def test_a_source_can_still_be_excluded(monkeypatch):
     monkeypatch.setattr(main, "EMBED_IN_APP", False)
     src = {"id": "s", "name": "n", "channel_id": ""}
     assert main._source_highlights({"id": "m"}, src)["allow_embed"] is False
+
+
+def test_the_player_interface_language_is_pinned():
+    """בלי זה מיקום הפקדים משתנה לפי שפת הצופה, והמסכה מפספסת."""
+    block = HTML[HTML.index("playerVars:"):]
+    assert "hl: 'en'" in block[:block.index("}")]
+
+
+def test_expanding_keeps_the_masks_on_the_picture():
+    """בתצוגה מורחבת הקופסה נשארת 16:9. אילו נמתחה למסך שלם, המסכות
+    היו יושבות על שולי המסך במקום על הכותרת ועל ההצעות."""
+    theatre = _css(".video-container.theatre")
+    assert "aspect-ratio:16 / 9" in theatre        # הקופסה = התמונה
+    assert "position:fixed" in theatre
+    # מוגבל גם בגובה: בלי זה סיבוב לרוחב חתך את התמונה (22.9.26)
+    assert "min(100vw" in theatre and "* 16 / 9)" in theatre
+    assert "function toggleTheatre()" in HTML
+    # החלון מוסר את ה-transform שלו, אחרת fixed נמדד יחסית אליו
+    assert ".modal-overlay.theatre-on .modal { transform:none; }" in HTML
+
+
+def test_leaving_the_video_leaves_the_expanded_view():
+    for fn in ("function closeModal()", "function hideVideoBar()"):
+        block = HTML[HTML.index(fn):]
+        assert "exitTheatre();" in block[:block.index("\n  }")]
