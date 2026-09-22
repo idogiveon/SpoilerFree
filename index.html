@@ -166,6 +166,26 @@
        זה 211px, וארבעה כפתורים גלשו החוצה מעל הכותרת (20.9.26) */
     .video-container.picking { padding-bottom:0; height:auto; }
     .video-container.picking .spoiler-shield { position:static; }
+    /* הכותרת של יוטיוב יושבת בראש הנגן ומכילה את התוצאה
+       ("Man City 5-0 Norwich"). הפס הזה מכסה אותה, וגם בולע את
+       הלחיצה — אחרת לחיצה עליה פותחת את הסרטון ביוטיוב. */
+    .video-container.shielded::after { content:''; position:absolute; top:0;
+      inset-inline:0; height:14%; min-height:44px; background:#000; z-index:5; }
+    /* "More videos" של יוטיוב יושב בפינה התחתונה ומציג תמונות ממוזערות
+       של משחקים אחרים — עם התוצאה בתוכן ("5 : 3"). הוא מופיע גם כש-
+       controls=0, ולכן מכוסה ידנית. לידו כפתור שפותח ביוטיוב. */
+    .video-container.shielded::before { content:''; position:absolute; bottom:0;
+      inset-inline-end:0; width:40%; height:16%; min-height:40px; background:#000; z-index:5; }
+    /* גם אירועי עכבר לא מגיעים למסגרת: בלי זה, מעבר עכבר מוציא את
+       הסרגל של יוטיוב על הווידאו. הפקדים שלנו ממילא מחוץ לו. */
+    .video-container.shielded iframe { pointer-events:none; }
+    /* פקדים משלנו — מתחת לנגן, לא מעליו */
+    .vid-bar { display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.75rem;
+      background:#000; border-top:1px solid var(--border); }
+    .vid-btn { background:none; border:none; color:var(--accent); font-size:1.1rem;
+      cursor:pointer; padding:0 0.2rem; line-height:1; }
+    .vid-time { font-size:0.7rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .vid-seek { flex:1; accent-color:var(--accent); height:3px; cursor:pointer; }
     .shield-icon { font-size:3rem; }
     .shield-text { font-size:1rem; color:var(--muted); text-align:center; }
     .shield-note { font-size:0.75rem; color:var(--muted); opacity:0.7; }
@@ -350,7 +370,11 @@
   "delete_account": "מחיקת החשבון",
   "delete_warning": "המחיקה סופית: החשבון וכל נתוני השימוש יימחקו. כדי להמשיך, הקלד את כתובת המייל שלך.",
   "delete_btn": "מחק את החשבון לצמיתות", "account_error": "שגיאה בטעינת החשבון", "delete_failed": "המחיקה נכשלה",
-  "badge": "▶ תקציר", "badge_none": "אין עדיין תקציר", "no_matches": "אין משחקים להצגה", "no_matches_hint": "לחץ \"רענן\" כדי לטעון",
+  "badge": "▶ תקציר", "badge_none": "אין עדיין תקציר",
+  "video_over": "התקציר נגמר", "watch_again": "↻ לצפות שוב",
+  "tap_to_play": "מוכן לצפייה", "play_btn": "▶ הפעלה",
+  "cant_embed": "הערוץ לא מאפשר צפייה כאן", "open_youtube_btn": "↗ לפתוח ביוטיוב",
+  "no_matches": "אין משחקים להצגה", "no_matches_hint": "לחץ \"רענן\" כדי לטעון",
   "n_matches": "{n} משחקים", "today": "היום", "yesterday": "אתמול",
   "offline_cached": "⚠ אין חיבור לשרת — מוצגים נתונים שמורים", "error": "שגיאה",
   "updating_bg": "⏳ מתעדכן ברקע...", "refreshed": "רענון — {d}",
@@ -403,7 +427,11 @@
   "delete_account": "Delete account",
   "delete_warning": "Deletion is permanent: your account and all usage data will be removed. To continue, type your email address.",
   "delete_btn": "Delete my account permanently", "account_error": "Couldn't load your account", "delete_failed": "Deletion failed",
-  "badge": "▶ Highlights", "badge_none": "No highlights yet", "no_matches": "No matches to show", "no_matches_hint": "Press \"Refresh\" to load",
+  "badge": "▶ Highlights", "badge_none": "No highlights yet",
+  "video_over": "That's the highlight", "watch_again": "↻ Watch again",
+  "tap_to_play": "Ready to watch", "play_btn": "▶ Play",
+  "cant_embed": "This channel won't play here", "open_youtube_btn": "↗ Open on YouTube",
+  "no_matches": "No matches to show", "no_matches_hint": "Press \"Refresh\" to load",
   "n_matches": "{n} matches", "today": "Today", "yesterday": "Yesterday",
   "offline_cached": "⚠ No connection — showing saved data", "error": "Error",
   "updating_bg": "⏳ Updating in the background...", "refreshed": "Refreshed — {d}",
@@ -456,7 +484,11 @@
   "delete_account": "Eliminar cuenta",
   "delete_warning": "La eliminación es definitiva: se borrarán tu cuenta y todos los datos de uso. Para continuar, escribe tu correo.",
   "delete_btn": "Eliminar mi cuenta definitivamente", "account_error": "No se pudo cargar la cuenta", "delete_failed": "No se pudo eliminar",
-  "badge": "▶ Resumen", "badge_none": "Aún sin resumen", "no_matches": "No hay partidos", "no_matches_hint": "Pulsa \"Actualizar\" para cargar",
+  "badge": "▶ Resumen", "badge_none": "Aún sin resumen",
+  "video_over": "Fin del resumen", "watch_again": "↻ Ver de nuevo",
+  "tap_to_play": "Listo para ver", "play_btn": "▶ Reproducir",
+  "cant_embed": "Este canal no permite verlo aquí", "open_youtube_btn": "↗ Abrir en YouTube",
+  "no_matches": "No hay partidos", "no_matches_hint": "Pulsa \"Actualizar\" para cargar",
   "n_matches": "{n} partidos", "today": "Hoy", "yesterday": "Ayer",
   "offline_cached": "⚠ Sin conexión — mostrando datos guardados", "error": "Error",
   "updating_bg": "⏳ Actualizando en segundo plano...", "refreshed": "Actualizado — {d}",
@@ -509,7 +541,11 @@
   "delete_account": "Supprimer le compte",
   "delete_warning": "La suppression est définitive : votre compte et toutes les données d'utilisation seront effacés. Pour continuer, saisissez votre e-mail.",
   "delete_btn": "Supprimer définitivement mon compte", "account_error": "Impossible de charger le compte", "delete_failed": "Échec de la suppression",
-  "badge": "▶ Résumé", "badge_none": "Pas encore de résumé", "no_matches": "Aucun match à afficher", "no_matches_hint": "Appuyez sur « Actualiser » pour charger",
+  "badge": "▶ Résumé", "badge_none": "Pas encore de résumé",
+  "video_over": "Fin du résumé", "watch_again": "↻ Revoir",
+  "tap_to_play": "Prêt à regarder", "play_btn": "▶ Lecture",
+  "cant_embed": "Cette chaîne ne le permet pas ici", "open_youtube_btn": "↗ Ouvrir sur YouTube",
+  "no_matches": "Aucun match à afficher", "no_matches_hint": "Appuyez sur « Actualiser » pour charger",
   "n_matches": "{n} matchs", "today": "Aujourd'hui", "yesterday": "Hier",
   "offline_cached": "⚠ Pas de connexion — données enregistrées affichées", "error": "Erreur",
   "updating_bg": "⏳ Mise à jour en arrière-plan...", "refreshed": "Actualisé — {d}",
@@ -1738,16 +1774,156 @@
     }, 1500);
   }
 
-  function loadVideo(videoId) {
+  // ── נגן מוטמע עם מגן (#35) ──────────────────────────
+  // יוטיוב מסגיר את התוצאה בשלושה מקומות, לא באחד:
+  //   1. הכותרת מעל הנגן — "Man City 5-0 Norwich | Highlights"
+  //   2. התמונה הממוזערת לפני ההפעלה — גרפיקה של "5 : 0" על כל המסך
+  //   3. מסך הסיום — תמונות ממוזערות של משחקים אחרים
+  // שלושתם מכוסים כאן. בלי שליטה במצב הנגן אי אפשר לדעת מתי בטוח
+  // לחשוף אותו, ולכן נטען ה-IFrame API של יוטיוב.
+  let ytPlayer = null, ytApi = null, ytNudge = null;
+
+  function youtubeApi() {
+    if (ytApi) return ytApi;
+    ytApi = new Promise((resolve, reject) => {
+      if (window.YT && window.YT.Player) return resolve();
+      const timer = setTimeout(() => reject(new Error('yt api timeout')), 8000);
+      window.onYouTubeIframeAPIReady = () => { clearTimeout(timer); resolve(); };
+      const el = document.createElement('script');
+      el.src = 'https://www.youtube.com/iframe_api';
+      el.onerror = () => { clearTimeout(timer); reject(new Error('yt api blocked')); };
+      document.head.appendChild(el);
+    });
+    return ytApi;
+  }
+
+  function shieldHTML(icon, text, btnLabel, onClick) {
+    return `<div class="shield-icon">${icon}</div>
+            <div class="shield-text">${text}</div>` +
+           (btnLabel ? `<button class="retry-btn" onclick="${onClick}">${btnLabel}</button>` : '');
+  }
+
+  async function loadVideo(videoId) {
     track('highlight_play', { match_id: currentMatchId, detail: videoId });
+    const container = document.querySelector('.video-container');
+    const shield = document.getElementById('shield');
+    container.classList.remove('picking');
+    // המגן נשאר פרוס עד שהניגון מתחיל בפועל — אחרת נראית התמונה הממוזערת
+    shield.innerHTML = shieldHTML('🛡️', t('loading'));
+    document.getElementById('video-frame').innerHTML = '<div id="yt-player"></div>';
+    try {
+      await youtubeApi();
+    } catch (e) {
+      // אין נגן מוטמע — פותחים ביוטיוב, כמו קודם
+      openOnYoutube(videoId);
+      shield.innerHTML = shieldHTML('↗', t('opens_youtube'));
+      return;
+    }
+    // בטלפון הדפדפן חוסם ניגון אוטומטי עם קול, ולכן ייתכן שהניגון לא
+    // יתחיל לבד. במקרה כזה המגן מציג כפתור הפעלה — הנגיעה בו היא
+    // מחווה של המשתמש, וזה מה שהדפדפן דורש.
+    clearTimeout(ytNudge);
+    ytNudge = setTimeout(() => {
+      if (!ytPlayer || !ytPlayer.getPlayerState) return;
+      if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
+      shield.innerHTML = shieldHTML('▶', t('tap_to_play'), t('play_btn'), 'startVideo()');
+    }, 2500);
+    ytPlayer = new YT.Player('yt-player', {
+      videoId,
+      host: 'https://www.youtube-nocookie.com',
+      // controls: 0 — הסרגל של יוטיוב נושא איתו קישורים החוצה; הפקדים
+      // שלנו יושבים מתחת לנגן ולא מסתירים את הווידאו
+      playerVars: { autoplay: 1, rel: 0, controls: 0, modestbranding: 1,
+                    iv_load_policy: 3, fs: 0, playsinline: 1, cc_load_policy: 0 },
+      events: {
+        onStateChange: e => {
+          if (e.data === YT.PlayerState.PLAYING) {
+            clearTimeout(ytNudge);
+            shield.style.display = 'none';
+            container.classList.add('shielded');   // המסכות מעל הכותרת וההצעות
+            showVideoBar();
+          } else if (e.data === YT.PlayerState.ENDED) {
+            // מסך הסיום מציע משחקים אחרים, עם התוצאה בתמונה הממוזערת
+            hideVideoBar();
+            container.classList.remove('shielded');
+            shield.style.display = '';
+            shield.innerHTML = shieldHTML('🛡️', t('video_over'), t('watch_again'),
+                                          'replayVideo()');
+          }
+          updatePlayPause();
+        },
+        onError: () => {
+          container.classList.remove('shielded');
+          shield.style.display = '';
+          shield.innerHTML = shieldHTML('↗', t('cant_embed'), t('open_youtube_btn'),
+                                        `openOnYoutube('${videoId}')`);
+        },
+      },
+    });
+  }
+
+  // ── פקדים משלנו ──────────────────────────────────
+  let vidTimer = null;
+  const fmt = sec => {
+    sec = Math.max(0, Math.floor(sec || 0));
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  };
+
+  function showVideoBar() {
+    if (document.getElementById('vid-bar')) return;
+    const bar = document.createElement('div');
+    bar.className = 'vid-bar';
+    bar.id = 'vid-bar';
+    bar.innerHTML = `
+      <button class="vid-btn" id="vid-play" aria-label="play">⏸</button>
+      <span class="vid-time" id="vid-now">0:00</span>
+      <input class="vid-seek" id="vid-seek" type="range" min="0" max="1000" value="0">
+      <span class="vid-time" id="vid-dur">0:00</span>`;
+    document.querySelector('.video-container').after(bar);
+    document.getElementById('vid-play').onclick = () => {
+      const playing = ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
+      playing ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+    };
+    const seek = document.getElementById('vid-seek');
+    seek.oninput = () => {
+      const d = ytPlayer.getDuration() || 0;
+      ytPlayer.seekTo(d * seek.value / 1000, true);
+    };
+    vidTimer = setInterval(() => {
+      if (!ytPlayer || !ytPlayer.getDuration) return;
+      const d = ytPlayer.getDuration() || 0, c = ytPlayer.getCurrentTime() || 0;
+      document.getElementById('vid-now').textContent = fmt(c);
+      document.getElementById('vid-dur').textContent = fmt(d);
+      if (document.activeElement !== seek && d) seek.value = Math.round(c / d * 1000);
+    }, 400);
+  }
+
+  function updatePlayPause() {
+    const b = document.getElementById('vid-play');
+    if (b && ytPlayer && ytPlayer.getPlayerState)
+      b.textContent = ytPlayer.getPlayerState() === YT.PlayerState.PLAYING ? '⏸' : '▶';
+  }
+
+  function hideVideoBar() {
+    clearInterval(vidTimer); vidTimer = null;
+    const b = document.getElementById('vid-bar');
+    if (b) b.remove();
+  }
+
+  // הפעלה מתוך נגיעה של המשתמש — הדרך היחידה שעוברת את חסימת הניגון
+  // האוטומטי בטלפון
+  function startVideo() {
+    if (!ytPlayer) return;
+    document.getElementById('shield').innerHTML = shieldHTML('🛡️', t('loading'));
+    ytPlayer.playVideo();
+  }
+
+  function replayVideo() {
+    if (!ytPlayer) return;
     document.getElementById('shield').style.display = 'none';
-    // הוידאו כן צריך 16:9 — הגובה החופשי היה רק בשביל הכפתורים
-    document.querySelector('.video-container').classList.remove('picking');
-    document.getElementById('video-frame').innerHTML = `
-      <iframe
-        src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-        allowfullscreen></iframe>`;
+    document.querySelector('.video-container').classList.add('shielded');
+    ytPlayer.seekTo(0);
+    ytPlayer.playVideo();
   }
 
   function openWeb(url, name) {
@@ -1757,6 +1933,9 @@
 
   function closeModal() {
     document.getElementById('modal').classList.remove('open');
+    hideVideoBar();
+    if (ytPlayer && ytPlayer.destroy) { try { ytPlayer.destroy(); } catch (e) {} }
+    ytPlayer = null;
     const f = document.getElementById('video-frame');
     if (f) f.innerHTML = '';
   }
