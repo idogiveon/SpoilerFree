@@ -174,8 +174,11 @@
     /* "More videos" של יוטיוב יושב בפינה התחתונה ומציג תמונות ממוזערות
        של משחקים אחרים — עם התוצאה בתוכן ("5 : 3"). הוא מופיע גם כש-
        controls=0, ולכן מכוסה ידנית. לידו כפתור שפותח ביוטיוב. */
+    /* right ולא inset-inline-end: הפקדים של יוטיוב תמיד בצד ימין של
+       הנגן, גם כשהממשק שלנו בעברית. עם inset-inline-end המסכה עברה
+       שמאלה בממשק העברי והשאירה את ההצעות חשופות (22.9.26). */
     .video-container.shielded::before { content:''; position:absolute; bottom:0;
-      inset-inline-end:0; width:40%; height:16%; min-height:40px; background:#000; z-index:5; }
+      right:0; width:38%; height:15%; min-height:38px; background:#000; z-index:5; }
     /* גם אירועי עכבר לא מגיעים למסגרת: בלי זה, מעבר עכבר מוציא את
        הסרגל של יוטיוב על הווידאו. הפקדים שלנו ממילא מחוץ לו. */
     .video-container.shielded iframe { pointer-events:none; }
@@ -186,6 +189,22 @@
       cursor:pointer; padding:0 0.2rem; line-height:1; }
     .vid-time { font-size:0.7rem; color:var(--muted); font-variant-numeric:tabular-nums; }
     .vid-seek { flex:1; accent-color:var(--accent); height:3px; cursor:pointer; }
+    /* תצוגה מורחבת. באייפון אי אפשר להגדיל אלמנט רגיל למסך מלא (רק
+       וידאו), ולכן זה נעשה ב-CSS. הקופסה נשארת ביחס 16:9 — המסכות
+       ממוקמות יחסית אליה, ואילו הן היו נמתחות למסך שלם הן היו מפספסות
+       את הכותרת ואת ההצעות. סיבוב הטלפון לרוחב = תמונה כמעט מלאה. */
+    .theatre-backdrop { position:fixed; inset:0; background:#000; z-index:2999; }
+    .modal-overlay.theatre-on .modal { transform:none; }
+    /* מתאים את עצמו לקטן מבין השניים — רוחב המסך או הגובה הפנוי מעל
+       הסרגל. בלי מגבלת הגובה, סיבוב לרוחב גלש מהמסך וחתך את התמונה
+       למעלה ולמטה (22.9.26). aspect-ratio שומר 16:9, כך שהמסכות
+       נשארות בדיוק על הכותרת ועל ההצעות. */
+    .video-container.theatre { position:fixed; left:50%; top:calc((100vh - 44px) / 2);
+      top:calc((100dvh - 44px) / 2); transform:translate(-50%, -50%);
+      width:min(100vw, calc((100vh - 44px) * 16 / 9));
+      width:min(100vw, calc((100dvh - 44px) * 16 / 9));
+      aspect-ratio:16 / 9; height:auto; padding-bottom:0; z-index:3000; }
+    .vid-bar.theatre { position:fixed; inset-inline:0; bottom:0; z-index:3001; }
     .shield-icon { font-size:3rem; }
     .shield-text { font-size:1rem; color:var(--muted); text-align:center; }
     .shield-note { font-size:0.75rem; color:var(--muted); opacity:0.7; }
@@ -1822,19 +1841,17 @@
     // בטלפון הדפדפן חוסם ניגון אוטומטי עם קול, ולכן ייתכן שהניגון לא
     // יתחיל לבד. במקרה כזה המגן מציג כפתור הפעלה — הנגיעה בו היא
     // מחווה של המשתמש, וזה מה שהדפדפן דורש.
-    clearTimeout(ytNudge);
-    ytNudge = setTimeout(() => {
-      if (!ytPlayer || !ytPlayer.getPlayerState) return;
-      if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
-      shield.innerHTML = shieldHTML('▶', t('tap_to_play'), t('play_btn'), 'startVideo()');
-    }, 2500);
+    armPlayNudge(shield);
     ytPlayer = new YT.Player('yt-player', {
       videoId,
       host: 'https://www.youtube-nocookie.com',
       // controls: 0 — הסרגל של יוטיוב נושא איתו קישורים החוצה; הפקדים
       // שלנו יושבים מתחת לנגן ולא מסתירים את הווידאו
+      // hl: הממשק של הנגן נשאר באנגלית — כך מיקום הפקדים קבוע, והמסכה
+      // לא מפספסת אותם. הצופה ממילא לא רואה את הממשק הזה.
       playerVars: { autoplay: 1, rel: 0, controls: 0, modestbranding: 1,
-                    iv_load_policy: 3, fs: 0, playsinline: 1, cc_load_policy: 0 },
+                    iv_load_policy: 3, fs: 0, playsinline: 1, cc_load_policy: 0,
+                    hl: 'en' },
       events: {
         onStateChange: e => {
           if (e.data === YT.PlayerState.PLAYING) {
@@ -1878,12 +1895,14 @@
       <button class="vid-btn" id="vid-play" aria-label="play">⏸</button>
       <span class="vid-time" id="vid-now">0:00</span>
       <input class="vid-seek" id="vid-seek" type="range" min="0" max="1000" value="0">
-      <span class="vid-time" id="vid-dur">0:00</span>`;
+      <span class="vid-time" id="vid-dur">0:00</span>
+      <button class="vid-btn" id="vid-full" aria-label="fullscreen">⤢</button>`;
     document.querySelector('.video-container').after(bar);
     document.getElementById('vid-play').onclick = () => {
       const playing = ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
       playing ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
     };
+    document.getElementById('vid-full').onclick = toggleTheatre;
     const seek = document.getElementById('vid-seek');
     seek.oninput = () => {
       const d = ytPlayer.getDuration() || 0;
@@ -1898,6 +1917,34 @@
     }, 400);
   }
 
+  // תצוגה מורחבת: הנגן יוצא מהחלון וממלא את הרוחב. בטלפון, סיבוב
+  // לרוחב הופך את זה כמעט למסך מלא — וזה מה שאפשרי שם.
+  function toggleTheatre() {
+    const c = document.querySelector('.video-container');
+    const bar = document.getElementById('vid-bar');
+    const on = !c.classList.contains('theatre');
+    c.classList.toggle('theatre', on);
+    if (bar) bar.classList.toggle('theatre', on);
+    document.getElementById('modal').classList.toggle('theatre-on', on);
+    let back = document.getElementById('theatre-backdrop');
+    if (on && !back) {
+      back = document.createElement('div');
+      back.className = 'theatre-backdrop';
+      back.id = 'theatre-backdrop';
+      back.onclick = toggleTheatre;
+      document.body.appendChild(back);
+    } else if (!on && back) {
+      back.remove();
+    }
+    const btn = document.getElementById('vid-full');
+    if (btn) btn.textContent = on ? '⤡' : '⤢';
+  }
+
+  function exitTheatre() {
+    const c = document.querySelector('.video-container');
+    if (c && c.classList.contains('theatre')) toggleTheatre();
+  }
+
   function updatePlayPause() {
     const b = document.getElementById('vid-play');
     if (b && ytPlayer && ytPlayer.getPlayerState)
@@ -1905,17 +1952,32 @@
   }
 
   function hideVideoBar() {
+    exitTheatre();
     clearInterval(vidTimer); vidTimer = null;
     const b = document.getElementById('vid-bar');
     if (b) b.remove();
   }
 
+  // אם הניגון לא התחיל תוך כמה שניות — המגן מציע כפתור הפעלה. זה קורה
+  // בטלפון, שחוסם ניגון אוטומטי עם קול.
+  function armPlayNudge(shield) {
+    clearTimeout(ytNudge);
+    ytNudge = setTimeout(() => {
+      if (!ytPlayer || !ytPlayer.getPlayerState) return;
+      if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
+      shield.innerHTML = shieldHTML('▶', t('tap_to_play'), t('play_btn'), 'startVideo()');
+    }, 2500);
+  }
+
   // הפעלה מתוך נגיעה של המשתמש — הדרך היחידה שעוברת את חסימת הניגון
-  // האוטומטי בטלפון
+  // האוטומטי בטלפון. גם היא יכולה להיכשל, ואז הכפתור חייב לחזור: בלי
+  // זה המגן נתקע על "טוען" ואין דרך לנסות שוב.
   function startVideo() {
     if (!ytPlayer) return;
-    document.getElementById('shield').innerHTML = shieldHTML('🛡️', t('loading'));
+    const shield = document.getElementById('shield');
+    shield.innerHTML = shieldHTML('🛡️', t('loading'));
     ytPlayer.playVideo();
+    armPlayNudge(shield);
   }
 
   function replayVideo() {
@@ -1932,6 +1994,7 @@
   }
 
   function closeModal() {
+    exitTheatre();
     document.getElementById('modal').classList.remove('open');
     hideVideoBar();
     if (ytPlayer && ytPlayer.destroy) { try { ytPlayer.destroy(); } catch (e) {} }
