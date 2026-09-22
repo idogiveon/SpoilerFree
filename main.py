@@ -4256,8 +4256,15 @@ def _start_prefetch():
         threading.Thread(target=_prefetch_loop, daemon=True).start()
 
 
+# גרסת הלקוח. הנגן המוטמע והמגן שלו נוספו ב-2: לקוח ישן לא יודע
+# לכסות את הכותרת ואת התמונה הממוזערת, ולכן הוא לא מקבל הרשאה להטמיע.
+# ה-service worker מגיש את הדף מהקאש, כך שגרסה חדשה מגיעה רק בפתיחה
+# הבאה — ובלי השער הזה השרת התיר הטמעה לקוד שאין לו מגן (22.9.26).
+CLIENT_EMBED_VERSION = 2
+
+
 @app.get("/highlights/{match_id}")
-def get_highlights(request: Request, match_id: str, lang: str = "he"):
+def get_highlights(request: Request, match_id: str, lang: str = "he", client: int = 1):
     require_auth(request)
     conn = get_db()
     row  = conn.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
@@ -4298,6 +4305,9 @@ def get_highlights(request: Request, match_id: str, lang: str = "he"):
 
     sources = get_sources_for_match(row)
     results = [_source_highlights(row, source) for source in sources]
+    if client < CLIENT_EMBED_VERSION:
+        for r in results:
+            r["allow_embed"] = False
 
     # קישורי אתר (same-day): השרת מחלץ את הכתבה הישירה ושומר בקאש
     league = LEAGUES.get(row["league_key"], {})
