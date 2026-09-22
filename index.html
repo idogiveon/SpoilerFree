@@ -1640,7 +1640,7 @@
     body.innerHTML = `<div class="loading">${t('searching')}</div>`;
     modal.classList.add('open');
 
-    apiFetch(`${API}/highlights/${matchId}?lang=${LANG}`)
+    apiFetch(`${API}/highlights/${matchId}?lang=${LANG}&client=2`)
       .then(r => r.json())
       .then(data => {
         if (!data.available) {
