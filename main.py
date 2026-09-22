@@ -124,8 +124,7 @@ LEAGUES = {
             {"id": "sky_efl", "name": "Sky Sports",
              "channel_id": "UCZ7wY7MRDSygp63HIEfdQZA",
              "search_template": "{home} {away} EFL highlights",
-             "title_include": ["efl"],
-             "allow_embed": False},
+             "title_include": ["efl"]},
         ],
     },
     "israel": {
@@ -142,13 +141,11 @@ LEAGUES = {
             {"id": "sport1", "name": "ספורט 1",
              "channel_id": "UC_wkUEeEC4HlcfI5xanWjBQ",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True,
-             "allow_embed": False},
+             "hebrew_names": True, "il_both_teams": True},
             {"id": "sport5", "name": "ערוץ הספורט",
              "channel_id": "UCyXf5cz6E9IIL40aivg7tOw",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True,
-             "allow_embed": False},
+             "hebrew_names": True, "il_both_teams": True},
             # "מחזור 4 | תקציר: בית"ר ירושלים - מכבי פ"ת 1-3" — שתי הקבוצות
             # בכותרת (גם בקיצור). "המשחק המלא" = 90 דקות, לא תקציר
             {"id": "ipfl", "name": "ליגת העל",
@@ -156,25 +153,21 @@ LEAGUES = {
              "search_template": "תקציר {home} {away}",
              "hebrew_names": True, "il_both_teams": True,
              # גם בגרסה האנגלית: "Matchday 4 | Full Match: ..." (90 דקות)
-             "title_exclude": ["המשחק המלא", "full match"],
-             "allow_embed": False},
+             "title_exclude": ["המשחק המלא", "full match"]},
             # ערוצים לא רשמיים (העלאות פיראטיות) — לפעמים מקדימים את הרשמיים.
             # il_both_teams: רק "תקציר" + שתי הקבוצות בשם מלא (is_il_both_teams)
             {"id": "yt_footballyom1", "name": "@FootballYom1",
              "channel_id": "UC5TtVDq_BSplSOHf7lb2AGQ",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True,
-             "allow_embed": False},
+             "hebrew_names": True, "il_both_teams": True},
             {"id": "yt_almog218", "name": "@almog218",
              "channel_id": "UCm8OkQc5lHJE29ADWkbB7CQ",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True,
-             "allow_embed": False},
+             "hebrew_names": True, "il_both_teams": True},
             {"id": "yt_itsfootball44", "name": "@ItsFootball44",
              "channel_id": "UCUEeo-8_3zovErCSQb58dnw",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True,
-             "allow_embed": False},
+             "hebrew_names": True, "il_both_teams": True},
         ],
         # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
         "web_sources": [
@@ -201,8 +194,7 @@ LEAGUES = {
         "sources": [
             {"id": "bundesliga_official", "name": "Bundesliga",
              "channel_id": "UC6UL29enLNe4mqwTfAyeNuw",
-             "search_template": "{home} {away} highlights",
-             "allow_embed": False},
+             "search_template": "{home} {away} highlights"},
         ],
     },
     "laliga": {
@@ -217,12 +209,10 @@ LEAGUES = {
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "{home} {away}",
              "hebrew_names": True,
-             "headline_titles": True,
-             "allow_embed": False},
+             "headline_titles": True},
             {"id": "laliga_official", "name": "LALIGA",
              "channel_id": "UCTv-XvfzLX3i4IGWAm4sbmA",
-             "search_template": "{home} {away} resumen",
-             "allow_embed": False},
+             "search_template": "{home} {away} resumen"},
         ],
     },
     "seriea": {
@@ -237,12 +227,10 @@ LEAGUES = {
              "channel_id": "UCgbHJENV6UgIZl1Rp_GXCfw",
              "search_template": "{home} {away}",
              "hebrew_names": True,
-             "headline_titles": True,
-             "allow_embed": False},
+             "headline_titles": True},
             {"id": "seriea_official", "name": "Serie A",
              "channel_id": "UCBJeMCIeLQos7wacox4hmLQ",
-             "search_template": "{home} {away} highlights",
-             "allow_embed": False},
+             "search_template": "{home} {away} highlights"},
         ],
     },
     "ligue1": {
@@ -253,8 +241,7 @@ LEAGUES = {
         "sources": [
             {"id": "ligue1_official", "name": "Ligue 1",
              "channel_id": "UCQsH5XtIc9hONE1BQjucM0g",
-             "search_template": "{home} {away} highlights",
-             "allow_embed": False},
+             "search_template": "{home} {away} highlights"},
         ],
         # תקצירי יוטיוב של ליג 1 עולים מאוחר — ספורט 5 (משדרת בישראל) כגיבוי.
         # אין להם VOD ייעודי לליגה, אז גם כתבות סיכום המחזור (עם וידאו).
@@ -285,8 +272,7 @@ LEAGUES = {
             {"id": "tv2_no", "name": "TV2 Sport",
              "channel_id": "UC9QZZRUajPEoo1Q-V3MfvnQ",
              "search_template": "{home} {away}",
-             "require_team_match": True,
-             "allow_embed": False},
+             "require_team_match": True},
         ],
         # ערוצי המועדונים ביוטיוב — שם התקצירים עולים הכי מהר (לרוב באותו לילה).
         # מפתח = שם הקבוצה ב-TheSportsDB. אומתו 13.9.26 מול ה-RSS הציבורי של
@@ -388,8 +374,7 @@ LEAGUES = {
             {"id": "mls_official", "name": "MLS",
              "channel_id": "UCSZbXT5TLLW_i-5W8FZpFsg",
              "search_template": "{home} vs {away} highlights",
-             "title_include": ["highlights"],
-             "allow_embed": False},
+             "title_include": ["highlights"]},
         ],
     },
     "eredivisie": {
@@ -436,12 +421,10 @@ LEAGUES = {
             {"id": "fanatiz", "name": "Fanatiz",
              "channel_id": "UCvEJrtUk0C2wh3P-9DOdblA",
              "search_template": "{home} {away} match highlights",
-             "title_exclude": ["game highlights"],
-             "allow_embed": False},
+             "title_exclude": ["game highlights"]},
             {"id": "lpf_official", "name": "Liga Profesional",
              "channel_id": "UCJmCVoUfCBQb9lcfXIS8nXQ",
-             "search_template": "{home} {away} resumen",
-             "allow_embed": False},
+             "search_template": "{home} {away} resumen"},
         ],
     },
     # ── גביעים ─────────────────────────────────────────
@@ -463,8 +446,7 @@ LEAGUES = {
             {"id": "efl_cup", "name": "EFL",
              "channel_id": "UCCmo_NIuQR5eU4AvBa6sEQQ",
              "search_template": "{home} {away} Carabao Cup highlights",
-             "title_include": ["carabao"],
-             "allow_embed": False},
+             "title_include": ["carabao"]},
         ],
     },
     "facup": {
@@ -482,8 +464,7 @@ LEAGUES = {
              "channel_id": "UCChcWqwYXCEs657MQ00qVWA",
              "search_template": "{home} {away} Emirates FA Cup",
              "title_include": ["fa cup"],
-             "title_exclude": ["community shield", "full match"],
-             "allow_embed": False},
+             "title_exclude": ["community shield", "full match"]},
         ],
     },
     "dfbpokal": {
@@ -499,8 +480,7 @@ LEAGUES = {
             {"id": "german_football", "name": "German Football",
              "channel_id": "UC7am34-1rGU_ky1vWYnoOJQ",
              "search_template": "{home} {away} DFB-Pokal highlights",
-             "title_include": ["pokal"],
-             "allow_embed": False},
+             "title_include": ["pokal"]},
         ],
     },
     "copadelrey": {
@@ -516,8 +496,7 @@ LEAGUES = {
             {"id": "rfef", "name": "RFEF",
              "channel_id": "UCQBxzdEPXjy05MtpfbdtMxQ",
              "search_template": "{home} {away} Copa del Rey resumen",
-             "title_include": ["copa"],
-             "allow_embed": False},
+             "title_include": ["copa"]},
         ],
     },
     "coupedefrance": {
@@ -3488,7 +3467,7 @@ def get_sources_for_match(row) -> list:
             cfg_name, cid = hit
             club_sources.append(
                 {"id": f"club_{_fixture_slug(team)}", "name": to_hebrew_team(team),
-                 "channel_id": cid, "allow_embed": False,
+                 "channel_id": cid,
                  "query_override": q, "club_team": team,
                  **CLUB_TITLE_RULES.get(cfg_name, {})})
         return club_sources + league.get("sources", [])
@@ -3535,7 +3514,7 @@ def get_sources_for_match(row) -> list:
 
     # club_team: הכפתור מציג את שם המועדון בשפת המשתמש (כמו בצ'מפיונס)
     club_sources = [{"id": f"club_{c['id']}", "name": c["short_name"],
-                     "channel_id": c["yt_channel_id"], "allow_embed": False,
+                     "channel_id": c["yt_channel_id"],
                      "query_override": short_q, "club_team": c["name"]}
                     for c in clubs]
 
@@ -4051,7 +4030,11 @@ def _source_highlights(row, source, free_only: bool = False) -> dict:
     match_id    = row["id"]
     source_id   = source["id"]
     channel_id  = source.get("channel_id", "")
-    allow_embed = source.get("allow_embed", False)
+    # צפייה בתוך האתר (#35): הנגן שלנו מכסה את הכותרת, את התמונה
+    # הממוזערת ואת ההצעות של יוטיוב — שלושתן מסגירות את התוצאה. לפני
+    # שהמגן הזה נבנה, כל מקור היה מסומן "אסור להטמיע".
+    # ערוץ שחוסם הטמעה בכל זאת → הנגן מציג כפתור פתיחה ביוטיוב.
+    allow_embed = EMBED_IN_APP and source.get("allow_embed", True)
     base = {"source_id": source_id, "name": source["name"], "allow_embed": allow_embed}
 
     if not channel_id:
@@ -4177,6 +4160,10 @@ def _web_link(row, w):
         conn.close()
     return url
 
+
+# צפייה בתוך האתר. EMBED_IN_APP=0 ב-Render מחזיר את כולם לפתיחה ביוטיוב,
+# בלי לחכות ל-deploy — נתיב נסיגה אם יתגלה דליפה שלא נצפתה.
+EMBED_IN_APP = os.environ.get("EMBED_IN_APP", "1") != "0"
 
 PREFETCH_EVERY_MIN   = 30
 PREFETCH_MAX_MATCHES = 20

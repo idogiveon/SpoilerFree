@@ -14,7 +14,8 @@ def test_sources_after_official_ones():
     assert [s["id"] for s in src[:3]] == ["sport1", "sport5", "ipfl"]
     pirate = src[3:]
     assert [s["channel_id"] for s in pirate] == PIRATE_IDS
-    assert all(s["il_both_teams"] and not s["allow_embed"] for s in pirate)
+    # ההטמעה נקבעת מרכזית (EMBED_IN_APP), לא לכל מקור בנפרד
+    assert all(s["il_both_teams"] and "allow_embed" not in s for s in pirate)
 
 
 def test_real_titles():

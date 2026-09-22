@@ -13,7 +13,8 @@ def test_new_club_channels_are_configured():
 
 def test_tv2_is_a_league_source():
     tv2 = next(s for s in UCL["sources"] if s["id"] == "tv2_no")
-    assert tv2["channel_id"] == "UC9QZZRUajPEoo1Q-V3MfvnQ" and not tv2["allow_embed"]
+    assert tv2["channel_id"] == "UC9QZZRUajPEoo1Q-V3MfvnQ"
+    assert "allow_embed" not in tv2      # מדיניות מרכזית, לא לכל מקור
 
 
 def test_norwegian_titles_pass_with_both_teams():
