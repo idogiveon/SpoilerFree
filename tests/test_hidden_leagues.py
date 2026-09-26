@@ -69,3 +69,17 @@ def test_it_is_written_in_four_languages_and_counts_one_properly():
 def test_a_day_whose_leagues_are_all_hidden_is_not_a_blank_screen():
     """כל הליגות של היום מוסתרות: html יוצא ריק, והמסך היה ריק לגמרי."""
     assert "if (!html) html = `<div class=\"empty\">${t('no_matches_day')}</div>`" in HTML
+
+
+def test_only_one_screen_decides_what_is_hidden():
+    """קודם היו שניים, עם אותו צ'יפ ירוק ובמשמעות הפוכה: במסך הליגות
+    "דולק = מוצגת", ובמועדפים "דולק = מוסתרת" — שני פריטים סמוכים
+    באותו תפריט. ובנוסף, ליגה מוסתרת הופיעה גם ברשימת "ליגות מועדפות"
+    באותו מסך, ולחיצה שם ביטלה את ההסתרה בלי שנאמר."""
+    assert 'id="hid-leagues"' not in HTML
+    assert "hidden_hint" not in HTML                 # התיאור הכפול של אותו מנגנון
+    fav = HTML[HTML.index("function renderFavLeagues()"):]
+    fav = fav[:fav.index("\n  }")]
+    assert "HIDDEN_LEAGUES" not in fav
+    # ומהמועדפים יש דרך למסך שכן מחליט
+    assert "onclick=\"openLeaguePicker()\">🏆 ${t('hidden_leagues')}" in HTML
