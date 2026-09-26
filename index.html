@@ -1238,7 +1238,9 @@
     try {
       const me = await apiFetch(`${API}/auth/me`).then(r => r.json());
       ME = me;
-      document.getElementById('lab-tag').hidden = !me.private;
+      // התג אמר "כתובת מוגבלת" (private), אבל מה שמבדיל את המופע הזה
+      // בפועל הוא הנגן המוטמע (EMBED_IN_APP) — וזה נקבע בנפרד
+      document.getElementById('lab-tag').hidden = !(me.embed || me.private);
       const user = document.getElementById('drawer-user');
       const items = [];
       if (me.auth_on) {

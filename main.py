@@ -6055,6 +6055,11 @@ def pwa_manifest(lang: str = "he"):
     desc, direction = MANIFEST_I18N.get(lang, MANIFEST_I18N["he"])
     data.update({"description": desc, "lang": lang if lang in MANIFEST_I18N else "he",
                  "dir": direction})
+    # הכתובת הפרטית היא origin נפרד, כלומר התקנה נפרדת במסך הבית — ועד
+    # עכשיו בשם ובאייקון זהים לציבורית. LAB הוא מה שכתוב גם בתוך האתר
+    if EMBED_IN_APP or ALLOWED_EMAILS:
+        data["name"] = f"{data['name']} LAB"
+        data["short_name"] = f"{data['short_name']} LAB"
     return JSONResponse(data, media_type="application/manifest+json")
 
 
