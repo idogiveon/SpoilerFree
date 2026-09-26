@@ -368,6 +368,15 @@ LEAGUES = {
             "NEC Nijmegen":   "UCF4UEYKNui8ytU9vC9h58fg",
             "Juventus":       "UCLzKhsxrExAC6yAdtZ-BOWw",
             "Lyon":           "UCzHCZXmqIdjqRnpdp0l_T6g",
+            # 26.9.26, סריקה של 15 הקבוצות שנשארו בלי מקור — הפעם קראתי
+            # את הכותרות בשפת המועדון ולא חיפשתי "highlights":
+            # ארארט-ארמניה מעלים את התקציר של הליגה האירופית עצמה
+            # ("UEFA Europa League | FC Ararat-Armenia - Sparta Praha [1:4]"),
+            # ודינמו זאגרב מעלים תקציר בפורמט הרגיל לליגה המקומית
+            # ("HIGHLIGHTS | Dinamo 3-2 Lokomotiva") — באירופה עוד לא ראיתי
+            # מהם אחד, והערוץ נבדק חינם ב-RSS ליום שבו כן יעלו
+            "Ararat-Armenia": "UCFzwA2WTexgusRXuBLTGPgw",
+            "Dinamo Zagreb":  "UC6vpARgHA0oSqtBgYcVWdHg",
         },
     },
     "mls": {

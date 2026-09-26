@@ -50,3 +50,35 @@ def test_the_club_source_is_actually_offered_for_that_match(db):
     row = db.execute("SELECT * FROM matches WHERE id='j1'").fetchone()
     chans = [s["channel_id"] for s in main.get_sources_for_match(row)]
     assert "UCLzKhsxrExAC6yAdtZ-BOWw" in chans
+
+
+# ── הסריקה החוזרת (26.9.26): 15 הקבוצות שנשארו בלי מקור ──────────────
+ARARAT = "UEFA Еuropa League | FC Ararat-Armenia - Sparta Praha [1:4]"
+DINAMO = "HIGHLIGHTS | Dinamo 3-2 Lokomotiva"
+
+
+def test_ararat_uploads_the_european_highlight_itself():
+    """הכותרת באנגלית עם ה-Е הקירילית, ועם התוצאה בסוגריים מרובעים."""
+    assert _channel("Ararat-Armenia") == "UCFzwA2WTexgusRXuBLTGPgw"
+    assert main.is_match_highlight(ARARAT, "Ararat-Armenia", "Sparta Prague",
+                                   implicit_team="Ararat-Armenia")
+
+
+def test_dinamo_uploads_highlights_in_the_usual_format():
+    assert _channel("Dinamo Zagreb") == "UC6vpARgHA0oSqtBgYcVWdHg"
+    assert main.is_match_highlight(DINAMO, "Dinamo Zagreb", "Lokomotiva",
+                                   implicit_team="Dinamo Zagreb")
+
+
+def test_what_those_two_channels_also_upload_is_not_offered():
+    """שני הערוצים עמוסים בראיונות, מסיבות עיתונאים ו"רגעים היסטוריים" —
+    כולם מזכירים את שתי הקבוצות ולפעמים גם את התוצאה."""
+    for title, home, away, club in [
+        ("NAKON UTAKMICE | Kovačević i Kotarski nakon remija s Hapoel Be'er Shevom",
+         "Dinamo Zagreb", "Hapoel Be'er Sheva", "Dinamo Zagreb"),
+        ("UNSEEN HISTORIC MOMENTS | Ararat-Armenia 1–0 Craiova",
+         "Ararat-Armenia", "Craiova", "Ararat-Armenia"),
+        ("Manuel Tulipa post-match press conference / UEL FC Ararat-Armenia - "
+         "Sparta Praha - 1:4", "Ararat-Armenia", "Sparta Prague", "Ararat-Armenia"),
+    ]:
+        assert not main.is_match_highlight(title, home, away, implicit_team=club), title
