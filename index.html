@@ -81,7 +81,20 @@
     .nav-panel { max-width:calc(960px - 4rem); margin:1rem auto 2.25rem; padding:0.9rem 1rem; position:relative; z-index:1; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
     .view-switch { display:flex; padding-bottom:0.8rem; margin-bottom:0.8rem; border-bottom:1px solid var(--border); }
     .view-switch .tab { text-align:center; font-size:0.9rem; padding:0.5rem 1.6rem; }
-    .league-tabs { display:flex; gap:0.5rem; flex-wrap:wrap; }
+    /* 17 ליגות גלשו ל-8 שורות ו-358 פיקסל — הפיד נדחק מהמסך (26.9.26).
+       שורה אחת שנגללת לצדדים: שום דבר לא מוסתר, והגובה קבוע. */
+    .league-tabs { display:flex; gap:0.5rem; align-items:center; }
+    .league-scroll { display:flex; gap:0.5rem; overflow-x:auto; flex:1;
+      scroll-behavior:smooth; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none; padding-bottom:2px;
+      /* דהייה בקצוות — הרמז היחיד שיש עוד */
+      mask-image:linear-gradient(to right, transparent, #000 14px,
+                                 #000 calc(100% - 14px), transparent); }
+    .league-scroll::-webkit-scrollbar { display:none; }
+    .league-scroll .tab { flex:0 0 auto; white-space:nowrap; }
+    /* קו מפריד בין הליגות לגביעים */
+    .tab-sep { flex:0 0 auto; width:1px; align-self:stretch; margin:0.2rem 0.15rem;
+      background:var(--border); }
     /* הפיד נשאר נקי: הליגות נפתחות רק בלחיצה על "ליגות" */
     .league-tabs.collapsed { display:none; }
     .tab-edit { padding-inline:0.7rem; opacity:0.75; }
@@ -289,6 +302,7 @@
   <button class="tab" id="leagues-toggle" aria-expanded="false">🏆 ליגות</button>
 </div>
 <div class="league-tabs collapsed" id="league-tabs">
+<div class="league-scroll" id="league-scroll">
   <button class="tab" data-league="premier" data-i18n="lg_premier" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
   <button class="tab" data-league="championship" data-i18n="lg_championship" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
   <button class="tab" data-league="israel" data-i18n="lg_israel" data-prefix="🇮🇱 ">🇮🇱 ליגת העל</button>
@@ -306,6 +320,7 @@
   <button class="tab" data-league="dfbpokal" data-i18n="lg_dfbpokal" data-prefix="🏆 ">🏆 הגביע הגרמני</button>
   <button class="tab" data-league="copadelrey" data-i18n="lg_copadelrey" data-prefix="🏆 ">🏆 גביע המלך</button>
   <button class="tab" data-league="coupedefrance" data-i18n="lg_coupedefrance" data-prefix="🏆 ">🏆 הגביע הצרפתי</button>
+</div>
   <button class="tab tab-edit" id="edit-leagues" title="ליגות">⚙</button>
 </div>
 </div>
@@ -923,6 +938,7 @@
 
   function rerender() {
     markHiddenTabs();
+    orderLeagueTabs();
     updateLeaguesToggle();   // גם בהחלפת שפה — הכפתור נושא שם ליגה
     if (currentLeague === '__byday') { if (lastDayMatches) renderDayMatches(lastDayMatches); }
     else if (leagueData[currentLeague]) showLeague(currentLeague, leagueData[currentLeague], true);
@@ -2126,6 +2142,43 @@
   // מוסתר ואי אפשר לדעת איזו ליגה נבחרה
   // "לפי ליגה" הוא מצב, לא בחירה: הכיתוב קבוע, והליגה שנבחרה מסומנת
   // ברשימה עצמה — שנשארת פתוחה כדי לעבור בין ליגות בלחיצה אחת.
+  // סדר: מועדפות קודם, ואז השאר; גביעים אחרי קו מפריד. בלי זה הליגה
+  // שאתה עוקב אחריה יכולה להיות הרחק ימינה בתוך הגוללן.
+  function orderLeagueTabs() {
+    const scroll = document.getElementById('league-scroll');
+    const tabs = [...scroll.querySelectorAll('.tab[data-league]')];
+    const rank = t => (FAV_LEAGUES.has(t.dataset.league) ? 0 : 1);
+    const leagues = tabs.filter(t => !isCup(t.dataset.league));
+    const cups    = tabs.filter(t => isCup(t.dataset.league));
+    const sorted = [...leagues.sort((a, b) => rank(a) - rank(b)),
+                    ...cups.sort((a, b) => rank(a) - rank(b))];
+    let sep = document.getElementById('cup-sep');
+    if (!sep) {
+      sep = document.createElement('div');
+      sep.className = 'tab-sep';
+      sep.id = 'cup-sep';
+    }
+    scroll.append(...sorted.slice(0, leagues.length), sep,
+                  ...sorted.slice(leagues.length));
+    sep.hidden = !cups.some(t => !t.classList.contains('is-hidden'));
+    // הסידור מאפס את מיקום הגלילה, ולכן החשיפה חייבת לבוא אחריו
+    revealActiveTab();
+  }
+
+  // הליגה שנבחרה יכולה להיות מחוץ לתחום הנראה בגוללן. חישוב מפורש
+  // ולא scrollIntoView: הוא גורר גם את הדף אנכית, וב-RTL ערכי הגלילה
+  // שליליים — הפרש בפיקסלים עובד בשני הכיוונים.
+  function revealActiveTab() {
+    const sc = document.getElementById('league-scroll');
+    const active = sc && sc.querySelector('.tab.active');
+    if (!active) return;
+    const s = sc.getBoundingClientRect(), a = active.getBoundingClientRect();
+    // instant ולא auto: auto פירושו "לפי ה-CSS", שם זה smooth. זהו
+    // תיקון מיקום ולא מחווה, וגלילה ביד נשארת חלקה.
+    sc.scrollBy({ left: (a.left + a.width / 2) - (s.left + s.width / 2),
+                  behavior: 'instant' });
+  }
+
   function updateLeaguesToggle() {
     const btn = document.getElementById('leagues-toggle');
     btn.textContent = '🏆 ' + t('by_league');
@@ -2144,7 +2197,7 @@
   document.getElementById('leagues-toggle').addEventListener('click', () => {
     const row = document.getElementById('league-tabs');
     // סגור ואנחנו בתצוגת יום — פותחים; פתוח — סוגרים וחוזרים ליום
-    if (row.classList.contains('collapsed')) toggleLeagueTabs(true);
+    if (row.classList.contains('collapsed')) { toggleLeagueTabs(true); revealActiveTab(); }
     else { toggleLeagueTabs(false); document.querySelector('.tab[data-league="__byday"]').click(); }
   });
 
@@ -2156,6 +2209,7 @@
       // בתצוגת יום הרשימה סגורה והפיד נקי; בתוך ליגה היא נשארת פתוחה
       toggleLeagueTabs(currentLeague !== '__byday');
       updateLeaguesToggle();
+      revealActiveTab();
       showScores = SCORES_DEFAULT === 'all';   // הכפתור חל על תצוגה אחת בלבד
       updateScoresBtn();
       if (currentLeague === '__byday') { enterDayView(); track('day_view'); }
