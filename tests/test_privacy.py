@@ -25,8 +25,10 @@ def test_it_is_public_and_needs_no_account(monkeypatch):
 def test_hebrew_and_english_are_written_out():
     assert "פרטיות" in _page("he")
     assert "Privacy" in _page("en")
-    # es/fr נופלים לאנגלית — עדיף על תרגום מכונה של טקסט משפטי
-    assert _page("fr") == _page("en")
+    # es/fr נופלים לאנגלית — עדיף על תרגום מכונה של טקסט משפטי.
+    # הגוף זהה; הקישורים בתחתית נושאים את שפת הקורא.
+    assert main.privacy_html("fr") == main.privacy_html("en")
+    assert "?lang=fr" in _page("fr")
 
 
 def test_every_table_that_holds_a_person_is_described(db):

@@ -827,7 +827,8 @@ LOGIN_I18N = {
            "set_pw_title": "בחר סיסמה לכניסות הבאות", "new_password": "סיסמה (8 תווים לפחות)",
            "confirm_password": "הקלד אותה שוב", "save": "שמירה וכניסה", "pw_mismatch": "הסיסמאות לא זהות",
            "back_to_email": "חזרה לכניסה במייל",
-           "legacy_link": "כניסה עם סיסמה (זמני)", "privacy_link": "פרטיות", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
+           "legacy_link": "כניסה עם סיסמה (זמני)", "privacy_link": "פרטיות", "terms_link": "תנאי שימוש",
+           "agree": "בהרשמה אתה מסכים ל{t} ול{p}.", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
            "code_len": "הקוד הוא 6 ספרות", "wrong_password": "סיסמה שגויה",
            "err_invalid_email": "כתובת מייל לא תקינה", "err_send_failed": "שליחת המייל נכשלה — נסה שוב בעוד דקה",
            "err_expired": "הקוד פג תוקף — בקש קוד חדש", "err_too_many": "יותר מדי ניסיונות — בקש קוד חדש",
@@ -853,7 +854,8 @@ LOGIN_I18N = {
            "set_pw_title": "Choose a password for next time", "new_password": "Password (at least 8 characters)",
            "confirm_password": "Type it again", "save": "Save and continue", "pw_mismatch": "Passwords don't match",
            "back_to_email": "Back to email login",
-           "legacy_link": "Log in with password (temporary)", "privacy_link": "Privacy", "ok": "OK", "generic_err": "Something went wrong — try again",
+           "legacy_link": "Log in with password (temporary)", "privacy_link": "Privacy", "terms_link": "Terms",
+           "agree": "By signing up you agree to the {t} and the {p} notice.", "ok": "OK", "generic_err": "Something went wrong — try again",
            "code_len": "The code has 6 digits", "wrong_password": "Wrong password",
            "err_invalid_email": "Invalid email address", "err_send_failed": "Couldn't send the email — try again in a minute",
            "err_expired": "The code has expired — request a new one", "err_too_many": "Too many attempts — request a new code",
@@ -879,7 +881,8 @@ LOGIN_I18N = {
            "set_pw_title": "Elige una contraseña para la próxima vez", "new_password": "Contraseña (mínimo 8 caracteres)",
            "confirm_password": "Repítela", "save": "Guardar y entrar", "pw_mismatch": "Las contraseñas no coinciden",
            "back_to_email": "Volver al acceso por correo",
-           "legacy_link": "Entrar con contraseña (temporal)", "privacy_link": "Privacidad", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
+           "legacy_link": "Entrar con contraseña (temporal)", "privacy_link": "Privacidad", "terms_link": "Términos",
+           "agree": "Al registrarte aceptas los {t} y la {p}.", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
            "code_len": "El código tiene 6 dígitos", "wrong_password": "Contraseña incorrecta",
            "err_invalid_email": "Correo no válido", "err_send_failed": "No se pudo enviar el correo — inténtalo en un minuto",
            "err_expired": "El código ha caducado — pide uno nuevo", "err_too_many": "Demasiados intentos — pide un código nuevo",
@@ -908,7 +911,8 @@ LOGIN_I18N = {
            "new_password": "Mot de passe (8 caractères min.)", "confirm_password": "Retapez-le",
            "save": "Enregistrer et continuer", "pw_mismatch": "Les mots de passe ne correspondent pas",
            "back_to_email": "Retour à la connexion par e-mail",
-           "legacy_link": "Connexion par mot de passe (temporaire)", "privacy_link": "Confidentialité", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
+           "legacy_link": "Connexion par mot de passe (temporaire)", "privacy_link": "Confidentialité", "terms_link": "Conditions",
+           "agree": "En vous inscrivant vous acceptez les {t} et la {p}.", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
            "code_len": "Le code comporte 6 chiffres", "wrong_password": "Mot de passe incorrect",
            "err_invalid_email": "Adresse e-mail invalide", "err_send_failed": "L'e-mail n'a pas pu être envoyé — réessayez dans une minute",
            "err_expired": "Le code a expiré — demandez-en un nouveau", "err_too_many": "Trop de tentatives — demandez un nouveau code",
@@ -1006,6 +1010,7 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
   <input type="password" id="reg-pw2" autocomplete="new-password" dir="ltr">
   <input type="password" id="reg-admin-key" autocomplete="off" dir="ltr" hidden>
   <button id="reg-btn" onclick="register()" data-i18n="register_btn">הרשמה וכניסה</button>
+  <p class="hint" id="agree-note"></p>
   <button class="link" onclick="show('step-login')" data-i18n="have_account">כבר יש לך חשבון? התחבר</button>
 </div>
 
@@ -1043,6 +1048,8 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 <button class="cookie-link" onclick="openCookies()">Cookie settings</button>
 <a class="cookie-link" id="privacy-link" href="/privacy" target="_blank" rel="noopener"
    data-i18n="privacy_link">פרטיות</a>
+<a class="cookie-link" id="terms-link" href="/terms" target="_blank" rel="noopener"
+   data-i18n="terms_link">תנאי שימוש</a>
 <div class="cookie-overlay" id="cookie-overlay" hidden
      onclick="if (event.target === this) closeCookies()">
   <div class="cookie-box"><div id="cookie-body"></div>
@@ -1085,6 +1092,12 @@ function applyLang() {
   $('new-user-btn').textContent = t(CFG.code_required ? 'new_user' : 'new_user_simple');
   $('lang-select').value = LANG;
   $('privacy-link').href = '/privacy?lang=' + LANG;
+  // ליד כפתור ההרשמה, כי שם נוצר החשבון — לא בתחתית העמוד
+  $('agree-note').innerHTML = t('agree').replace('{t}',
+      `<a href="/terms?lang=${LANG}" target="_blank" rel="noopener">${t('terms_link')}</a>`)
+    .replace('{p}',
+      `<a href="/privacy?lang=${LANG}" target="_blank" rel="noopener">${t('privacy_link')}</a>`);
+  $('terms-link').href = '/terms?lang=' + LANG;
 }
 $('lang-select').addEventListener('change', e => {
   LANG = e.target.value;
@@ -3655,16 +3668,106 @@ failed attempts.</p>
 __CONTACT_EN__"""
 
 
+TERMS_HE = """<h2>תנאי שימוש</h2>
+<p class="upd">עודכן: 26.9.2026</p>
+
+<h3>מה השירות הזה</h3>
+<p>SpoilerFree מציג לוח משחקים ומפנה לתקצירים, בלי לחשוף תוצאות. השימוש חינם.
+זה פרויקט אישי ולא חברה — הוא מתוחזק כתחביב, וזה הבסיס לכל מה שכתוב כאן.</p>
+
+<h3>מה אנחנו לא</h3>
+<p><b>אנחנו לא מארחים תקצירים ולא מעלים אותם.</b> הסרטונים יושבים ביוטיוב
+ובאתרי הספורט, בבעלות מי שהעלה אותם, וכפופים לתנאים שלהם. אנחנו מפנים אליהם
+בלבד. אם אתה בעל זכויות ותוכן שלך מופיע כאן שלא כדין — כתוב לנו והקישור יוסר.</p>
+
+<h3>החשבון שלך</h3>
+<p>חשבון אחד לאדם, עם כתובת מייל אמיתית שלך. הסיסמה באחריותך; אם נראה לך
+שמישהו נכנס אליה, החלף אותה. אפשר למחוק את החשבון בכל רגע דרך ☰ ← חשבון.</p>
+
+<h3>מה אסור</h3>
+<p>לא לגשת לאתר באמצעים אוטומטיים, לא לנסות לעקוף את מגבלות ההרשמה או את
+מנגנוני האבטחה, ולא להעמיס עליו. חשבון שעושה את זה ייחסם.</p>
+
+<h3>זמינות</h3>
+<p>האתר עשוי להיות איטי, לא זמין, או להשתנות — בלי הודעה מראש. לוח המשחקים
+והתקצירים מגיעים ממקורות חיצוניים, ולכן הם עשויים להיות חסרים, מאוחרים או
+שגויים. אנחנו עושים מאמץ שלא ייחשפו תוצאות, <b>אבל אי אפשר להבטיח זאת</b>:
+כותרת, תמונה או תגובה באתר חיצוני עלולות להסגיר תוצאה.</p>
+
+<h3>אחריות</h3>
+<p>השירות ניתן כמות שהוא, בלי התחייבות. במידה שהחוק מתיר, אין אחריות לנזק
+שנגרם משימוש בו — לרבות תוצאה שנחשפה.</p>
+
+<h3>שינויים וסיום</h3>
+<p>התנאים עשויים להשתנות; המשך שימוש אחרי עדכון מהווה הסכמה. אפשר להפסיק
+להפעיל את השירות בכל עת.</p>
+
+<h3>דין</h3>
+<p>על התנאים חל הדין הישראלי.</p>
+__CONTACT_HE__"""
+
+TERMS_EN = """<h2>Terms of use</h2>
+<p class="upd">Updated: 26 September 2026</p>
+
+<h3>What this is</h3>
+<p>SpoilerFree shows fixtures and points you to highlights without giving the
+result away. It is free. It is a personal project rather than a company —
+maintained as a hobby, which is the ground for everything below.</p>
+
+<h3>What we are not</h3>
+<p><b>We do not host highlights and we do not upload them.</b> The videos live
+on YouTube and on sports sites, belong to whoever posted them, and are subject
+to those sites' terms. We link to them. If you hold rights to something that
+appears here without permission, write to us and the link will be removed.</p>
+
+<h3>Your account</h3>
+<p>One account per person, with an email address that is really yours. The
+password is your responsibility; change it if you think someone else has it.
+You can delete the account at any time under ☰ → Account.</p>
+
+<h3>What is not allowed</h3>
+<p>No automated access, no working around the sign-up limits or the security
+measures, and no overloading the site. An account doing any of that will be
+closed.</p>
+
+<h3>Availability</h3>
+<p>The site may be slow, unavailable, or changed without notice. Fixtures and
+highlights come from outside sources, so they can be missing, late or wrong. We
+work at not revealing results, <b>but it cannot be guaranteed</b>: a title, a
+thumbnail or a comment on someone else's site may give a score away.</p>
+
+<h3>Liability</h3>
+<p>The service is provided as is, without warranty. To the extent the law
+allows, there is no liability for harm arising from using it — including a
+result that was revealed.</p>
+
+<h3>Changes and ending</h3>
+<p>These terms may change; continuing to use the site after an update means
+accepting it. The service may be stopped at any time.</p>
+
+<h3>Law</h3>
+<p>Israeli law applies.</p>
+__CONTACT_EN__"""
+
+
+def terms_html(lang: str = "he") -> str:
+    return _with_contact(TERMS_HE if lang == "he" else TERMS_EN)
+
+
+def _with_contact(body: str) -> str:
+    """כתובת ליצירת קשר — דרושה גם לפרטיות וגם לתנאים (ולהסרת תוכן)."""
+    who = sorted(NOTIFY_EMAILS or ADMIN_EMAILS)
+    line = (f'<h3>יצירת קשר</h3><p dir="ltr"><a href="mailto:{who[0]}">{who[0]}</a></p>'
+            if who else "")
+    line_en = (f'<h3>Contact</h3><p dir="ltr"><a href="mailto:{who[0]}">{who[0]}</a></p>'
+               if who else "")
+    return body.replace("__CONTACT_HE__", line).replace("__CONTACT_EN__", line_en)
+
+
 def privacy_html(lang: str = "he") -> str:
     """טקסט הפרטיות. es/fr מקבלים אנגלית — עדיף על תרגום מכונה של טקסט
     שמשמעותו משפטית."""
-    body = PRIVACY_HE if lang == "he" else PRIVACY_EN
-    who = sorted(NOTIFY_EMAILS or ADMIN_EMAILS)
-    contact_he = (f'<h3>יצירת קשר</h3><p dir="ltr"><a href="mailto:{who[0]}">{who[0]}</a></p>'
-                  if who else "")
-    contact_en = (f'<h3>Contact</h3><p dir="ltr"><a href="mailto:{who[0]}">{who[0]}</a></p>'
-                  if who else "")
-    return body.replace("__CONTACT_HE__", contact_he).replace("__CONTACT_EN__", contact_en)
+    return _with_contact(PRIVACY_HE if lang == "he" else PRIVACY_EN)
 
 
 COOKIES_HTML = """<h2>הגדרות עוגיות ופרטיות</h2>
@@ -3739,15 +3842,14 @@ def cookies_policy(lang: str = "he"):
     return HTMLResponse(COOKIES_HTML_BY_LANG.get(lang, COOKIES_HTML))
 
 
-@app.get("/privacy")
-def privacy_policy(lang: str = "he"):
-    """מדיניות פרטיות — עמוד ציבורי עם כתובת משלו, כדי שאפשר יהיה לקשר
-    אליו מחוץ לאתר. אותו טקסט מוצג גם בחלון שבתוך האתר."""
+def _policy_page(body: str, title: str, lang: str) -> HTMLResponse:
+    """עמוד מדיניות עומד בפני עצמו — כתובת משלו, כדי שאפשר לקשר אליו
+    מחוץ לאתר. אותו טקסט מוצג גם בתוך האפליקציה."""
     rtl = lang == "he"
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="{'he' if rtl else 'en'}" dir="{'rtl' if rtl else 'ltr'}"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SpoilerFree — {'פרטיות' if rtl else 'Privacy'}</title>
+<title>SpoilerFree — {title}</title>
 <style>
 body{{background:#0a0a0f;color:#e8e8f0;font-family:system-ui,'Heebo',sans-serif;
 line-height:1.7;margin:0;padding:2rem 1.25rem;}}
@@ -3757,7 +3859,23 @@ h3{{font-size:0.95rem;color:#00e5a0;margin:1.6rem 0 0.3rem;}}
 p{{font-size:0.9rem;color:#b9b9c8;margin:0.3rem 0;}}
 .upd{{font-size:0.75rem;color:#6b6b80;}}
 a{{color:#00e5a0;}}
-</style></head><body><main>{privacy_html(lang)}</main></body></html>""")
+nav{{margin-top:2.5rem;font-size:0.8rem;}}
+</style></head><body><main>{body}
+<nav><a href="/privacy?lang={lang}">{'פרטיות' if rtl else 'Privacy'}</a> ·
+<a href="/terms?lang={lang}">{'תנאי שימוש' if rtl else 'Terms'}</a> ·
+<a href="/">{'לאתר' if rtl else 'To the site'}</a></nav>
+</main></body></html>""")
+
+
+@app.get("/privacy")
+def privacy_policy(lang: str = "he"):
+    return _policy_page(privacy_html(lang), "פרטיות" if lang == "he" else "Privacy", lang)
+
+
+@app.get("/terms")
+def terms_of_use(lang: str = "he"):
+    return _policy_page(terms_html(lang),
+                        "תנאי שימוש" if lang == "he" else "Terms of use", lang)
 
 
 @app.get("/health/db")
