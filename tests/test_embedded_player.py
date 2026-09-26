@@ -130,3 +130,21 @@ def test_leaving_the_video_leaves_the_expanded_view():
     for fn in ("function closeModal()", "function hideVideoBar()"):
         block = HTML[HTML.index(fn):]
         assert "exitTheatre();" in block[:block.index("\n  }")]
+
+
+# ── מסך הסיום של יוטיוב (QA, 26.9.26) ──────────────────────────────
+def test_the_corner_masks_come_back_before_the_end():
+    """כרטיסי "עוד סרטונים" עולים ~20 שניות לפני הסוף, והמצב עדיין
+    PLAYING — אין אירוע שיחזיר את המסכות, ולכן הטיימר עושה את זה."""
+    assert "d - c <= 25) coverChrome()" in HTML
+
+
+def test_the_full_cover_does_not_eat_the_highlight():
+    """כיסוי מלא של 25 השניות האחרונות היה מסתיר את סוף התקציר עצמו —
+    בתקציר של 90 שניות זה השליש האחרון."""
+    assert "d - c <= 1.5) container.classList.add('ending')" in HTML
+    assert ".video-container.shielded.ending::before { inset:0" in HTML
+
+
+def test_replay_clears_the_end_cover():
+    assert "classList.remove('ending')" in HTML

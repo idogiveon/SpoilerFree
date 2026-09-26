@@ -30,7 +30,11 @@ def _row(home, away):
 
 
 def test_sources():
-    assert main.get_sources_for_match(_row("Hapoel Be'er Sheva", "Dinamo Zagreb")) == []
+    """להפועל באר שבע אין ערוץ שמעלה תקצירים, ולכן המקור היחיד למשחק שלה
+    הוא הערוץ של היריבה (דינמו זאגרב נוסף 26.9.26)."""
+    assert [s["club_team"] for s in
+            main.get_sources_for_match(_row("Hapoel Be'er Sheva", "Dinamo Zagreb"))
+            ] == ["Dinamo Zagreb"]
     assert [s["club_team"] for s in main.get_sources_for_match(_row("Celtic", "Ferencváros"))] == ["Celtic"]
 
 

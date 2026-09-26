@@ -204,6 +204,8 @@
        שמאלה בממשק העברי והשאירה את ההצעות חשופות (22.9.26). */
     .video-container.shielded.chrome-risk::before { content:''; position:absolute; bottom:0;
       right:0; width:38%; height:15%; min-height:38px; background:#000; z-index:5; }
+    /* מסך הסיום פורס כרטיסים על כל שטח הנגן, לא רק בפינה */
+    .video-container.shielded.ending::before { inset:0; width:auto; height:auto; }
     /* גם אירועי עכבר לא מגיעים למסגרת: בלי זה, מעבר עכבר מוציא את
        הסרגל של יוטיוב על הווידאו. הפקדים שלנו ממילא מחוץ לו. */
     .video-container.shielded iframe { pointer-events:none; }
@@ -1954,6 +1956,7 @@
 
   function showVideoBar() {
     if (document.getElementById('vid-bar')) return;
+    const container = document.querySelector('.video-container');
     const bar = document.createElement('div');
     bar.className = 'vid-bar';
     bar.id = 'vid-bar';
@@ -1982,6 +1985,14 @@
     vidTimer = setInterval(() => {
       if (!ytPlayer || !ytPlayer.getDuration) return;
       const d = ytPlayer.getDuration() || 0, c = ytPlayer.getCurrentTime() || 0;
+      // מסך הסיום של יוטיוב (כרטיסים עם תמונות ממוזערות של תקצירים
+      // אחרים, ובהן התוצאה) עולה בערך 20 שניות לפני הסוף — בזמן
+      // שהמצב עדיין PLAYING. אין אירוע מצב, ולכן המסכות לא חוזרות לבד.
+      // המסכות של הפינות חוזרות מוקדם; כיסוי מלא רק בשנייה וחצי האחרונה,
+      // כגשר אל ENDED (שם כבר עולה המגן "התקציר נגמר"). כיסוי מלא של
+      // 25 השניות האחרונות היה מוחק את סוף התקציר עצמו.
+      if (d && d - c <= 25) coverChrome();
+      if (d && d - c <= 1.5) container.classList.add('ending');
       document.getElementById('vid-now').textContent = fmt(c);
       document.getElementById('vid-dur').textContent = fmt(d);
       if (document.activeElement !== seek && d) seek.value = Math.round(c / d * 1000);
@@ -2047,6 +2058,7 @@
   function replayVideo() {
     if (!ytPlayer) return;
     document.getElementById('shield').style.display = 'none';
+    document.querySelector('.video-container').classList.remove('ending');
     document.querySelector('.video-container').classList.add('shielded');
     ytPlayer.seekTo(0);
     ytPlayer.playVideo();
