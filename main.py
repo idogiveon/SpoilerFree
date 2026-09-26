@@ -1531,6 +1531,20 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+def _add_missing_columns(conn, table: str, cols) -> None:
+    """מוסיף עמודות שחסרות, לפי מה שקיים בפועל.
+
+    קודם זה היה ALTER בתוך try/except — "כבר קיימת" הוא מצב צפוי. אבל
+    מול החיבור המשותף כל שגיאה כזו זורקת את החיבור, נספרת ככשל, ואחרי
+    שלושה כאלה התהליך מוותר על השיתוף. בעלייה יש שבע עמודות כאלה, וזה
+    היה עניין של מזל שזה נעצר על אחת (נמדד בפרודקשן, 26.9.26).
+    """
+    have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    for col in cols:
+        if col.split()[0] not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+
+
 def init_db():
     conn = get_db()
 
@@ -1551,11 +1565,7 @@ def init_db():
         )
     """)
     # תוצאות (16.9.26) — לטבלה קיימת. נשלחות רק כשהמשתמש ביקש לראות
-    for col in ("home_score INTEGER", "away_score INTEGER"):
-        try:
-            conn.execute(f"ALTER TABLE matches ADD COLUMN {col}")
-        except Exception:
-            pass   # כבר קיימת
+    _add_missing_columns(conn, "matches", ("home_score INTEGER", "away_score INTEGER"))
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS clubs (
@@ -1604,13 +1614,10 @@ def init_db():
         )
     """)
     # כניסה עם סיסמה (13.9.26) — עמודות חדשות לטבלה קיימת ב-Turso
-    for col in ("password_hash TEXT", "pw_fails INTEGER DEFAULT 0",
-                "pw_locked_until TEXT", "pw_reset_until TEXT",
-                "onboarded_at TEXT"):          # מסכי הפתיחה (#32) הוצגו
-        try:
-            conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
-        except Exception:
-            pass   # כבר קיימת
+    _add_missing_columns(conn, "users",
+                         ("password_hash TEXT", "pw_fails INTEGER DEFAULT 0",
+                          "pw_locked_until TEXT", "pw_reset_until TEXT",
+                          "onboarded_at TEXT"))   # מסכי הפתיחה (#32) הוצגו
     conn.execute("""
         CREATE TABLE IF NOT EXISTS login_codes (
             email      TEXT PRIMARY KEY,
