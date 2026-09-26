@@ -827,7 +827,7 @@ LOGIN_I18N = {
            "set_pw_title": "בחר סיסמה לכניסות הבאות", "new_password": "סיסמה (8 תווים לפחות)",
            "confirm_password": "הקלד אותה שוב", "save": "שמירה וכניסה", "pw_mismatch": "הסיסמאות לא זהות",
            "back_to_email": "חזרה לכניסה במייל",
-           "legacy_link": "כניסה עם סיסמה (זמני)", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
+           "legacy_link": "כניסה עם סיסמה (זמני)", "privacy_link": "פרטיות", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
            "code_len": "הקוד הוא 6 ספרות", "wrong_password": "סיסמה שגויה",
            "err_invalid_email": "כתובת מייל לא תקינה", "err_send_failed": "שליחת המייל נכשלה — נסה שוב בעוד דקה",
            "err_expired": "הקוד פג תוקף — בקש קוד חדש", "err_too_many": "יותר מדי ניסיונות — בקש קוד חדש",
@@ -853,7 +853,7 @@ LOGIN_I18N = {
            "set_pw_title": "Choose a password for next time", "new_password": "Password (at least 8 characters)",
            "confirm_password": "Type it again", "save": "Save and continue", "pw_mismatch": "Passwords don't match",
            "back_to_email": "Back to email login",
-           "legacy_link": "Log in with password (temporary)", "ok": "OK", "generic_err": "Something went wrong — try again",
+           "legacy_link": "Log in with password (temporary)", "privacy_link": "Privacy", "ok": "OK", "generic_err": "Something went wrong — try again",
            "code_len": "The code has 6 digits", "wrong_password": "Wrong password",
            "err_invalid_email": "Invalid email address", "err_send_failed": "Couldn't send the email — try again in a minute",
            "err_expired": "The code has expired — request a new one", "err_too_many": "Too many attempts — request a new code",
@@ -879,7 +879,7 @@ LOGIN_I18N = {
            "set_pw_title": "Elige una contraseña para la próxima vez", "new_password": "Contraseña (mínimo 8 caracteres)",
            "confirm_password": "Repítela", "save": "Guardar y entrar", "pw_mismatch": "Las contraseñas no coinciden",
            "back_to_email": "Volver al acceso por correo",
-           "legacy_link": "Entrar con contraseña (temporal)", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
+           "legacy_link": "Entrar con contraseña (temporal)", "privacy_link": "Privacidad", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
            "code_len": "El código tiene 6 dígitos", "wrong_password": "Contraseña incorrecta",
            "err_invalid_email": "Correo no válido", "err_send_failed": "No se pudo enviar el correo — inténtalo en un minuto",
            "err_expired": "El código ha caducado — pide uno nuevo", "err_too_many": "Demasiados intentos — pide un código nuevo",
@@ -908,7 +908,7 @@ LOGIN_I18N = {
            "new_password": "Mot de passe (8 caractères min.)", "confirm_password": "Retapez-le",
            "save": "Enregistrer et continuer", "pw_mismatch": "Les mots de passe ne correspondent pas",
            "back_to_email": "Retour à la connexion par e-mail",
-           "legacy_link": "Connexion par mot de passe (temporaire)", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
+           "legacy_link": "Connexion par mot de passe (temporaire)", "privacy_link": "Confidentialité", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
            "code_len": "Le code comporte 6 chiffres", "wrong_password": "Mot de passe incorrect",
            "err_invalid_email": "Adresse e-mail invalide", "err_send_failed": "L'e-mail n'a pas pu être envoyé — réessayez dans une minute",
            "err_expired": "Le code a expiré — demandez-en un nouveau", "err_too_many": "Trop de tentatives — demandez un nouveau code",
@@ -1041,6 +1041,8 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 <!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')" data-i18n="legacy_link">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
 </div>
 <button class="cookie-link" onclick="openCookies()">Cookie settings</button>
+<a class="cookie-link" id="privacy-link" href="/privacy" target="_blank" rel="noopener"
+   data-i18n="privacy_link">פרטיות</a>
 <div class="cookie-overlay" id="cookie-overlay" hidden
      onclick="if (event.target === this) closeCookies()">
   <div class="cookie-box"><div id="cookie-body"></div>
@@ -1082,6 +1084,7 @@ function applyLang() {
   $('reg-admin-key').placeholder = t('admin_key');
   $('new-user-btn').textContent = t(CFG.code_required ? 'new_user' : 'new_user_simple');
   $('lang-select').value = LANG;
+  $('privacy-link').href = '/privacy?lang=' + LANG;
 }
 $('lang-select').addEventListener('change', e => {
   LANG = e.target.value;
@@ -3550,6 +3553,112 @@ def health():
     return {"status": "SpoilerFree API ✓"}
 
 
+# ── פרטיות ─────────────────────────────────────────────
+# נכתב מתוך הסכימה בפועל (26.9.26), לא מתבנית: כל שורה כאן מתאימה
+# לטבלה או לקריאה שקיימות בקוד. אם משנים מה נאסף — משנים גם כאן.
+PRIVACY_HE = """<h2>פרטיות</h2>
+<p class="upd">עודכן: 26.9.2026</p>
+
+<h3>מה נשמר אצלנו</h3>
+<p><b>החשבון:</b> כתובת המייל, מתי נרשמת, מתי התחברת לאחרונה וכמה פעמים.
+הסיסמה נשמרת <b>מעורבלת בלבד</b> (PBKDF2, 200,000 סיבובים) — אין לנו דרך
+לקרוא אותה.<br>
+<b>ההעדפות שלך:</b> הליגות והקבוצות שסימנת, ליגות שהסתרת, והאם לראות תוצאות.<br>
+<b>שימוש:</b> פתיחת האתר, מעבר בין ליגות, פתיחת משחק, לחיצה על תקציר או על
+קישור לאתר חיצוני — עם השעה ומזהה המשחק. זה משמש אותנו כדי לדעת אילו מקורות
+עובדים ואילו לא.<br>
+<b>קוד חד-פעמי</b> (כשנשלח) נשמר מעורבל, ונמחק אחרי השימוש או התפוגה.</p>
+
+<h3>מה לא נאסף</h3>
+<p>אין תשלומים, אין מיקום, אין גישה לאנשי הקשר, אין העלאת קבצים, ואין פרסום.
+המידע לא נמכר.</p>
+
+<h3>מה נשמר במכשיר שלך בלבד</h3>
+<p>עוגיית התחברות (עד 90 יום), שפת הממשק, לוח המשחקים בזיכרון מקומי כדי שהאתר
+ייפתח מהר, והעדפות תצוגה. אלה לא מגיעים אלינו.</p>
+
+<h3>מי עוד מעורב</h3>
+<p>האתר מציג תוכן של אחרים, ולכן הדפדפן שלך פונה אליהם ישירות והם רואים את
+כתובת ה-IP שלך:</p>
+<p><b>YouTube / Google</b> — התקצירים. צפייה או לחיצה כפופות למדיניות שלהם.
+אנחנו משתמשים בגרסת youtube-nocookie.<br>
+<b>TheSportsDB</b> — לוח המשחקים נשלף <b>מהדפדפן שלך</b> ישירות משירות זה.<br>
+<b>Google Fonts</b> — גופנים.<br>
+<b>Brevo</b> — שולחת את מיילי ההתחברות ומקבלת לשם כך את כתובת המייל שלך.<br>
+<b>Render</b> ו-<b>Turso</b> — מארחים את האתר ואת מסד הנתונים עבורנו.</p>
+
+<h3>כמה זמן</h3>
+<p>חיבור פעיל — עד 90 יום. החשבון והנתונים שלו — עד שתמחק אותו.</p>
+
+<h3>מה אתה יכול לעשות</h3>
+<p>בתפריט ☰ ← חשבון אפשר לראות מה שמור עליך <b>ולמחוק את החשבון לצמיתות</b>.
+מחיקה מסירה את המייל, ההעדפות, המועדפים ורישום השימוש.</p>
+
+<h3>אבטחה</h3>
+<p>סיסמאות מעורבלות, עוגיית התחברות חתומה, ונעילה זמנית אחרי ניסיונות כושלים
+חוזרים.</p>
+__CONTACT_HE__"""
+
+PRIVACY_EN = """<h2>Privacy</h2>
+<p class="upd">Updated: 26 September 2026</p>
+
+<h3>What we keep</h3>
+<p><b>Your account:</b> the email address, when you signed up, when you last
+signed in and how often. The password is kept <b>hashed only</b> (PBKDF2,
+200,000 rounds) — we have no way to read it.<br>
+<b>Your choices:</b> the leagues and teams you follow, leagues you hid, and
+whether you want to see scores.<br>
+<b>Use:</b> opening the site, switching leagues, opening a match, pressing a
+highlight or an outside link — with the time and the match. We use this to
+tell which sources work and which do not.<br>
+<b>A one-time code</b>, when one is sent, is stored hashed and deleted once
+used or expired.</p>
+
+<h3>What we never collect</h3>
+<p>No payments, no location, no contacts, no uploads, no advertising. Nothing
+is sold.</p>
+
+<h3>What stays on your device</h3>
+<p>The login cookie (up to 90 days), your language, the fixtures kept locally
+so the site opens quickly, and display preferences. These never reach us.</p>
+
+<h3>Who else is involved</h3>
+<p>The site shows other people's content, so your browser contacts them
+directly and they see your IP address:</p>
+<p><b>YouTube / Google</b> — the highlights, under their own policies. We use
+the youtube-nocookie version.<br>
+<b>TheSportsDB</b> — fixtures are fetched <b>by your browser</b>, directly.<br>
+<b>Google Fonts</b> — fonts.<br>
+<b>Brevo</b> — sends sign-in emails and receives your address to do so.<br>
+<b>Render</b> and <b>Turso</b> — host the site and the database for us.</p>
+
+<h3>How long</h3>
+<p>A signed-in session lasts up to 90 days. Your account and its data stay
+until you delete it.</p>
+
+<h3>What you can do</h3>
+<p>Under ☰ → Account you can see what is stored about you and
+<b>delete your account permanently</b>. That removes the email, the
+preferences, the favourites and the usage record.</p>
+
+<h3>Security</h3>
+<p>Hashed passwords, a signed login cookie, and a temporary lock after repeated
+failed attempts.</p>
+__CONTACT_EN__"""
+
+
+def privacy_html(lang: str = "he") -> str:
+    """טקסט הפרטיות. es/fr מקבלים אנגלית — עדיף על תרגום מכונה של טקסט
+    שמשמעותו משפטית."""
+    body = PRIVACY_HE if lang == "he" else PRIVACY_EN
+    who = sorted(NOTIFY_EMAILS or ADMIN_EMAILS)
+    contact_he = (f'<h3>יצירת קשר</h3><p dir="ltr"><a href="mailto:{who[0]}">{who[0]}</a></p>'
+                  if who else "")
+    contact_en = (f'<h3>Contact</h3><p dir="ltr"><a href="mailto:{who[0]}">{who[0]}</a></p>'
+                  if who else "")
+    return body.replace("__CONTACT_HE__", contact_he).replace("__CONTACT_EN__", contact_en)
+
+
 COOKIES_HTML = """<h2>הגדרות עוגיות ופרטיות</h2>
 <p>אנחנו משתמשים בעוגיות ובטכנולוגיות דומות כדי שהאתר יעבוד, כדי לזכור את
 ההתחברות שלך וכדי לשפר את השירות.</p>
@@ -3559,7 +3668,8 @@ COOKIES_HTML = """<h2>הגדרות עוגיות ופרטיות</h2>
 <p>לוח המשחקים והדף נשמרים במכשיר שלך, כדי שהאתר ייפתח מהר גם בחיבור חלש.</p>
 <h3>נתוני שימוש</h3>
 <p>אנחנו שומרים את כתובת המייל שלך, מועדי התחברות, ואילו ליגות, משחקים ותקצירים
-פתחת — לצורך תפעול ושיפור השירות. המידע לא נמכר ולא מועבר לצדדים שלישיים.</p>
+פתחת — לצורך תפעול ושיפור השירות. המידע לא נמכר. פירוט מלא, כולל מי עוד
+מעורב, נמצא ב<a href="/privacy">מדיניות הפרטיות</a>.</p>
 <h3>שירותי צד שלישי</h3>
 <p>סרטונים נפתחים ביוטיוב וכפופים למדיניות של YouTube ו-Google. גופנים נטענים
 מ-Google Fonts.</p>
@@ -3619,6 +3729,27 @@ résumés consultés, pour faire fonctionner et améliorer le service. Ces donn�
 def cookies_policy(lang: str = "he"):
     """תוכן חלון "Cookie settings" — ציבורי, משותף למסך הכניסה ולאפליקציה."""
     return HTMLResponse(COOKIES_HTML_BY_LANG.get(lang, COOKIES_HTML))
+
+
+@app.get("/privacy")
+def privacy_policy(lang: str = "he"):
+    """מדיניות פרטיות — עמוד ציבורי עם כתובת משלו, כדי שאפשר יהיה לקשר
+    אליו מחוץ לאתר. אותו טקסט מוצג גם בחלון שבתוך האתר."""
+    rtl = lang == "he"
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="{'he' if rtl else 'en'}" dir="{'rtl' if rtl else 'ltr'}"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpoilerFree — {'פרטיות' if rtl else 'Privacy'}</title>
+<style>
+body{{background:#0a0a0f;color:#e8e8f0;font-family:system-ui,'Heebo',sans-serif;
+line-height:1.7;margin:0;padding:2rem 1.25rem;}}
+main{{max-width:640px;margin:0 auto;}}
+h2{{font-size:1.4rem;margin:0 0 0.2rem;}}
+h3{{font-size:0.95rem;color:#00e5a0;margin:1.6rem 0 0.3rem;}}
+p{{font-size:0.9rem;color:#b9b9c8;margin:0.3rem 0;}}
+.upd{{font-size:0.75rem;color:#6b6b80;}}
+a{{color:#00e5a0;}}
+</style></head><body><main>{privacy_html(lang)}</main></body></html>""")
 
 
 @app.get("/health/db")

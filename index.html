@@ -351,6 +351,8 @@
 
 <footer class="app-footer">
   <button class="cookie-link" id="cookie-link">Cookie settings</button>
+  <a class="cookie-link" id="privacy-link" href="/privacy" target="_blank" rel="noopener"
+     data-i18n="privacy_link">פרטיות</a>
 </footer>
 
 <div class="sheet-overlay" id="sheet" hidden>
@@ -389,7 +391,7 @@
   "refresh": "↻ רענון", "refreshing": "⏳ מתעדכן...",
   "saving": "שומר...", "loading": "טוען", "loading_matches": "טוען משחקים", "close": "סגור",
   "password_login": "כניסה בסיסמה", "account": "חשבון", "admin": "ניהול", "logout": "יציאה",
-  "menu": "תפריט", "cookie_settings": "הגדרות עוגיות", "language": "שפה",
+  "menu": "תפריט", "cookie_settings": "הגדרות עוגיות", "privacy_link": "פרטיות", "language": "שפה",
   "my_favorites": "המועדפים שלי", "fav_empty": "עוד אין מועדפים — חפש קבוצה למטה והוסף",
   "fav_search": "חפש קבוצה להוספה…", "fav_add": "הוסף", "fav_remove": "הסר", "fav_no_results": "לא נמצאו קבוצות",
   "fav_leagues": "ליגות מועדפות", "fav_teams": "קבוצות מועדפות",
@@ -446,7 +448,7 @@
   "refresh": "↻ Refresh", "refreshing": "⏳ Updating...",
   "saving": "Saving...", "loading": "Loading", "loading_matches": "Loading matches", "close": "Close",
   "password_login": "Password login", "account": "Account", "admin": "Admin", "logout": "Log out",
-  "menu": "Menu", "cookie_settings": "Cookie settings", "language": "Language",
+  "menu": "Menu", "cookie_settings": "Cookie settings", "privacy_link": "Privacy", "language": "Language",
   "my_favorites": "My favorites", "fav_empty": "No favorites yet — search for a team below and add it",
   "fav_search": "Search a team to add…", "fav_add": "Add", "fav_remove": "Remove", "fav_no_results": "No teams found",
   "fav_leagues": "Favorite leagues", "fav_teams": "Favorite teams",
@@ -503,7 +505,7 @@
   "refresh": "↻ Actualizar", "refreshing": "⏳ Actualizando...",
   "saving": "Guardando...", "loading": "Cargando", "loading_matches": "Cargando partidos", "close": "Cerrar",
   "password_login": "Acceso con contraseña", "account": "Cuenta", "admin": "Admin", "logout": "Salir",
-  "menu": "Menú", "cookie_settings": "Configuración de cookies", "language": "Idioma",
+  "menu": "Menú", "cookie_settings": "Configuración de cookies", "privacy_link": "Privacidad", "language": "Idioma",
   "my_favorites": "Mis favoritos", "fav_empty": "Aún no tienes favoritos — busca un equipo abajo y añádelo",
   "fav_search": "Busca un equipo para añadir…", "fav_add": "Añadir", "fav_remove": "Quitar", "fav_no_results": "No se encontraron equipos",
   "fav_leagues": "Ligas favoritas", "fav_teams": "Equipos favoritos",
@@ -560,7 +562,7 @@
   "refresh": "↻ Actualiser", "refreshing": "⏳ Mise à jour...",
   "saving": "Enregistrement...", "loading": "Chargement", "loading_matches": "Chargement des matchs", "close": "Fermer",
   "password_login": "Connexion par mot de passe", "account": "Compte", "admin": "Admin", "logout": "Déconnexion",
-  "menu": "Menu", "cookie_settings": "Paramètres des cookies", "language": "Langue",
+  "menu": "Menu", "cookie_settings": "Paramètres des cookies", "privacy_link": "Confidentialité", "language": "Langue",
   "my_favorites": "Mes favoris", "fav_empty": "Pas encore de favoris — cherchez une équipe ci-dessous et ajoutez-la",
   "fav_search": "Cherchez une équipe à ajouter…", "fav_add": "Ajouter", "fav_remove": "Retirer", "fav_no_results": "Aucune équipe trouvée",
   "fav_leagues": "Ligues favorites", "fav_teams": "Équipes favorites",
@@ -652,6 +654,8 @@
       el.textContent = (el.dataset.prefix || '') + t(el.dataset.i18n);
     });
     document.getElementById('lang-select').value = LANG;
+    const pv = document.getElementById('privacy-link');
+    if (pv) pv.href = '/privacy?lang=' + LANG;
   }
 
   // השרת מחזיר את סוג התקציר בעברית — מתורגם כאן
