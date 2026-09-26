@@ -6002,10 +6002,24 @@ def serve_frontend(request: Request):
 # ── PWA ────────────────────────────────────────────────
 # ציבוריים (בלי סיסמה) — הדפדפן טוען אותם גם לפני כניסה.
 
+# התיאור שמופיע בהתקנת ה-PWA ובמגירת האפליקציות. הקובץ הסטטי היה עברית
+# קשיחה, מחוץ למערכת ה-i18n — מי שהתקין בספרדית קיבל תיאור בעברית.
+MANIFEST_I18N = {
+    "he": ("לוח משחקים ותקצירים בלי ספוילרים", "rtl"),
+    "en": ("Fixtures and highlights without spoilers", "ltr"),
+    "es": ("Partidos y resúmenes sin spoilers", "ltr"),
+    "fr": ("Matchs et résumés sans spoilers", "ltr"),
+}
+
+
 @app.get("/manifest.webmanifest")
-def pwa_manifest():
-    return FileResponse("static/manifest.webmanifest",
-                        media_type="application/manifest+json")
+def pwa_manifest(lang: str = "he"):
+    with open("static/manifest.webmanifest", encoding="utf-8") as f:
+        data = json.load(f)
+    desc, direction = MANIFEST_I18N.get(lang, MANIFEST_I18N["he"])
+    data.update({"description": desc, "lang": lang if lang in MANIFEST_I18N else "he",
+                 "dir": direction})
+    return JSONResponse(data, media_type="application/manifest+json")
 
 
 @app.get("/sw.js")
