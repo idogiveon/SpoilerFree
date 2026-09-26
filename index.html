@@ -2279,6 +2279,23 @@
   // PWA: הדף נשמר במכשיר ונפתח מיד גם כשהשרת ישן
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
+    // גרסה חדשה ירדה ברקע. בלי זה הלשונית ממשיכה להריץ את הקוד הישן
+    // עד הפתיחה הבאה — ואז השרת והדף לא מסכימים ביניהם.
+    let pendingReload = false;
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (!e.data || e.data.type !== 'shell-updated') return;
+      // באמצע צפייה בתקציר לא חוטפים למשתמש את המסך
+      if (document.getElementById('modal').classList.contains('open')) {
+        pendingReload = true;
+      } else {
+        location.reload();
+      }
+    });
+    document.getElementById('modal').addEventListener('transitionend', () => {
+      if (pendingReload && !document.getElementById('modal').classList.contains('open')) {
+        location.reload();
+      }
+    });
   }
 </script>
 </body>

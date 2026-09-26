@@ -6,7 +6,7 @@
 // הקפצת המספר מוחקת את הדף השמור בכל המכשירים. עושים את זה כששינוי
 // בשרת תלוי בקוד לקוח חדש — אחרת הלקוח הישן ממשיך לרוץ פתיחה שלמה
 // (הנגן המוטמע, 22.9.26).
-const CACHE = 'sf-shell-v2';
+const CACHE = 'sf-shell-v3';
 const STATIC = ['/manifest.webmanifest', '/icons/icon-192.png',
                 '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
@@ -26,7 +26,20 @@ async function fetchAndStoreApp(request) {
   const resp = await fetch(request);
   if (resp.ok && resp.headers.get('X-SF-App') === '1') {
     const c = await caches.open(CACHE);
+    // השוואה לפני הכתיבה: אם הדף השתנה, הלשוניות הפתוחות עדיין מריצות
+    // את הקוד הישן. בלי ההודעה הזו הן ימשיכו כך עד הפתיחה הבאה — וזה
+    // הפיל אותנו שלוש פעמים (גביעים, נגן, שורת הליגות).
+    const old = await c.match('/app');
+    const [was, now] = await Promise.all([
+      old ? old.clone().text() : Promise.resolve(''),
+      resp.clone().text(),
+    ]);
     await c.put('/app', resp.clone());
+    if (was && was !== now) {
+      for (const client of await self.clients.matchAll({ type: 'window' })) {
+        client.postMessage({ type: 'shell-updated' });
+      }
+    }
   }
   return resp;
 }

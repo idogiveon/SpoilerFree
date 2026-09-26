@@ -55,5 +55,7 @@ def test_the_kill_switch_still_wins(db, monkeypatch):
 def test_the_cached_page_is_dropped_when_the_client_must_change():
     """בלי הקפצת הקאש, הקוד החדש מגיע רק בפתיחה שאחרי — ובינתיים
     השרת והלקוח לא מסכימים."""
+    import re
     sw = open("static/sw.js", encoding="utf-8").read()
-    assert "const CACHE = 'sf-shell-v2';" in sw
+    ver = re.search(r"const CACHE = 'sf-shell-v(\d+)';", sw)
+    assert ver and int(ver.group(1)) >= 2, "הקפצת גרסה מוחקת את הדף השמור"
