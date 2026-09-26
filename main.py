@@ -834,7 +834,7 @@ def _notify_registration(email: str, lang: str = None):
 # תרגומי מסך הכניסה (השפה נשמרת במכשיר — אותה בחירה כמו באפליקציה).
 # err_*: הודעות השרת (בעברית) → מפתח, כדי להציג אותן בשפת המשתמש.
 LOGIN_I18N = {
-    "he": {"title": "כניסה", "enter_email": "הכנס מייל וסיסמה", "password": "סיסמה", "enter": "כניסה",
+    "he": {"cookie_settings": "הגדרות עוגיות", "skip_pw": "דלג — להיכנס עם קוד בכל פעם", "err_closed": "האתר הזה סגור", "err_rate": "יותר מדי בקשות — נסה שוב בעוד שעה", "err_no_account": "אין חשבון אישי", "title": "כניסה", "enter_email": "הכנס מייל וסיסמה", "password": "סיסמה", "enter": "כניסה",
            "new_user": "משתמש חדש? נשלח לך קוד למייל", "forgot": "שכחתי סיסמה",
            "code_intro": "נשלח קוד בן 6 ספרות אל המייל שלך", "send_code": "שלח קוד",
            "sent_to": "שלחנו קוד בן 6 ספרות אל", "other_email": "מייל אחר / שלח שוב", "back": "חזרה",
@@ -861,7 +861,7 @@ LOGIN_I18N = {
            "err_exists": "המייל כבר רשום — היכנס עם הסיסמה",
            "err_code_required": "הרשמה דורשת קוד למייל",
            "err_admin_code": "כתובת מנהל דורשת את סיסמת המנהל", "admin_key": "סיסמת מנהל"},
-    "en": {"title": "Log in", "enter_email": "Enter your email and password", "password": "Password", "enter": "Log in",
+    "en": {"cookie_settings": "Cookie settings", "skip_pw": "Skip — sign in with a code each time", "err_closed": "This site is closed", "err_rate": "Too many requests — try again in an hour", "err_no_account": "No personal account", "title": "Log in", "enter_email": "Enter your email and password", "password": "Password", "enter": "Log in",
            "new_user": "New here? We'll email you a code", "forgot": "Forgot password",
            "code_intro": "We'll send a 6-digit code to your email", "send_code": "Send code",
            "sent_to": "We sent a 6-digit code to", "other_email": "Different email / resend", "back": "Back",
@@ -888,7 +888,7 @@ LOGIN_I18N = {
            "err_exists": "This email is already registered — log in with your password",
            "err_code_required": "Signing up requires an email code",
            "err_admin_code": "Admin addresses require the admin password", "admin_key": "Admin password"},
-    "es": {"title": "Entrar", "enter_email": "Escribe tu correo y contraseña", "password": "Contraseña", "enter": "Entrar",
+    "es": {"cookie_settings": "Configuración de cookies", "skip_pw": "Omitir — entrar con un código cada vez", "err_closed": "Este sitio está cerrado", "err_rate": "Demasiadas solicitudes — inténtalo en una hora", "err_no_account": "No hay cuenta personal", "title": "Entrar", "enter_email": "Escribe tu correo y contraseña", "password": "Contraseña", "enter": "Entrar",
            "new_user": "¿Nuevo? Te enviamos un código por correo", "forgot": "Olvidé mi contraseña",
            "code_intro": "Te enviaremos un código de 6 dígitos por correo", "send_code": "Enviar código",
            "sent_to": "Enviamos un código de 6 dígitos a", "other_email": "Otro correo / reenviar", "back": "Volver",
@@ -916,7 +916,7 @@ LOGIN_I18N = {
            "err_code_required": "El registro requiere un código por correo",
            "err_admin_code": "Las direcciones de administrador requieren la contraseña de administrador",
            "admin_key": "Contraseña de administrador"},
-    "fr": {"title": "Connexion", "enter_email": "Saisissez votre e-mail et votre mot de passe", "password": "Mot de passe",
+    "fr": {"cookie_settings": "Paramètres des cookies", "skip_pw": "Passer — se connecter avec un code chaque fois", "err_closed": "Ce site est fermé", "err_rate": "Trop de demandes — réessayez dans une heure", "err_no_account": "Pas de compte personnel", "title": "Connexion", "enter_email": "Saisissez votre e-mail et votre mot de passe", "password": "Mot de passe",
            "enter": "Se connecter", "new_user": "Nouveau ? Nous vous envoyons un code par e-mail",
            "forgot": "Mot de passe oublié", "code_intro": "Nous vous enverrons un code à 6 chiffres par e-mail",
            "send_code": "Envoyer le code",
@@ -986,9 +986,17 @@ margin-top:0.8rem;width:auto;padding:0.2rem;text-decoration:underline}
 .err{color:#ff4757;font-size:0.85rem;margin-top:0.8rem;min-height:1.2em}
 .ok{color:#00e5a0}
 .hint{font-size:0.78rem;color:#6b6b80;margin:0.8rem 0 0}
-button.cookie-link{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
-width:auto;background:none;color:#4a4a5a;font-weight:400;font-size:0.7rem;
-padding:0.2rem;text-decoration:underline}
+/* בלי זה הקישורים בתוך "בהרשמה אתה מסכים ל..." הם כחול/סגול של הדפדפן,
+   על רקע שחור — הצבע היחיד בעמוד שאינו שלנו */
+a{color:#00e5a0}
+/* שורת הקישורים המשפטיים. הכלל היה על button בלבד, ולכן שני ה-<a>
+   נשארו פריטי flex של body — קישורים כחולים 16px לצד כרטיס הכניסה,
+   שדחקו אותו הצידה. את זה רואה כל מי שאינו מחובר, כלומר כל מבקר חדש. */
+.legal{position:fixed;bottom:12px;left:0;right:0;display:flex;gap:1rem;
+flex-wrap:wrap;align-items:center;justify-content:center}
+.cookie-link{width:auto;background:none;border:none;color:#4a4a5a;
+font-weight:400;font-size:0.7rem;padding:0.2rem;text-decoration:underline;
+cursor:pointer}
 .cookie-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;
 align-items:center;justify-content:center;padding:1rem;z-index:10}
 .cookie-box{background:#13131a;border:1px solid #2a2a3a;border-radius:12px;
@@ -1047,6 +1055,8 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
   <input type="password" id="new-pw" autocomplete="new-password" dir="ltr">
   <input type="password" id="new-pw2" autocomplete="new-password" dir="ltr">
   <button id="setpw-btn" onclick="setPw()" data-i18n="save">שמירה וכניסה</button>
+  <!-- בשלב הזה המשתמש כבר מחובר, ולא היה לו שום מסלול חוץ מרענון ידני -->
+  <button class="link" onclick="go()" data-i18n="skip_pw">דלג — להיכנס עם קוד בכל פעם</button>
 </div>
 
 <div id="step-legacy" hidden>
@@ -1059,11 +1069,14 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 <p class="hint" data-i18n="privacy_note">נשמרים המייל שלך, הליגות והקבוצות שבחרת. הסיסמה נשמרת מעורבלת בלבד — גם לנו אין דרך לקרוא אותה.</p>
 <!--LEGACY--><button class="link" id="legacy-link" onclick="show('step-legacy')" data-i18n="legacy_link">כניסה עם סיסמה (זמני)</button><!--/LEGACY-->
 </div>
-<button class="cookie-link" onclick="openCookies()">Cookie settings</button>
-<a class="cookie-link" id="privacy-link" href="/privacy" target="_blank" rel="noopener"
-   data-i18n="privacy_link">פרטיות</a>
-<a class="cookie-link" id="terms-link" href="/terms" target="_blank" rel="noopener"
-   data-i18n="terms_link">תנאי שימוש</a>
+<div class="legal">
+  <button class="cookie-link" onclick="openCookies()"
+          data-i18n="cookie_settings">הגדרות עוגיות</button>
+  <a class="cookie-link" id="privacy-link" href="/privacy" target="_blank" rel="noopener"
+     data-i18n="privacy_link">פרטיות</a>
+  <a class="cookie-link" id="terms-link" href="/terms" target="_blank" rel="noopener"
+     data-i18n="terms_link">תנאי שימוש</a>
+</div>
 <div class="cookie-overlay" id="cookie-overlay" hidden
      onclick="if (event.target === this) closeCookies()">
   <div class="cookie-box"><div id="cookie-body"></div>
@@ -1221,7 +1234,8 @@ $('code').addEventListener('input', e => { if (e.target.value.trim().length === 
 $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') legacy(); });
 // עמוד ברירת המחדל הוא הרשמה — רוב מי שמגיע לכאן עוד לא רשום.
 // כשהרשמה דורשת קוד למייל, המסך הזה לא רלוונטי ונשארים בכניסה.
-if (CFG.code_required) { $('email').focus(); }
+if (CFG.closed) { $('new-user-btn').hidden = true; $('email').focus(); }
+else if (CFG.code_required) { $('email').focus(); }
 else { show('step-register'); $('reg-email').focus(); }
 
 // "שכחתי סיסמה" בלי שליחת מיילים: מציגים למי לכתוב
@@ -1240,8 +1254,11 @@ async function askReset() {
 
 def render_login_page() -> str:
     page = LOGIN_PAGE.replace("__LOGIN_I18N__", json.dumps(LOGIN_I18N, ensure_ascii=False))
+    # closed: ALLOWED_EMAILS מוגדר, ולכן הרשמה תיענה ב-403 לכל מייל אחר.
+    # בלי הדגל הזה מסך ההרשמה היה ברירת המחדל דווקא שם
     page = page.replace("__LOGIN_CFG__", json.dumps({"code_required": EMAIL_CODE_REQUIRED,
-                                                     "can_send": email_sender_ready()}))
+                                                     "can_send": email_sender_ready(),
+                                                     "closed": bool(ALLOWED_EMAILS)}))
     if not APP_PASSWORD:
         page = re.sub(r"<!--LEGACY-->.*?<!--/LEGACY-->", "", page, flags=re.S)
     return page
@@ -3868,6 +3885,20 @@ def cookies_policy(lang: str = "he"):
     return HTMLResponse(COOKIES_HTML_BY_LANG.get(lang, COOKIES_HTML))
 
 
+# ספרדית וצרפתית מקבלות את המסמך באנגלית — תרגום מכונה של טקסט משפטי
+# גרוע מטקסט מובן בשפה אחרת. הקישור אליו מתורגם ("Términos"), ולכן צריך
+# שורה שאומרת את זה, במקום עמוד שנפתח בשפה אחרת בלי הסבר.
+_ENGLISH_NOTE = {
+    "es": "Este documento solo está disponible en inglés.",
+    "fr": "Ce document n'est disponible qu'en anglais.",
+}
+
+
+def _english_note(lang: str) -> str:
+    note = _ENGLISH_NOTE.get(lang)
+    return f'<p class="upd">{note}</p>' if note else ""
+
+
 def _policy_page(body: str, title: str, lang: str) -> HTMLResponse:
     """עמוד מדיניות עומד בפני עצמו — כתובת משלו, כדי שאפשר לקשר אליו
     מחוץ לאתר. אותו טקסט מוצג גם בתוך האפליקציה."""
@@ -3886,7 +3917,7 @@ p{{font-size:0.9rem;color:#b9b9c8;margin:0.3rem 0;}}
 .upd{{font-size:0.75rem;color:#6b6b80;}}
 a{{color:#00e5a0;}}
 nav{{margin-top:2.5rem;font-size:0.8rem;}}
-</style></head><body><main>{body}
+</style></head><body><main>{_english_note(lang)}{body}
 <nav><a href="/privacy?lang={lang}">{'פרטיות' if rtl else 'Privacy'}</a> ·
 <a href="/terms?lang={lang}">{'תנאי שימוש' if rtl else 'Terms'}</a> ·
 <a href="/">{'לאתר' if rtl else 'To the site'}</a></nav>

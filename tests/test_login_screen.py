@@ -57,3 +57,58 @@ def test_what_is_kept_is_stated_in_every_language():
     for lang in ("he", "en", "es", "fr"):
         note = main.LOGIN_I18N[lang]["privacy_note"]
         assert len(note) > 40, lang
+
+
+# ── ביקורת מוצר (26.9.26): מה שמבקר חדש רואה במסך הכניסה ─────────────
+def test_the_legal_links_are_not_bare_flex_items_beside_the_card():
+    """הכלל היה `button.cookie-link{position:fixed}` בלבד, ושני ה-<a>
+    נשארו ילדים ישירים של body — שהוא display:flex. כלומר שני קישורים
+    כחולים 16px *לצד* כרטיס הכניסה, שדוחקים אותו. הבעלים לא רואה את זה:
+    יש לו קוקי ל-90 יום."""
+    page = main.LOGIN_PAGE
+    assert ".legal{position:fixed" in page
+    assert ".cookie-link{width:auto" in page       # לא רק button
+    legal = page[page.index('<div class="legal">'):]
+    legal = legal[:legal.index("</div>")]
+    for el in ('id="privacy-link"', 'id="terms-link"', 'onclick="openCookies()"'):
+        assert el in legal, el
+
+
+def test_the_cookie_button_is_translated_in_both_doors():
+    """הכפתור היה "Cookie settings" קשיח בשני המקומות, בזמן שהמפתח
+    cookie_settings קיים בארבע השפות."""
+    assert 'data-i18n="cookie_settings"' in main.LOGIN_PAGE
+    html = open("index.html", encoding="utf-8").read()
+    assert html.count('data-i18n="cookie_settings"') == 2      # ☰ והפוטר
+    assert "Cookie settings</button>" not in html
+
+
+def test_the_hebrew_server_messages_the_login_screen_shows_are_translated():
+    """serverMsg מתרגם רק detail שזהה לערך של מפתח err_*. שלוש ההודעות
+    האלה יוצאות מהשרת בעברית לכל משתמש, בכל שפה — וביניהן הפנים של תקרת
+    ההרשמה ושל הכתובת הסגורה."""
+    src = open("main.py", encoding="utf-8").read()
+    for detail in ("האתר הזה סגור", "יותר מדי בקשות — נסה שוב בעוד שעה",
+                   "אין חשבון אישי"):
+        assert f'"{detail}"' in src, detail
+        keys = [k for k, v in main.LOGIN_I18N["he"].items()
+                if k.startswith("err_") and v == detail]
+        assert len(keys) == 1, detail
+        for lang in ("en", "es", "fr"):
+            other = main.LOGIN_I18N[lang][keys[0]]
+            assert other and other != detail, (lang, detail)
+
+
+def test_choosing_a_password_has_a_way_out():
+    """המשתמש כבר מחובר בשלב הזה, ולא היה לו שום מסלול חוץ מרענון ידני."""
+    step = main.LOGIN_PAGE[main.LOGIN_PAGE.index('id="step-setpw"'):]
+    step = step[:step.index("</div>")]
+    assert 'data-i18n="skip_pw"' in step
+
+
+def test_the_spanish_and_french_reader_is_told_the_document_is_in_english():
+    from fastapi.testclient import TestClient
+    c = TestClient(main.app)
+    assert "solo está disponible en inglés" in c.get("/terms?lang=es").text
+    assert "n'est disponible qu'en anglais" in c.get("/privacy?lang=fr").text
+    assert "only available" not in c.get("/terms?lang=en").text

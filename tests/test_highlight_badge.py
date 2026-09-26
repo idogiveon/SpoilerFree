@@ -1,5 +1,6 @@
 """החיווי על הכרטיס (פידבק חיצוני, 19.9.26). קודם הופיע "תקציר" על כל
 משחק שנגמר — גם כשלא היה מה להציג, וגילית את זה רק אחרי לחיצה."""
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -118,8 +119,19 @@ def test_an_old_match_keeps_its_no_for_longer(db):
 def test_the_card_shows_all_three_states():
     assert "m.highlight === 'none'" in HTML
     assert "t('badge_none')" in HTML
-    assert "m.highlight === 'yes' ? '' : ' is-unknown'" in HTML
+    assert "m.highlight === 'yes'" in HTML
     assert HTML.count('"badge_none":') == 4          # ארבע השפות
+
+
+def test_unknown_does_not_say_the_same_thing_as_yes():
+    """שני המצבים היו "▶ תקציר" בדיוק, וההבדל היחיד היה גוון הצבע.
+    בטלפון החיווי הוא 0.6rem מתחת ל-VS — שם רואים מילה, לא צבע."""
+    assert "is-unknown\">${t('badge_unknown')}" in HTML
+    yes = re.findall(r'"badge": "(.*?)"', HTML)
+    unknown = re.findall(r'"badge_unknown": "(.*?)"', HTML)
+    assert len(yes) == len(unknown) == 4                  # ארבע השפות
+    for a, b in zip(yes, unknown):
+        assert a != b, a
 
 
 def test_the_badge_is_not_hidden_on_a_phone():

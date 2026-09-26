@@ -88,3 +88,31 @@ def test_scores_are_stored_from_both_sources():
                                "strStatus": "Match Finished"}])
     assert (sdb["e1"]["home_score"], sdb["e1"]["away_score"]) == (3, 0)
     assert "home_score" in main._MATCH_COLS and "away_score" in main._MATCH_COLS
+
+
+# ── ביקורת מוצר (26.9.26): הכפתור אמר דבר אחד והמסך עשה אחר ──────────
+HTML = open("index.html", encoding="utf-8").read()
+
+
+def test_the_first_request_is_repeated_once_we_know_the_preference():
+    """`loadDay()` יצא לפני `loadScorePref()`, כלומר בלי scores=1. אחר כך
+    הכפתור התעדכן ל"הסתר תוצאות" — ועל המסך לא היו תוצאות, כי rerender
+    צובע מחדש את אותם נתונים. רק לחיצה שנייה הביאה אותן."""
+    boot = HTML[HTML.index("loadUserBar().then(loadFavorites).then(loadScorePref)"):]
+    boot = boot[:boot.index("maybeOnboard")]
+    assert "if (showScores) return" in boot
+    assert "loadDay()" in boot and "openLeague(currentLeague)" in boot
+
+
+def test_hiding_scores_in_the_feed_also_covers_the_match_window():
+    """מי שלחץ "הסתר תוצאות" לא מצפה שחלון המשחק יחשוף בשבילו. "רק בחלון
+    המשחק" הוא היחיד שכן ביקש את זה במפורש."""
+    assert "if (!showScores && SCORES_DEFAULT !== 'match')" in HTML
+    assert "SCORES_DEFAULT === 'off' && !showScores" not in HTML
+
+
+def test_the_settings_hint_does_not_contradict_the_chosen_chip():
+    """הטקסט הכריז "ברירת המחדל היא בלי תוצאות" גם למי שבחר "תוצאות בכל
+    האתר", מעל הצ'יפ המסומן שלו."""
+    for word in ("ברירת המחדל היא בלי תוצאות", "Scores are off by default"):
+        assert word not in HTML
