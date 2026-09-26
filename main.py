@@ -4210,6 +4210,18 @@ def prefetch_highlights_once() -> int:
             for r in conn.execute("SELECT match_id, source_id, videos_json, found_at "
                                   "FROM highlight_cache").fetchall()}
     conn.close()
+
+    # סדר הבדיקה: מי שלא נבדק מעולם קודם, ואחריו מי שנבדק לפני הכי הרבה
+    # זמן. הלולאה נעצרת אחרי PREFETCH_MAX_MATCHES, והשליפה היא בלי
+    # ORDER BY — כלומר בסדר הטבלה. ברוב המצבים זה מסתדר מעצמו, כי משחק
+    # שנבדק מקבל קאש טרי ויוצא מהתור; אבל כשהתוקף פג לכולם יחד (שבת
+    # עמוסה, 17 ליגות), הראשונים בטבלה תפסו את כל המקומות שוב ושוב.
+    last_checked = {}
+    for (mid, _sid), (_found, at) in have.items():
+        if at and at > last_checked.get(mid, ""):
+            last_checked[mid] = at
+    rows = sorted(rows, key=lambda r: last_checked.get(r["id"], ""))
+
     done = 0
     for row in rows:
         if done >= PREFETCH_MAX_MATCHES:
