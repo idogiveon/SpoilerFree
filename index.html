@@ -149,6 +149,11 @@
     .team.home { text-align:end; }
     .team.away { text-align:start; }
     .fav-row { display:flex; gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap; }
+    /* התוצאה יושבת בצד הנגדי לכפתורי הקבוצות ובמרווח מהם: לחיצה בטעות
+       כאן חושפת תוצאה, וזה בדיוק מה שהאתר קיים כדי למנוע */
+    .match-score { display:flex; align-items:center; gap:0.5rem;
+      justify-content:flex-end; margin-top:0.9rem; }
+    .score-val { font-size:1.1rem; font-weight:700; letter-spacing:1px; }
     .fav-btn { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:100px; padding:0.15rem 0.6rem; font-size:0.72rem; cursor:pointer; font-family:'Heebo',sans-serif; }
     .fav-btn:hover { border-color:#ffc107; color:#ffc107; }
     .fav-group .date-label .weekday { color:#ffc107; }
@@ -186,7 +191,10 @@
     /* הכותרת של יוטיוב יושבת בראש הנגן ומכילה את התוצאה
        ("Man City 5-0 Norwich"). הפס הזה מכסה אותה, וגם בולע את
        הלחיצה — אחרת לחיצה עליה פותחת את הסרטון ביוטיוב. */
-    .video-container.shielded::after { content:''; position:absolute; top:0;
+    /* המסכות מוצגות רק כשיוטיוב יכול להציג את הממשק שלו — כלומר
+       כשהסרטון לא מתנגן. בזמן ניגון אין מה לכסות (אירועי עכבר חסומים),
+       ואין סיבה להשאיר ריבוע שחור על המגרש. */
+    .video-container.shielded.chrome-risk::after { content:''; position:absolute; top:0;
       inset-inline:0; height:14%; min-height:44px; background:#000; z-index:5; }
     /* "More videos" של יוטיוב יושב בפינה התחתונה ומציג תמונות ממוזערות
        של משחקים אחרים — עם התוצאה בתוכן ("5 : 3"). הוא מופיע גם כש-
@@ -194,7 +202,7 @@
     /* right ולא inset-inline-end: הפקדים של יוטיוב תמיד בצד ימין של
        הנגן, גם כשהממשק שלנו בעברית. עם inset-inline-end המסכה עברה
        שמאלה בממשק העברי והשאירה את ההצעות חשופות (22.9.26). */
-    .video-container.shielded::before { content:''; position:absolute; bottom:0;
+    .video-container.shielded.chrome-risk::before { content:''; position:absolute; bottom:0;
       right:0; width:38%; height:15%; min-height:38px; background:#000; z-index:5; }
     /* גם אירועי עכבר לא מגיעים למסגרת: בלי זה, מעבר עכבר מוציא את
        הסרגל של יוטיוב על הווידאו. הפקדים שלנו ממילא מחוץ לו. */
@@ -210,8 +218,9 @@
        וידאו), ולכן זה נעשה ב-CSS. הקופסה נשארת ביחס 16:9 — המסכות
        ממוקמות יחסית אליה, ואילו הן היו נמתחות למסך שלם הן היו מפספסות
        את הכותרת ואת ההצעות. סיבוב הטלפון לרוחב = תמונה כמעט מלאה. */
-    .theatre-backdrop { position:fixed; inset:0; background:#000; z-index:2999; }
-    .modal-overlay.theatre-on .modal { transform:none; }
+    .modal-overlay.theatre-on { background:#000; }
+    .modal-overlay.theatre-on .modal { transform:none; background:transparent;
+      border:none; box-shadow:none; }
     /* מתאים את עצמו לקטן מבין השניים — רוחב המסך או הגובה הפנוי מעל
        הסרגל. בלי מגבלת הגובה, סיבוב לרוחב גלש מהמסך וחתך את התמונה
        למעלה ולמטה (22.9.26). aspect-ratio שומר 16:9, כך שהמסכות
@@ -398,6 +407,7 @@
   "hidden_leagues": "הסתרת ליגות", "hidden_tab": "מוסתרת מהתצוגה לפי יום",
   "leagues_screen": "ליגות", "leagues_hint": "ליגות מסומנות מוצגות באתר. ליגה שתבטל לא תופיע בכפתורים למעלה ולא בתצוגה לפי יום.",
   "settings": "הגדרות", "scores_title": "הצגת תוצאות", "scores_show": "הצג תוצאות", "scores_hide": "הסתר תוצאות",
+  "score_show_one": "הצג תוצאה", "score_hide_one": "הסתר",
   "scores_hint": "ברירת המחדל היא בלי תוצאות. הכפתור שלמעלה חל על התצוגה הפתוחה בלבד.",
   "scores_off": "בלי תוצאות", "scores_all": "תוצאות בכל האתר", "scores_match": "רק בחלון המשחק",
   "score_none": "אין תוצאה",
@@ -455,6 +465,7 @@
   "hidden_leagues": "Hide leagues", "hidden_tab": "Hidden from the day view",
   "leagues_screen": "Leagues", "leagues_hint": "Checked leagues are shown. A league you uncheck disappears from the buttons above and from the day view.",
   "settings": "Settings", "scores_title": "Showing scores", "scores_show": "Show scores", "scores_hide": "Hide scores",
+  "score_show_one": "Show the score", "score_hide_one": "Hide",
   "scores_hint": "Scores are off by default. The button above applies to the open view only.",
   "scores_off": "No scores", "scores_all": "Scores everywhere", "scores_match": "Only in the match window",
   "score_none": "No score",
@@ -512,6 +523,7 @@
   "hidden_leagues": "Ocultar ligas", "hidden_tab": "Oculta en la vista por día",
   "leagues_screen": "Ligas", "leagues_hint": "Las ligas marcadas se muestran. La que desmarques desaparece de los botones de arriba y de la vista por día.",
   "settings": "Ajustes", "scores_title": "Mostrar resultados", "scores_show": "Mostrar resultados", "scores_hide": "Ocultar resultados",
+  "score_show_one": "Mostrar el resultado", "score_hide_one": "Ocultar",
   "scores_hint": "Los resultados están desactivados por defecto. El botón de arriba afecta solo a la vista abierta.",
   "scores_off": "Sin resultados", "scores_all": "Resultados en todo el sitio", "scores_match": "Solo en la ventana del partido",
   "score_none": "Sin resultado",
@@ -569,6 +581,7 @@
   "hidden_leagues": "Masquer des ligues", "hidden_tab": "Masquée dans la vue par jour",
   "leagues_screen": "Ligues", "leagues_hint": "Les ligues cochées sont affichées. Une ligue décochée disparaît des boutons ci-dessus et de la vue par jour.",
   "settings": "Réglages", "scores_title": "Afficher les scores", "scores_show": "Afficher les scores", "scores_hide": "Masquer les scores",
+  "score_show_one": "Afficher le score", "score_hide_one": "Masquer",
   "scores_hint": "Les scores sont désactivés par défaut. Le bouton ci-dessus s'applique à la vue ouverte uniquement.",
   "scores_off": "Sans scores", "scores_all": "Scores sur tout le site", "scores_match": "Seulement dans la fenêtre du match",
   "score_none": "Pas de score",
@@ -1056,19 +1069,30 @@
     el.innerHTML = '';
     if (!isOver) return;
     if (SCORES_DEFAULT === 'off' && !showScores) {
-      el.innerHTML = `<button class="fav-btn" id="reveal-score">👁 ${t('scores_show')}</button>`;
-      document.getElementById('reveal-score')
-        .addEventListener('click', () => showMatchScore(matchId));
+      offerScore(matchId);
       return;
     }
     showMatchScore(matchId);
+  }
+
+  // "הצג תוצאה" ביחיד: מדובר במשחק הזה בלבד, לא בהגדרה של האתר
+  function offerScore(matchId) {
+    const el = document.getElementById('modal-score');
+    el.innerHTML = `<button class="fav-btn" id="reveal-score">👁 ${t('score_show_one')}</button>`;
+    document.getElementById('reveal-score')
+      .addEventListener('click', () => showMatchScore(matchId));
   }
 
   async function showMatchScore(matchId) {
     const el = document.getElementById('modal-score');
     try {
       const s = await apiFetch(`${API}/score/${matchId}`).then(r => r.json());
-      el.textContent = s.available ? `${s.home} : ${s.away}` : t('score_none');
+      if (!s.available) { el.textContent = t('score_none'); return; }
+      // אחרי החשיפה — דרך חזרה. מי שראה בטעות רוצה שזה ייעלם מהמסך.
+      el.innerHTML = `<span class="score-val">${s.home} : ${s.away}</span>
+        <button class="fav-btn" id="hide-score">🙈 ${t('score_hide_one')}</button>`;
+      document.getElementById('hide-score')
+        .addEventListener('click', () => offerScore(matchId));
     } catch (e) { el.textContent = ''; }
   }
 
@@ -1826,7 +1850,14 @@
   //   3. מסך הסיום — תמונות ממוזערות של משחקים אחרים
   // שלושתם מכוסים כאן. בלי שליטה במצב הנגן אי אפשר לדעת מתי בטוח
   // לחשוף אותו, ולכן נטען ה-IFrame API של יוטיוב.
-  let ytPlayer = null, ytApi = null, ytNudge = null;
+  let ytPlayer = null, ytApi = null, ytNudge = null, chromeTimer = null;
+
+  // כל מצב שאינו "מתנגן" עלול להציג את הכותרת ואת ההצעות
+  function coverChrome() {
+    clearTimeout(chromeTimer);
+    const c = document.querySelector('.video-container');
+    if (c) c.classList.add('chrome-risk');
+  }
 
   function youtubeApi() {
     if (ytApi) return ytApi;
@@ -1853,6 +1884,7 @@
     const container = document.querySelector('.video-container');
     const shield = document.getElementById('shield');
     container.classList.remove('picking');
+    container.classList.add('chrome-risk');
     // המגן נשאר פרוס עד שהניגון מתחיל בפועל — אחרת נראית התמונה הממוזערת
     shield.innerHTML = shieldHTML('🛡️', t('loading'));
     document.getElementById('video-frame').innerHTML = '<div id="yt-player"></div>';
@@ -1883,7 +1915,10 @@
           if (e.data === YT.PlayerState.PLAYING) {
             clearTimeout(ytNudge);
             shield.style.display = 'none';
-            container.classList.add('shielded');   // המסכות מעל הכותרת וההצעות
+            container.classList.add('shielded');
+            // הממשק של יוטיוב נשאר על המסך עוד כמה שניות אחרי ההפעלה
+            clearTimeout(chromeTimer);
+            chromeTimer = setTimeout(() => container.classList.remove('chrome-risk'), 3500);
             showVideoBar();
           } else if (e.data === YT.PlayerState.ENDED) {
             // מסך הסיום מציע משחקים אחרים, עם התוצאה בתמונה הממוזערת
@@ -1893,6 +1928,7 @@
             shield.innerHTML = shieldHTML('🛡️', t('video_over'), t('watch_again'),
                                           'replayVideo()');
           }
+          if (e.data !== YT.PlayerState.PLAYING) coverChrome();
           updatePlayPause();
         },
         onError: () => {
@@ -1926,7 +1962,12 @@
     document.querySelector('.video-container').after(bar);
     document.getElementById('vid-play').onclick = () => {
       const playing = ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
-      playing ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+      if (playing) {
+        coverChrome();          // לפני ההשהיה, אחרת הכותרת מבליחה
+        ytPlayer.pauseVideo();
+      } else {
+        ytPlayer.playVideo();
+      }
     };
     document.getElementById('vid-full').onclick = toggleTheatre;
     const seek = document.getElementById('vid-seek');
@@ -1952,16 +1993,9 @@
     c.classList.toggle('theatre', on);
     if (bar) bar.classList.toggle('theatre', on);
     document.getElementById('modal').classList.toggle('theatre-on', on);
-    let back = document.getElementById('theatre-backdrop');
-    if (on && !back) {
-      back = document.createElement('div');
-      back.className = 'theatre-backdrop';
-      back.id = 'theatre-backdrop';
-      back.onclick = toggleTheatre;
-      document.body.appendChild(back);
-    } else if (!on && back) {
-      back.remove();
-    }
+    // בלי רקע נפרד: הוא נוסף ל-body, כלומר לשכבה שמעל החלון כולו —
+    // והסתיר את הווידאו עצמו (מסך שחור עם קול, 26.9.26). שכבת החלון
+    // ממילא שחורה כמעט לגמרי.
     const btn = document.getElementById('vid-full');
     if (btn) btn.textContent = on ? '⤡' : '⤢';
   }
