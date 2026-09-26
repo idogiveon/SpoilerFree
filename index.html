@@ -49,6 +49,9 @@
     .drawer-sep { border-top:1px solid var(--border); margin:0.4rem 0; }
 
     .app-footer { max-width:960px; margin:0 auto; padding:0 2rem 2rem; text-align:center; position:relative; z-index:1; }
+    .hidden-note { display:block; margin:1.2rem auto 0; background:none; border:none;
+      color:#6b6b80; font-family:'Heebo',sans-serif; font-size:0.78rem;
+      text-decoration:underline; cursor:pointer; }
     .cookie-link { background:none; border:none; color:#4a4a5a; font-family:'Heebo',sans-serif; font-size:0.7rem; text-decoration:underline; cursor:pointer; }
     .sheet-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1100; display:flex; align-items:center; justify-content:center; padding:1rem; }
     .sheet { background:var(--surface); border:1px solid var(--border); border-radius:12px; max-width:460px; width:100%; max-height:80vh; overflow:auto; padding:1.5rem; }
@@ -410,7 +413,7 @@
   "my_favorites": "המועדפים שלי", "fav_empty": "עוד אין מועדפים — חפש קבוצה למטה והוסף",
   "fav_search": "חפש קבוצה להוספה…", "fav_add": "הוסף", "fav_remove": "הסר", "fav_no_results": "לא נמצאו קבוצות",
   "fav_leagues": "ליגות מועדפות", "fav_teams": "קבוצות מועדפות",
-  "hidden_leagues": "הסתרת ליגות", "hidden_tab": "מוסתרת מהתצוגה לפי יום",
+  "hidden_leagues": "הסתרת ליגות", "hidden_n": "{n} ליגות מוסתרות בתצוגה הזו — לשינוי", "hidden_1": "ליגה אחת מוסתרת בתצוגה הזו — לשינוי",
   "leagues_screen": "ליגות", "leagues_hint": "ליגות מסומנות מוצגות באתר. ליגה שתבטל לא תופיע בכפתורים למעלה ולא בתצוגה לפי יום.",
   "settings": "הגדרות", "scores_title": "הצגת תוצאות", "scores_show": "הצג תוצאות", "scores_hide": "הסתר תוצאות",
   "score_show_one": "הצג תוצאה", "score_hide_one": "הסתר",
@@ -468,7 +471,7 @@
   "my_favorites": "My favorites", "fav_empty": "No favorites yet — search for a team below and add it",
   "fav_search": "Search a team to add…", "fav_add": "Add", "fav_remove": "Remove", "fav_no_results": "No teams found",
   "fav_leagues": "Favorite leagues", "fav_teams": "Favorite teams",
-  "hidden_leagues": "Hide leagues", "hidden_tab": "Hidden from the day view",
+  "hidden_leagues": "Hide leagues", "hidden_n": "{n} leagues hidden from this view — change", "hidden_1": "One league hidden from this view — change",
   "leagues_screen": "Leagues", "leagues_hint": "Checked leagues are shown. A league you uncheck disappears from the buttons above and from the day view.",
   "settings": "Settings", "scores_title": "Showing scores", "scores_show": "Show scores", "scores_hide": "Hide scores",
   "score_show_one": "Show the score", "score_hide_one": "Hide",
@@ -526,7 +529,7 @@
   "my_favorites": "Mis favoritos", "fav_empty": "Aún no tienes favoritos — busca un equipo abajo y añádelo",
   "fav_search": "Busca un equipo para añadir…", "fav_add": "Añadir", "fav_remove": "Quitar", "fav_no_results": "No se encontraron equipos",
   "fav_leagues": "Ligas favoritas", "fav_teams": "Equipos favoritos",
-  "hidden_leagues": "Ocultar ligas", "hidden_tab": "Oculta en la vista por día",
+  "hidden_leagues": "Ocultar ligas", "hidden_n": "{n} ligas ocultas en esta vista — cambiar", "hidden_1": "Una liga oculta en esta vista — cambiar",
   "leagues_screen": "Ligas", "leagues_hint": "Las ligas marcadas se muestran. La que desmarques desaparece de los botones de arriba y de la vista por día.",
   "settings": "Ajustes", "scores_title": "Mostrar resultados", "scores_show": "Mostrar resultados", "scores_hide": "Ocultar resultados",
   "score_show_one": "Mostrar el resultado", "score_hide_one": "Ocultar",
@@ -584,7 +587,7 @@
   "my_favorites": "Mes favoris", "fav_empty": "Pas encore de favoris — cherchez une équipe ci-dessous et ajoutez-la",
   "fav_search": "Cherchez une équipe à ajouter…", "fav_add": "Ajouter", "fav_remove": "Retirer", "fav_no_results": "Aucune équipe trouvée",
   "fav_leagues": "Ligues favorites", "fav_teams": "Équipes favorites",
-  "hidden_leagues": "Masquer des ligues", "hidden_tab": "Masquée dans la vue par jour",
+  "hidden_leagues": "Masquer des ligues", "hidden_n": "{n} ligues masquées dans cette vue — modifier", "hidden_1": "Une ligue masquée dans cette vue — modifier",
   "leagues_screen": "Ligues", "leagues_hint": "Les ligues cochées sont affichées. Une ligue décochée disparaît des boutons ci-dessus et de la vue par jour.",
   "settings": "Réglages", "scores_title": "Afficher les scores", "scores_show": "Afficher les scores", "scores_hide": "Masquer les scores",
   "score_show_one": "Afficher le score", "score_hide_one": "Masquer",
@@ -2176,12 +2179,25 @@
     }
   }
 
+  // מי שבחר שלוש ליגות במסך הפתיחה ותוהה חודש אחרי "איפה הבונדסליגה"
+  // לא קיבל שום רמז: הטאב ב-display:none, והמונה סופר רק את הנראים
+  function hiddenNoteHTML(matches) {
+    const hidden = new Set(matches.filter(m => !isFavMatch(m)
+                                            && HIDDEN_LEAGUES.has(m.league_key))
+                                  .map(m => m.league_key));
+    if (!hidden.size) return '';
+    return `<button class="hidden-note" onclick="openLeaguePicker()">
+              ${t(hidden.size === 1 ? 'hidden_1' : 'hidden_n',
+                      { n: hidden.size })}</button>`;
+  }
+
   function renderDayMatches(matches) {
     const container = document.getElementById('matches-container');
     const countEl   = document.getElementById('match-count');
     if (!matches.length) {
       container.innerHTML = `<div class="empty">${t('no_matches_day')}<br>` +
-        `<small style="opacity:0.6">${t('no_matches_day_hint')}</small></div>`;
+        `<small style="opacity:0.6">${t('no_matches_day_hint')}</small></div>` +
+        hiddenNoteHTML(matches);
       countEl.textContent = '';
       return;
     }
@@ -2207,7 +2223,9 @@
       html += matchCardHTML(m);
     }
     if (lastLeague !== null) html += '</div>';
-    container.innerHTML = html;
+    // כל הליגות של היום מוסתרות: קודם זה היה מסך ריק לגמרי, בלי מילה
+    if (!html) html = `<div class="empty">${t('no_matches_day')}</div>`;
+    container.innerHTML = html + hiddenNoteHTML(matches);
     bindMatchCards(container);
   }
 
