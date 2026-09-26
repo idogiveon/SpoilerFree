@@ -106,6 +106,10 @@
     .refresh-btn { background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.8rem; padding:0.3rem 0.8rem; border-radius:6px; cursor:pointer; transition:all 0.2s; }
     .refresh-btn:hover { border-color:var(--accent); color:var(--accent); }
     .refresh-btn:disabled { opacity:0.4; cursor:default; }
+    /* הכתובת הפרטית מריצה את אותו קוד ונראית זהה — הסימון הזה הוא
+       מה שמונע בלבול בין השתיים */
+    .lab-tag { font-size:0.6rem; font-weight:900; letter-spacing:1px; color:#000;
+      background:#ffb400; padding:0.1rem 0.4rem; border-radius:4px; align-self:center; }
     .sync-note { font-size:0.72rem; color:var(--muted); margin-inline-start:auto; margin-inline-end:0.75rem; }
 
     .date-group { margin-bottom:1.75rem; }
@@ -253,6 +257,7 @@
     <div class="brand">
       <button class="menu-btn" id="menu-btn" aria-label="Menu" aria-controls="drawer" aria-expanded="false">☰</button>
       <div class="logo">SPOILERFREE<span data-i18n="tagline">לוח משחקים ותקצירים</span></div>
+      <span class="lab-tag" id="lab-tag" hidden>LAB</span>
     </div>
   </div>
 </header>
@@ -1168,6 +1173,7 @@
     try {
       const me = await apiFetch(`${API}/auth/me`).then(r => r.json());
       ME = me;
+      document.getElementById('lab-tag').hidden = !me.private;
       const user = document.getElementById('drawer-user');
       const items = [];
       if (me.auth_on) {

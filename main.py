@@ -154,20 +154,23 @@ LEAGUES = {
              "hebrew_names": True, "il_both_teams": True,
              # גם בגרסה האנגלית: "Matchday 4 | Full Match: ..." (90 דקות)
              "title_exclude": ["המשחק המלא", "full match"]},
-            # ערוצים לא רשמיים (העלאות פיראטיות) — לפעמים מקדימים את הרשמיים.
+            # ערוצים לא רשמיים (העלאות פיראטיות) — לפעמים מקדימים את
+            # הרשמיים. unofficial=True: מוגשים רק כש-UNOFFICIAL_SOURCES=1.
+            # הפניה מודעת לתוכן מפר היא חשיפה משפטית אמיתית, ולכן
+            # ברירת המחדל מכבה אותם.
             # il_both_teams: רק "תקציר" + שתי הקבוצות בשם מלא (is_il_both_teams)
             {"id": "yt_footballyom1", "name": "@FootballYom1",
              "channel_id": "UC5TtVDq_BSplSOHf7lb2AGQ",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True},
+             "hebrew_names": True, "il_both_teams": True, "unofficial": True},
             {"id": "yt_almog218", "name": "@almog218",
              "channel_id": "UCm8OkQc5lHJE29ADWkbB7CQ",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True},
+             "hebrew_names": True, "il_both_teams": True, "unofficial": True},
             {"id": "yt_itsfootball44", "name": "@ItsFootball44",
              "channel_id": "UCUEeo-8_3zovErCSQb58dnw",
              "search_template": "תקציר {home} {away}",
-             "hebrew_names": True, "il_both_teams": True},
+             "hebrew_names": True, "il_both_teams": True, "unofficial": True},
         ],
         # קישורי אתר (same-day): קפיצה ישירה לתוצאה הראשונה, בלי גלילה
         "web_sources": [
@@ -3447,6 +3450,12 @@ CLUB_TITLE_RULES = {
 }
 
 
+def _allowed(sources: list) -> list:
+    if UNOFFICIAL_SOURCES:
+        return sources
+    return [s for s in sources if not s.get("unofficial")]
+
+
 def get_sources_for_match(row) -> list:
     league_key = row["league_key"]
     league     = LEAGUES.get(league_key, {})
@@ -3470,10 +3479,10 @@ def get_sources_for_match(row) -> list:
                  "channel_id": cid,
                  "query_override": q, "club_team": team,
                  **CLUB_TITLE_RULES.get(cfg_name, {})})
-        return club_sources + league.get("sources", [])
+        return club_sources + _allowed(league.get("sources", []))
 
     if "sources" in league:
-        return league["sources"]
+        return _allowed(league["sources"])
 
     # Premier League — search by club tier
     conn = get_db()
@@ -4164,6 +4173,14 @@ def _web_link(row, w):
 # צפייה בתוך האתר. EMBED_IN_APP=0 ב-Render מחזיר את כולם לפתיחה ביוטיוב,
 # בלי לחכות ל-deploy — נתיב נסיגה אם יתגלה דליפה שלא נצפתה.
 EMBED_IN_APP = os.environ.get("EMBED_IN_APP", "1") != "0"
+# ערוצים שמעלים תקצירים בלי רישיון. הם מקדימים את הרשמיים, ולכן
+# דלוקים (החלטת הבעלים, 26.9.26). הדגל קיים כדי ש-UNOFFICIAL_SOURCES=0
+# יכבה אותם מיד — זו החשיפה המשפטית הממשית היחידה של האתר, ואם יגיע
+# מכתב, הכיבוי צריך להיות משתנה סביבה ולא deploy.
+UNOFFICIAL_SOURCES = os.environ.get("UNOFFICIAL_SOURCES", "1") != "0"
+# מופע פרטי: רשימת כתובות שמותר להן להיכנס. ריק = פתוח (האתר הציבורי).
+ALLOWED_EMAILS = {e.strip().lower()
+                  for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()}
 
 PREFETCH_EVERY_MIN   = 30
 PREFETCH_MAX_MATCHES = 20
@@ -4785,6 +4802,11 @@ def _email_from(payload) -> str:
     email = str(payload.get("email") or "").strip().lower()
     if len(email) > 200 or not EMAIL_RE.match(email):
         raise HTTPException(400, "כתובת מייל לא תקינה")
+    # ALLOWED_EMAILS: מופע פרטי. חוסם גם כניסה ולא רק הרשמה — שתי
+    # הכתובות חולקות את אותו DB, ובלי זה כל משתמש של האתר הציבורי היה
+    # נכנס לכתובת הפרטית עם הסיסמה הקיימת שלו.
+    if ALLOWED_EMAILS and email not in ALLOWED_EMAILS:
+        raise HTTPException(403, "האתר הזה סגור")
     return email
 
 
@@ -5049,7 +5071,10 @@ def auth_me(request: Request):
         onboarded = bool((r and r["onboarded_at"]) or has)
     return {"auth_on": AUTH_ON, "email": u.get("email"),
             "is_admin": bool(u.get("is_admin")) or not AUTH_ON,
-            "legacy": bool(u.get("legacy")), "onboarded": onboarded}
+            "legacy": bool(u.get("legacy")), "onboarded": onboarded,
+            # שתי הכתובות מריצות את אותו קוד ונראות זהות. הסימון הזה הוא
+            # מה שמבדיל ביניהן על המסך.
+            "private": bool(ALLOWED_EMAILS)}
 
 
 @app.post("/auth/onboarded")
