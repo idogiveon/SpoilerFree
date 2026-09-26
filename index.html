@@ -420,7 +420,6 @@
   "scores_hint": "הכפתור שלמעלה חל על התצוגה הפתוחה בלבד.",
   "scores_off": "בלי תוצאות", "scores_all": "תוצאות בכל האתר", "scores_match": "רק בחלון המשחק",
   "score_none": "אין תוצאה",
-  "hidden_hint": "ליגות מסומנות לא יוצגו בתצוגה לפי יום (משחקי הקבוצות המועדפות שלך כן).",
   "ob_title1": "ברוך הבא! באילו ליגות אתה מתעניין?",
   "ob_hint1": "רק הן יוצגו באתר. אפשר לשנות בכל רגע ב-⚙ שליד הליגות.",
   "ob_title2": "קבוצות פופולריות — סמן את שלך", "ob_hint2": "המשחקים שלהן יופיעו ראשונים, בכל מפעל.",
@@ -478,7 +477,6 @@
   "scores_hint": "The button above applies to the open view only.",
   "scores_off": "No scores", "scores_all": "Scores everywhere", "scores_match": "Only in the match window",
   "score_none": "No score",
-  "hidden_hint": "Marked leagues won't show in the day view (your favorite teams' matches still do).",
   "ob_title1": "Welcome! Which leagues do you follow?",
   "ob_hint1": "Only these will be shown. You can change it anytime with the ⚙ next to the leagues.",
   "ob_title2": "Popular teams — pick yours", "ob_hint2": "Their matches will show first, in every competition.",
@@ -536,7 +534,6 @@
   "scores_hint": "El botón de arriba afecta solo a la vista abierta.",
   "scores_off": "Sin resultados", "scores_all": "Resultados en todo el sitio", "scores_match": "Solo en la ventana del partido",
   "score_none": "Sin resultado",
-  "hidden_hint": "Las ligas marcadas no aparecerán en la vista por día (los partidos de tus equipos favoritos sí).",
   "ob_title1": "¡Bienvenido! ¿Qué ligas sigues?",
   "ob_hint1": "Solo estas se mostrarán. Puedes cambiarlo cuando quieras con el ⚙ junto a las ligas.",
   "ob_title2": "Equipos populares — elige los tuyos", "ob_hint2": "Sus partidos aparecerán primero, en todas las competiciones.",
@@ -594,7 +591,6 @@
   "scores_hint": "Le bouton ci-dessus s'applique à la vue ouverte uniquement.",
   "scores_off": "Sans scores", "scores_all": "Scores sur tout le site", "scores_match": "Seulement dans la fenêtre du match",
   "score_none": "Pas de score",
-  "hidden_hint": "Les ligues cochées n'apparaîtront pas dans la vue par jour (les matchs de vos équipes favorites, si).",
   "ob_title1": "Bienvenue ! Quelles ligues suivez-vous ?",
   "ob_hint1": "Seules celles-ci seront affichées. Modifiable à tout moment avec le ⚙ à côté des ligues.",
   "ob_title2": "Équipes populaires — choisissez les vôtres", "ob_hint2": "Leurs matchs s'afficheront en premier, dans toutes les compétitions.",
@@ -1010,7 +1006,8 @@
     catch (e) { if (e.message === 'auth') return; TEAMS = TEAMS || []; }
     openSheet(`<h2>⭐ ${t('my_favorites')}</h2>
       <h3>${t('fav_leagues')}</h3><div id="fav-leagues" class="chips"></div>
-      <h3>${t('hidden_leagues')}</h3><p>${t('hidden_hint')}</p><div id="hid-leagues" class="chips"></div>
+      <button class="retry-btn" style="opacity:0.7;margin-top:0.4rem"
+              onclick="openLeaguePicker()">🏆 ${t('hidden_leagues')}</button>
       <h3>${t('fav_teams')}</h3>
       <div id="fav-mine" class="fav-list"></div>
       <input id="fav-search" autocomplete="off" placeholder="${esc(t('fav_search'))}">
@@ -1063,20 +1060,14 @@
       c.classList.toggle('on', selected.has(v));
     }));
   }
-  // מועדפות + מוסתרות — השינוי באחת משפיע על השנייה, אז מציירים את שתיהן
+  // ההסתרה נקבעת במסך אחד בלבד. קודם היו שניים, עם אותו צ'יפ ירוק
+  // ובמשמעות הפוכה: כאן "דולק = מוסתרת", ובמסך הליגות "דולק = מוצגת".
   function renderFavLeagues() {
-    const fav = document.getElementById('fav-leagues'), hid = document.getElementById('hid-leagues');
+    const fav = document.getElementById('fav-leagues');
     if (!fav) return;
-    const items = allLeagues().map(l => [l, t('lg_' + l)]);
-    fav.innerHTML = chipsHTML(items, FAV_LEAGUES);
+    fav.innerHTML = chipsHTML(allLeagues().map(l => [l, t('lg_' + l)]), FAV_LEAGUES);
     fav.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
       toggleFavLeague(c.dataset.val);
-      renderFavLeagues();
-    }));
-    if (!hid) return;
-    hid.innerHTML = chipsHTML(items, HIDDEN_LEAGUES);
-    hid.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
-      toggleHideLeague(c.dataset.val);
       renderFavLeagues();
     }));
   }
