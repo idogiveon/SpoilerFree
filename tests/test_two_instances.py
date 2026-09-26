@@ -77,7 +77,7 @@ def test_the_page_says_which_one_you_are_looking_at(db, monkeypatch, mails):
     assert c.get("/auth/me").json()["private"] is True
     html = open("index.html", encoding="utf-8").read()
     assert 'id="lab-tag"' in html
-    assert "document.getElementById('lab-tag').hidden = !me.private;" in html
+    assert "document.getElementById('lab-tag').hidden = !(me.embed || me.private);" in html
 
 
 def test_each_switch_has_one_place_that_decides():
@@ -86,3 +86,27 @@ def test_each_switch_has_one_place_that_decides():
     assert 'os.environ.get("ALLOWED_EMAILS", "")' in src
     # היחיד שדלוק כברירת מחדל — והוא זה שהכתובת הציבורית תכבה
     assert 'os.environ.get("EMBED_IN_APP", "1") != "0"' in src
+
+
+# ── ביקורת מוצר (26.9.26) + שאלה מהמשתמש: שתי התקנות במסך הבית ──────
+def test_the_private_install_has_its_own_name(monkeypatch):
+    """הכתובת הפרטית היא origin נפרד, כלומר PWA נפרד — ועד עכשיו בשם
+    ובאייקון זהים לציבורית: שני ריבועים שאי אפשר להבדיל ביניהם."""
+    from fastapi.testclient import TestClient
+    c = TestClient(main.app)
+    monkeypatch.setattr(main, "EMBED_IN_APP", False)
+    monkeypatch.setattr(main, "ALLOWED_EMAILS", set())
+    assert c.get("/manifest.webmanifest").json()["short_name"] == "SpoilerFree"
+    monkeypatch.setattr(main, "EMBED_IN_APP", True)
+    assert c.get("/manifest.webmanifest").json()["short_name"] == "SpoilerFree LAB"
+    monkeypatch.setattr(main, "EMBED_IN_APP", False)
+    monkeypatch.setattr(main, "ALLOWED_EMAILS", {"owner@example.com"})
+    assert c.get("/manifest.webmanifest").json()["name"] == "SpoilerFree LAB"
+
+
+def test_the_lab_tag_follows_what_the_user_feels():
+    """התג נגזר מ-private ("כתובת מוגבלת"), אבל מה שמבדיל את המופע בפועל
+    הוא הנגן המוטמע — והוא נקבע בדגל נפרד ובלתי נראה."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "!(me.embed || me.private)" in html
+    assert '"embed": EMBED_IN_APP' in open("main.py", encoding="utf-8").read()
