@@ -90,8 +90,20 @@ def _cfg(html):
 
 
 def test_login_page_config(auth_on, monkeypatch):
-    assert _cfg(client().get("/").text) == {"code_required": False, "can_send": False}
+    assert _cfg(client().get("/").text) == {"code_required": False, "can_send": False,
+                                            "closed": False}
     monkeypatch.setattr(main, "EMAIL_CODE_REQUIRED", True)
     monkeypatch.setattr(main, "BREVO_API_KEY", "k")
     monkeypatch.setattr(main, "BREVO_SENDER", "s@example.com")
-    assert _cfg(client().get("/").text) == {"code_required": True, "can_send": True}
+    assert _cfg(client().get("/").text) == {"code_required": True, "can_send": True,
+                                            "closed": False}
+
+
+def test_a_closed_instance_does_not_open_on_a_form_that_cannot_succeed(auth_on, monkeypatch):
+    """בכתובת הפרטית ALLOWED_EMAILS מוגדר, ולכן _email_from מחזיר 403 לכל
+    מייל אחר — גם בהרשמה. מסך ההרשמה היה ברירת המחדל דווקא שם: מייל,
+    סיסמה, סיסמה שוב, אישור תנאים — ואז "האתר הזה סגור"."""
+    monkeypatch.setattr(main, "ALLOWED_EMAILS", {"owner@example.com"})
+    page = client().get("/").text
+    assert _cfg(page)["closed"] is True
+    assert "if (CFG.closed) { $('new-user-btn').hidden = true;" in page
