@@ -3337,16 +3337,20 @@ def search_youtube(home: str, away: str, match_date: str,
 
     # 2. API בתשלום — רק כשה-RSS לא יכול להכריע, ורק מתחת לבלם היומי
     if results is None:
-        if free_only:
-            # בדיקת רקע: רק המקור החינמי. ה-RSS לא הכריע → "לא יודעים"
-            # (בדיקות רקע שרפו 9,000 יחידות ביום, 15–16.9.26)
+        # ערוץ עמוס: ה-RSS מחזיק 15 פריטים בלבד. בערוץ של מנהלת הליגות
+        # הם מכסים יומיים-שלושה, ולכן תקציר של מחזור שעבר נמצא מחוץ
+        # לטווח (26.9.26). רשימת ההעלאות כן מגיעה עד שם, והיא עולה
+        # יחידה אחת ל-50 סרטונים — מול 100 של חיפוש. לכן ברקע היא
+        # מותרת, והחיפוש היקר לא.
+        if free_only and not (YOUTUBE_API_KEY
+                              and _yt_units_today() < PREFETCH_UNIT_BUDGET):
             return None
-        if not YOUTUBE_API_KEY:
+        if not free_only and not YOUTUBE_API_KEY:
             # ה-RSS לא הכריע (תקלה / ערוץ עמוס) ואין API — לא יודעים.
             # None = לא נשמר כ"אין תקציר" (החזרת [] "קיבעה" משחקים שלמים
             # כשה-RSS של יוטיוב נפל, 16.9.26)
             return None
-        if _yt_units_today() >= YT_DAILY_BRAKE:
+        if not free_only and _yt_units_today() >= YT_DAILY_BRAKE:
             # None = לא נשמר בקאש כ"לא נמצא" — יחפש שוב אחרי האיפוס היומי
             print(f"[yt] daily brake {YT_DAILY_BRAKE} reached — no API for {channel_id}")
             return None
@@ -3360,6 +3364,10 @@ def search_youtube(home: str, away: str, match_date: str,
                 # הרשימה לא הגיעה עד יום המשחק — אחרת היה נקבע "לא נמצא" בטעות
                 print(f"[yt] uploads cap before {match_date} — falling back to search")
                 uploads = None
+        if uploads is None and free_only:
+            # ברקע עוצרים כאן: החיפוש עולה פי מאה, וזה מה ששרף 9,000
+            # יחידות ביום (15–16.9.26)
+            return None
         if uploads is None:
             # 2ב. גיבוי: search.list (100 יחידות) — הרשימה לא נגישה,
             #     או שהתקרה נגמרה לפני יום המשחק בלי תוצאה
@@ -4948,6 +4956,46 @@ def debug_vodscrape(request: Request, home: str = "מכבי חיפה", away: str
 # Serve frontend (מוגן בסיסמה — מציג דף כניסה אם אין cookie)
 # ── Auth endpoints ─────────────────────────────────────
 
+# ── הגבלת קצב ──────────────────────────────────────────
+# עד כה היה בלם רק על סיסמה שגויה ועל שליחת קוד חוזרת לאותו מייל.
+# ההרשמה עצמה הייתה פתוחה לחלוטין: בוט יכול היה ליצור אלפי חשבונות,
+# למלא את ה-DB ולהציף את הבעלים בהתראות — ובכל בקשת קוד גם לשלוח מייל
+# אמיתי דרך Brevo, כלומר לשרוף מכסה ומוניטין שליחה.
+REGISTER_PER_IP_HOUR = int(os.environ.get("REGISTER_PER_IP_HOUR", "3"))
+REGISTER_PER_HOUR    = int(os.environ.get("REGISTER_PER_HOUR", "60"))
+_rate_hits: dict = {}
+_RATE_LOCK = threading.Lock()
+
+
+def _client_ip(request: Request) -> str:
+    """מאחורי ה-proxy של Render, הכתובת האמיתית ב-X-Forwarded-For."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _rate_limit(key: str, limit: int, window_sec: int = 3600) -> None:
+    now = time.time()
+    with _RATE_LOCK:
+        hits = [t for t in _rate_hits.get(key, []) if now - t < window_sec]
+        if len(hits) >= limit:
+            raise HTTPException(429, "יותר מדי בקשות — נסה שוב בעוד שעה")
+        hits.append(now)
+        _rate_hits[key] = hits
+        if len(_rate_hits) > 5000:      # לא נותנים למילון לגדול לנצח
+            for k in [k for k, v in _rate_hits.items()
+                      if not any(now - t < window_sec for t in v)]:
+                _rate_hits.pop(k, None)
+
+
+def _guard_signup(request: Request) -> None:
+    """גם לפי כתובת וגם סך הכול: האחת עוצרת מי שמנסה שוב ושוב, השנייה
+    היא רשת ביטחון מפני הצפה מכמה כתובות."""
+    _rate_limit(f"signup:{_client_ip(request)}", REGISTER_PER_IP_HOUR)
+    _rate_limit("signup:*", REGISTER_PER_HOUR)
+
+
 def _email_from(payload) -> str:
     email = str(payload.get("email") or "").strip().lower()
     if len(email) > 200 or not EMAIL_RE.match(email):
@@ -4984,7 +5032,7 @@ def _session_response(token: str, body: dict):
 
 
 @app.post("/auth/request_code")
-def auth_request_code(payload: dict = Body(...)):
+def auth_request_code(request: Request, payload: dict = Body(...)):
     """קוד בן 6 ספרות למייל: כניסה ראשונה (הרשמה), שכחתי סיסמה, או כניסה בלי
     סיסמה. בלי אישור מנהל — המשתמש נוצר כשהקוד מאומת."""
     email = _email_from(payload)
@@ -5003,6 +5051,12 @@ def auth_request_code(payload: dict = Body(...)):
                 return {"status": "code_sent"}   # נשלח לפני פחות מדקה — משתמשים בו
         except Exception:
             pass
+    # מכאן והלאה נשלח מייל אמיתי דרך Brevo — כלומר עלות ומוניטין שליחה
+    try:
+        _guard_signup(request)
+    except HTTPException:
+        conn.close()
+        raise
     code = f"{secrets.randbelow(10**6):06d}"
     conn.execute(
         "INSERT OR REPLACE INTO login_codes (email, code_hash, expires_at, attempts, sent_at) "
@@ -5080,7 +5134,7 @@ def auth_contact():
 
 
 @app.post("/auth/register")
-def auth_register(payload: dict = Body(...)):
+def auth_register(request: Request, payload: dict = Body(...)):
     """הרשמה מיידית: מייל + סיסמה, בלי קוד (כל עוד EMAIL_CODE_REQUIRED כבוי).
     מייל רשום עם סיסמה — תפוס. כתובת מנהל — רק עם סיסמת המנהל."""
     if EMAIL_CODE_REQUIRED:
@@ -5106,6 +5160,13 @@ def auth_register(payload: dict = Body(...)):
     if u and u["password_hash"]:
         conn.close()
         raise HTTPException(409, "המייל כבר רשום — היכנס עם הסיסמה")
+    # הבלם נספר רק על חשבון שבאמת נוצר. אילו היה בכניסה לפונקציה, מי
+    # שטועה בסיסמה פעמיים ומתקן היה נחסם לשעה — וזה לא מי שמגנים מפניו.
+    try:
+        _guard_signup(request)
+    except HTTPException:
+        conn.close()
+        raise
     new_user = u is None
     if new_user:
         conn.execute(
@@ -5222,9 +5283,10 @@ def auth_me(request: Request):
     return {"auth_on": AUTH_ON, "email": u.get("email"),
             "is_admin": bool(u.get("is_admin")) or not AUTH_ON,
             "legacy": bool(u.get("legacy")), "onboarded": onboarded,
-            # שתי הכתובות מריצות את אותו קוד ונראות זהות. הסימון הזה הוא
-            # מה שמבדיל ביניהן על המסך.
-            "private": bool(ALLOWED_EMAILS)}
+            # שתי הכתובות מריצות את אותו קוד ונראות זהות. הסימונים האלה
+            # הם מה שמבדיל ביניהן — ומה שמאפשר לענות על "למה זה נפתח
+            # ביוטיוב אצלי?" בלי לנחש איזה משתנה הוגדר איפה.
+            "private": bool(ALLOWED_EMAILS), "embed": EMBED_IN_APP}
 
 
 @app.post("/auth/onboarded")

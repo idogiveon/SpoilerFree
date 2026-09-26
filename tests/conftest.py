@@ -31,6 +31,9 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "APP_PASSWORD", "")
     monkeypatch.setattr(main, "ADMIN_EMAILS", set())
     main._rss_cache.clear()
+    # מוני הגבלת הקצב הם לכל התהליך; בלי איפוס, בדיקה שנרשמת חוסמת
+    # את הבאות אחריה (כולן מגיעות מאותה "כתובת")
+    main._rate_hits.clear()
     # בלי רשת בבדיקות: זיהוי Shorts ומשכים מדף הסרטון (בדיקות ייעודיות מחליפות)
     main._short_cache.clear()
     monkeypatch.setattr(main, "_probe_short", lambda vid: False)
