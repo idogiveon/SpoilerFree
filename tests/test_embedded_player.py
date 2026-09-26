@@ -148,3 +148,29 @@ def test_the_full_cover_does_not_eat_the_highlight():
 
 def test_replay_clears_the_end_cover():
     assert "classList.remove('ending')" in HTML
+
+
+# ── ביקורת מוצר (26.9.26): מבוי סתום אחרי בחירת גרסה ────────────────
+def test_there_is_a_way_back_to_the_source_list():
+    """loadVideo דורס את shield.innerHTML ומסיר picking. אחרי לחיצה על
+    "ספורט 1 — תקציר מלא" לא הייתה שום דרך לנסות מקור אחר חוץ מלסגור
+    את החלון ולפתוח את המשחק מחדש."""
+    assert "function backToSources()" in HTML
+    assert "pickerHTML = `" in HTML and "body.innerHTML = pickerHTML;" in HTML
+    # כל מסך מגן מקבל את הכפתור, כולל סוף הווידאו ומסלול הכשל
+    assert "backBtnHTML()" in HTML
+    assert HTML.count('"other_source":') == 4
+
+
+def test_the_list_of_another_match_is_not_offered_here():
+    """pickerHTML מתאפס בפתיחת משחק — אחרת הכפתור היה מחזיר את המקורות
+    של המשחק הקודם."""
+    open_match = HTML[HTML.index("const body  = document.getElementById('modal-body')"):]
+    assert "pickerHTML = '';" in open_match[:600]
+
+
+def test_going_back_stops_the_player():
+    back = HTML[HTML.index("function backToSources()"):]
+    back = back[:back.index("\n  }")]
+    for call in ("ytPlayer.destroy()", "clearInterval(vidTimer)", "hideVideoBar()"):
+        assert call in back, call

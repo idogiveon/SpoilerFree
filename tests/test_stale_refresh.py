@@ -53,3 +53,36 @@ def test_by_date_flags_stale_matches_only(db):
     res = TestClient(main.app).get(f"/matches/by_date/{il_day}").json()
     flags = {m["id"]: m["needs_refresh"] for m in res["matches"]}
     assert flags["stale"] is True and flags["done"] is False
+
+
+# ── ביקורת מוצר (26.9.26): "רענן" מוצע גם כשהוא לא יכול לעזור ───────
+HTML = open("index.html", encoding="utf-8").read()
+
+
+def test_an_old_matchday_gets_a_button_that_can_actually_load_it():
+    """מחזור 2 באמצע העונה: ההנחיה אמרה "לחץ רענן כדי לטעון", אבל
+    ↻ רענון מושך רק את חלון המחזורים האחרון (max-1..max+3) ולעולם לא
+    יביא אותו. הכפתור כאן מושך בדיוק את המחזור שעל המסך."""
+    assert "function renderEmptyMatchday(league, md)" in HTML
+    assert "renderEmptyMatchday(league, md); return;" in HTML
+    retry = HTML[HTML.index("function retryMatchday(league, md)"):]
+    assert "mdTried.delete(" in retry[:200] and "loadMatchday(league, md)" in retry[:260]
+
+
+def test_the_hint_names_the_button_that_is_on_the_screen():
+    """ההנחיה ציטטה "רענן"; על הכפתור כתוב "↻ רענון"."""
+    import re
+    hints = re.findall(r'"no_matches_hint": "(.*?)"', HTML)
+    assert len(hints) == 4
+    assert all(h.startswith("↻") for h in hints), hints
+
+
+def test_an_empty_refresh_does_not_blame_the_refresh():
+    """גביע בין שלבים / MLS בחורף: "נסה שוב" יחזיר בדיוק אותו דבר,
+    ויבזבז עוד שבע בקשות ל-TheSportsDB."""
+    import re
+    msgs = re.findall(r'"refresh_empty": "(.*?)"', HTML)
+    assert len(msgs) == 4
+    for m in msgs:
+        assert "נסה שוב" not in m and "try again" not in m.lower()
+        assert "inténtalo" not in m and "réessayez" not in m
