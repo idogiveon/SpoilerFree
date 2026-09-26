@@ -346,9 +346,12 @@ LEAGUES = {
             "AC Milan":       "UCKcx1uK38H4AOkmfv4ywlrg",
             # אומתו 18.9.26: הערוצים האלה באמת מעלים תקציר של משחק הליגה
             # האירופית ("HIGHLIGHTS | Europa League 26-27 | J1 | Real
-            # Sociedad 1 - 2 AFC Bournemouth"). ערוצים של דינמו זאגרב,
-            # אולימפיאקוס, פרנצוורוש, ליון, בשיקטאש והפועל ב"ש נבדקו ואין בהם
-            # תקצירים — רק ראיונות ומסיבות עיתונאים, אז הם לא נכנסים
+            # Sociedad 1 - 2 AFC Bournemouth").
+            # מהמשתמש (26.9.26): יובנטוס וליון כן מעלים — הסינון שלי חיפש
+            # "highlights" באנגלית, וליון מעלים בצרפתית עם התוצאה בכותרת
+            # ("Anderlecht - OL : 3 points pour démarrer la campagne
+            # européenne ! (1-2)"). כלומר "אין תקצירים" בערוץ לא נקבע לפי
+            # מילת מפתח באנגלית — צריך לקרוא את הכותרות בשפת המועדון.
             "Anderlecht":     "UCIr5bpTRrkwJprfaG1owIZw",
             "Celta Vigo":     "UCCJLVZYqRb_85b2Flpg04cg",
             "Real Sociedad":  "UCfeqewEKWQ8CXY8OiXoMxxw",
@@ -363,6 +366,8 @@ LEAGUES = {
             # כבר מוגדרים אצלנו בליגה ההולנדית
             "AZ Alkmaar":     "UCTCO3NaW_heI8H6U7f43Now",
             "NEC Nijmegen":   "UCF4UEYKNui8ytU9vC9h58fg",
+            "Juventus":       "UCLzKhsxrExAC6yAdtZ-BOWw",
+            "Lyon":           "UCzHCZXmqIdjqRnpdp0l_T6g",
         },
     },
     "mls": {
@@ -2877,6 +2882,10 @@ TEAM_ALIASES = {
     "Bodø/Glimt": ["glimt"],
     # ליגה אירופית — השם הרשמי בכותרות המועדונים
     "Rennes": ["rennais"],
+    # יובנטוס כותבים את היריבה בקיצור ("Juventus 5-0 NEC | Europa League
+    # Highlights") — בלי זה שתי הקבוצות לא מזוהות, והכותרת נמצאת רק ביום
+    # המשחק עצמו (loose_club)
+    "NEC Nijmegen": ["nec"],
     # צ'מפיונשיפ — הקיצורים של Sky Sports
     "Wolverhampton Wanderers": ["wolves"],
     "Queens Park Rangers": ["qpr"],
@@ -2947,7 +2956,10 @@ def is_match_highlight(title: str, home: str, away: str,
         # football-data: "Manchester United FC" — הכינויים שמורים בלי הסיומת
         # ("man utd"); בלי זה אף כינוי לא חל בפרמייר ליג (דרבי מנצ'סטר 13.9)
         base = re.sub(r"\s+A?FC$", "", team.strip())
-        if any(a in t for a in TEAM_ALIASES.get(team, []) + TEAM_ALIASES.get(base, [])):
+        # גבול מילה: הקיצורים קצרים, ו-"nec" (NEC נימיכן) יושב גם בתוך
+        # "connection". קיצור חייב להופיע בכותרת כמילה שלמה
+        if any(re.search(rf"(?<!\w){re.escape(a)}(?!\w)", t)
+               for a in TEAM_ALIASES.get(team, []) + TEAM_ALIASES.get(base, [])):
             return True
         if len(words) >= 1 and words[-1] not in GENERIC_TEAM_WORDS and words[-1] in t:
             return True
@@ -3487,7 +3499,9 @@ def _allowed(sources: list) -> list:
     return [s for s in sources if not s.get("unofficial")]
 
 
-def get_sources_for_match(row) -> list:
+def get_sources_for_match(row, conn=None) -> list:
+    """conn: חיבור פתוח לשימוש חוזר (הפיד קורא לזה לכל משחק — פתיחת חיבור
+    לכל שורה הייתה מכפילה את עלות הפיד בפרמייר ליג)."""
     league_key = row["league_key"]
     league     = LEAGUES.get(league_key, {})
 
@@ -3516,7 +3530,9 @@ def get_sources_for_match(row) -> list:
         return _allowed(league["sources"])
 
     # Premier League — search by club tier
-    conn = get_db()
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db()
     home_club = conn.execute(
         "SELECT * FROM clubs WHERE fd_team_id=? AND league_key=?",
         (row["home_team_id"], league_key)
@@ -3525,7 +3541,8 @@ def get_sources_for_match(row) -> list:
         "SELECT * FROM clubs WHERE fd_team_id=? AND league_key=?",
         (row["away_team_id"], league_key)
     ).fetchone()
-    conn.close()
+    if own_conn:
+        conn.close()
 
     clubs = []
     for club, team in ((home_club, row["home_team"]), (away_club, row["away_team"])):
@@ -4051,25 +4068,42 @@ def _highlight_states(conn, rows: list) -> dict:
     "אין" חייב להיות באותו תוקף שהחלון נותן לו: "לא נמצא" במשחק טרי
     נבדק שוב אחרי 30 דקות (_not_found_retry). בלי הכלל הזה הפיד הכריז
     "אין עדיין תקציר" על ברייטון–ארסנל (20.9.26 בבוקר), והחלון — שבדק
-    מחדש — הציג מיד שני תקצירים."""
-    by_id = {r["id"]: r for r in rows}
-    ids = list(by_id)
+    מחדש — הציג מיד שני תקצירים.
+
+    שתי הבטחות שהיו נשברות (QA, 26.9.26):
+    1. הקאש משותף לשתי הכתובות, ולכן שורה של מקור לא רשמי נשמרת גם
+       כשהאתר הציבורי לא מגיש אותו — הכרטיס הבטיח "▶ תקציר" והחלון הציג
+       "עדיין לא הועלה". לכן נספרות רק שורות של מקורות שהמופע הזה יגיש.
+    2. "אין עדיין תקציר" נאמר גם כשמקור אחד מתוך שבעה נבדק. זה לא "אין",
+       זה "לא בדקנו" — ואז אין מצב, והכרטיס לא מבטיח דבר."""
+    ids = [r["id"] for r in rows]
     per: dict = {}
     for i in range(0, len(ids), 400):              # SQLite מגביל פרמטרים
         chunk = ids[i:i + 400]
         marks = ",".join("?" * len(chunk))
         for c in conn.execute(
-                f"SELECT match_id, videos_json, found_at FROM highlight_cache "
-                f"WHERE match_id IN ({marks})", chunk).fetchall():
+                f"SELECT match_id, source_id, videos_json, found_at "
+                f"FROM highlight_cache WHERE match_id IN ({marks})",
+                chunk).fetchall():
             per.setdefault(c["match_id"], []).append(c)
 
     now = datetime.now(timezone.utc)
     states = {}
-    for mid, cached in per.items():
+    for row in rows:
+        mid = row["id"]
+        servable = {s["id"] for s in get_sources_for_match(row, conn)
+                    if s.get("channel_id")}
+        servable |= {f"web_{w['name']}" for w in
+                     LEAGUES.get(row["league_key"], {}).get("web_sources", [])}
+        cached = [c for c in per.get(mid, []) if c["source_id"] in servable]
+        if not cached:
+            continue
         if any(c["videos_json"] not in ("[]", "") for c in cached):
             states[mid] = "yes"
             continue
-        retry = _not_found_retry(by_id[mid])
+        if {c["source_id"] for c in cached} != servable:
+            continue        # מקור שלא נבדק בכלל — אולי דווקא הוא ימצא
+        retry = _not_found_retry(row)
 
         def still_valid(c):
             if retry is None:       # לא ייבדק שוב — "אין" נשאר נכון
@@ -4407,6 +4441,19 @@ def _web_link(row, w):
     if cached:
         return json.loads(cached["videos_json"])["url"]
 
+    # לחיפוש ביוטיוב יש גבול תאריך משני הצדדים; לאתרים אין שום דרך לדעת
+    # על איזה מפגש הכתבה מדברת — התנאי היחיד הוא ששתי הקבוצות מופיעות
+    # בטקסט, וזה בדיוק מה שחוזר במפגש השני של אותן קבוצות. לכן מחפשים
+    # רק בחלון שבו הכתבה עדיין על העמוד, ולא אחריו: פתיחת משחק ממחזור 5
+    # בפברואר הייתה מחזירה את הכתבה של מחזור 22, עם התוצאה בכותרת.
+    try:
+        age = (datetime.now(timezone.utc).date()
+               - datetime.fromisoformat(row["date_utc"]).date()).days
+    except (ValueError, TypeError):
+        age = 0
+    if age > HIGHLIGHT_MAX_DAYS:
+        return None
+
     # 1. עמודי האתר עצמו (VOD/ליגה) — קישור ישיר, בלי מנוע חיפוש
     url = None
     if w.get("scrape_pages"):
@@ -4633,7 +4680,12 @@ def clear_cache(request: Request, match_id: str):
     # חברים על אותו משחק) לא מריצות חיפוש חדש בכל פעם
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
     conn = get_db()
-    conn.execute("DELETE FROM highlight_cache WHERE match_id=? AND found_at<?",
+    # רק שורות ריקות: "חפש שוב" אמור להפוך "לא נמצא" לניסיון חדש, לא
+    # למחוק מציאה. המגן ב-_source_highlights נשען על מה ששמור בקאש —
+    # ומחיקה כאן עקפה אותו, כך שחיפוש שנפל על המכסה החזיר "לא הצלחנו
+    # לבדוק" במקום התקציר שהיה על המסך שנייה קודם.
+    conn.execute("DELETE FROM highlight_cache WHERE match_id=? AND found_at<? "
+                 "AND videos_json IN ('[]', '')",
                  (match_id, cutoff))
     conn.commit()
     conn.close()

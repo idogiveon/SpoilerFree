@@ -2,7 +2,9 @@ venv/
 __pycache__/
 *.pyc
 spike_*.py
-.env.DS_Store
+.env
+.env.*
+.DS_Store
 Claude Session Log/
 database.db
 turso_replica.db*

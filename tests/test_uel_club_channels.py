@@ -37,9 +37,13 @@ def test_verified_channels_are_configured():
 
 
 def test_channels_without_highlights_are_not_configured():
-    """נבדקו ידנית ואין בהם תקצירים — רק ראיונות ומסיבות עיתונאים."""
-    for team in ("Dinamo Zagreb", "Olympiacos", "Ferencváros", "Lyon", "Beşiktaş",
-                 "Hapoel Be'er Sheva", "Juventus", "Lech Poznań", "Hoffenheim",
+    """נבדקו ידנית ואין בהם תקצירים — רק ראיונות ומסיבות עיתונאים.
+
+    יובנטוס וליון היו ברשימה הזו עד 26.9.26, בטעות: הסינון חיפש
+    "highlights" באנגלית. ראה tests/test_uel_missing_clubs.py — הרשימה
+    הזו היא "עוד לא נמצא", לא "הוכח שאין"."""
+    for team in ("Dinamo Zagreb", "Olympiacos", "Ferencváros", "Beşiktaş",
+                 "Hapoel Be'er Sheva", "Lech Poznań", "Hoffenheim",
                  "Ararat-Armenia", "Celje", "Jagiellonia Białystok", "Levski Sofia",
                  "Lillestrøm", "OFI Crete", "Omonia Nicosia", "Torreense"):
         assert team not in CC, team
