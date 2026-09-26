@@ -115,7 +115,7 @@ def test_permissions_tracking_and_block(auth_on):
     admin = login(mails, ADMIN)
     assert admin.get("/auth/me").json() == {"auth_on": True, "email": ADMIN, "is_admin": True,
                                             "legacy": False, "onboarded": False,
-                                            "private": False}
+                                            "private": False, "embed": main.EMBED_IN_APP}
     assert admin.get("/app").headers.get("X-SF-App") == "1"
     assert admin.get("/debug/quota").status_code == 200
 
