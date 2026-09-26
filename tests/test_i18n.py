@@ -82,3 +82,52 @@ def test_highlight_messages_have_reason_codes(db):
     c = TestClient(main.app)
     assert c.get("/highlights/future").json()["reason_code"] == "not_over"
     assert c.get("/highlights/stale").json()["reason_code"] == "stale"
+
+
+# ── ביקורת מוצר (26.9.26): מחרוזות גלויות שנשארו מחוץ ל-i18n ─────────
+HTML = open("index.html", encoding="utf-8").read()
+def test_the_first_paint_of_every_visit_is_translated():
+    """`<div class="loading">טוען משחקים</div>` — מה שכל משתמש רואה
+    ראשון, בכל שפה."""
+    assert '<div class="loading" data-i18n="loading_matches">' in HTML
+    assert 'class="loading">טוען' not in HTML
+
+
+def test_the_gear_button_has_a_name_in_every_language():
+    """הכפתור היחיד שמחזיר ממסך הפתיחה — היה עם title בעברית קשיחה
+    ובלי aria-label."""
+    assert 'data-i18n-title="leagues_screen"' in HTML
+    assert "el.setAttribute('aria-label', el.title)" in HTML
+
+
+def test_the_delete_error_does_not_leak_a_hebrew_detail():
+    """שאר האפליקציה שולחת detail לקונסול ומציגה טקסט מתורגם."""
+    assert "j.detail || t('delete_failed')" not in HTML
+    assert "console.debug('delete_account:', j.detail)" in HTML
+
+
+def test_the_youtube_legend_is_not_shown_when_there_is_no_arrow():
+    """↗ נוסף לכפתור רק כשהטמעה חסומה. במופע הפרטי אין ↗ בכלל, והמקרא
+    הסביר סמל שאינו על המסך."""
+    assert "anyExternal ? `<div class=\"shield-note\">" in HTML
+    assert "t('opened_on_youtube')" in HTML       # מסלול הכשל: הודעה, לא מקרא
+
+
+def test_the_same_key_does_not_promise_different_things():
+    """no_source_hint בעברית היה TODO של המתחזק ("צריך למצוא את הערוץ
+    הרשמי"), ו-no_matches_day_hint נתן הנחיה רק בעברית."""
+    assert "צריך למצוא את הערוץ הרשמי" not in HTML
+    hints = re.findall(r'"no_matches_day_hint": "(.*?)"', HTML)
+    assert len(hints) == 4
+    assert all("—" in h for h in hints), hints
+
+
+def test_the_pwa_description_follows_the_user_language():
+    """מחרוזת גלויה שנמצאה מחוץ ל-i18n: ההתקנה הציגה תיאור בעברית לכל
+    מי שהתקין."""
+    from fastapi.testclient import TestClient
+    c = TestClient(main.app)
+    assert c.get("/manifest.webmanifest?lang=fr").json()["lang"] == "fr"
+    assert c.get("/manifest.webmanifest").json()["dir"] == "rtl"
+    assert set(main.MANIFEST_I18N) == {"he", "en", "es", "fr"}
+    assert "manifest.webmanifest?lang=" in HTML
