@@ -19,10 +19,14 @@ def _css(selector):
     return HTML[i:HTML.index("}", i)]
 
 
+MASK_TOP = ".video-container.shielded.chrome-risk::after"
+MASK_CORNER = ".video-container.shielded.chrome-risk::before"
+
+
 def test_the_title_and_the_suggestions_are_both_covered():
-    top = _css(".video-container.shielded::after")
+    top = _css(MASK_TOP)
     assert "top:0" in top and "background:#000" in top
-    corner = _css(".video-container.shielded::before")
+    corner = _css(MASK_CORNER)
     assert "bottom:0" in corner and "background:#000" in corner
     # right פיזי, לא inset-inline-end: הפקדים של יוטיוב תמיד בימין,
     # וב-RTL המסכה עברה שמאלה והשאירה את ההצעות חשופות (22.9.26)
@@ -31,8 +35,15 @@ def test_the_title_and_the_suggestions_are_both_covered():
 
 def test_the_masks_are_not_tied_to_hovering():
     """השהיה דרך הכפתור שלנו מציגה את הכותרת בלי מגע עכבר."""
-    for sel in (".video-container.shielded::after", ".video-container.shielded::before"):
+    for sel in (MASK_TOP, MASK_CORNER):
         assert ":hover" not in _css(sel)
+    # הן תלויות במצב הנגן, לא באינטראקציה: כל מצב שאינו "מתנגן" מכסה
+    assert "function coverChrome()" in HTML
+    assert "if (e.data !== YT.PlayerState.PLAYING) coverChrome();" in HTML
+    # והשהיה שלנו מכסה לפני הקריאה, כדי שלא תהיה הבלחה
+    block = HTML[HTML.index("document.getElementById('vid-play').onclick"):]
+    block = block[:block.index("};")]
+    assert block.index("coverChrome()") < block.index("pauseVideo()")
 
 
 def test_the_frame_never_receives_the_pointer():
@@ -110,7 +121,9 @@ def test_expanding_keeps_the_masks_on_the_picture():
     assert "min(100vw" in theatre and "* 16 / 9)" in theatre
     assert "function toggleTheatre()" in HTML
     # החלון מוסר את ה-transform שלו, אחרת fixed נמדד יחסית אליו
-    assert ".modal-overlay.theatre-on .modal { transform:none; }" in HTML
+    assert ".modal-overlay.theatre-on .modal { transform:none;" in HTML
+    # בלי רקע נפרד ב-body: הוא היה בשכבה מעל החלון והסתיר את הווידאו
+    assert "theatre-backdrop" not in HTML
 
 
 def test_leaving_the_video_leaves_the_expanded_view():
