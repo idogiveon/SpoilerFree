@@ -4347,6 +4347,14 @@ def _highlight_window(league_key: str) -> timedelta:
     return timedelta(hours=_SLOW_LEAGUES.get(league_key, HIGHLIGHT_WINDOW_HOURS))
 
 
+def _has_extended(videos_json: str) -> bool:
+    try:
+        vids = json.loads(videos_json)
+    except (ValueError, TypeError):
+        return False
+    return isinstance(vids, list) and any(v.get("extended") for v in vids)
+
+
 def _not_found_retry(row):
     """אחרי כמה זמן לחפש שוב כש"לא נמצא" — לפי גיל המשחק. גם משחק ישן נבדק
     שוב פעם בשבוע: תקלה זמנית (RSS נפל) לא "מקבעת" משחק בלי תקציר."""
@@ -4410,8 +4418,12 @@ def _source_highlights(row, source, free_only: bool = False) -> dict:
                 cache_age_ok = False
         elif not any(v.get("extended") for v in videos):
             # נמצא רק תקציר קצר — המלא עולה לרוב יום-יומיים אחרי.
-            # מרעננים לכל היותר פעם ב-12 שעות, עד 3 ימים מהמציאה.
-            if age is not None and timedelta(hours=12) < age < timedelta(days=3):
+            # מרעננים לכל היותר פעם ב-12 שעות, כל עוד התקציר עוד יכול
+            # לעלות (HIGHLIGHT_MAX_DAYS — אותו גבול כמו בכל מקום אחר).
+            # שלושה ימים היו קצרים מדי: הבונדסליגה מעלה תקציר של דקה
+            # בערב המשחק ואת המלא (4 דקות) יום-יומיים אחרי, ומי שפתח את
+            # המשחק בשבוע שאחרי קיבל לנצח את הקצר (מהמשתמש, 26.9.26)
+            if age is not None and timedelta(hours=12) < age < timedelta(days=HIGHLIGHT_MAX_DAYS):
                 cache_age_ok = False
         if cache_age_ok:
             return {**base, "videos": videos, "status": "cached"}
@@ -4550,6 +4562,7 @@ def prefetch_highlights_once() -> int:
     rows = conn.execute("SELECT * FROM matches WHERE date_utc >= ?", (since,)).fetchall()
     # (משחק, מקור) → האם נמצא משהו
     have = {(r["match_id"], r["source_id"]): (r["videos_json"] not in ("[]", ""),
+                                             _has_extended(r["videos_json"]),
                                              r["found_at"])
             for r in conn.execute("SELECT match_id, source_id, videos_json, found_at "
                                   "FROM highlight_cache").fetchall()}
@@ -4561,7 +4574,7 @@ def prefetch_highlights_once() -> int:
     # שנבדק מקבל קאש טרי ויוצא מהתור; אבל כשהתוקף פג לכולם יחד (שבת
     # עמוסה, 17 ליגות), הראשונים בטבלה תפסו את כל המקומות שוב ושוב.
     last_checked = {}
-    for (mid, _sid), (_found, at) in have.items():
+    for (mid, _sid), (_found, _ext, at) in have.items():
         if at and at > last_checked.get(mid, ""):
             last_checked[mid] = at
     rows = sorted(rows, key=lambda r: last_checked.get(r["id"], ""))
@@ -4571,17 +4584,37 @@ def prefetch_highlights_once() -> int:
         if done >= PREFETCH_MAX_MATCHES:
             break
         window = _highlight_window(row["league_key"])
-        if not likely_over(row) or kickoff_passed(row, hours=window.total_seconds() / 3600):
+        # מחוץ לחלון הרקע לא מחפש תקציר חדש — אבל כן חוזר למשחק שיש בו
+        # רק תקציר קצר. בבונדסליגה המלא עולה יומיים אחרי, כלומר בדיוק
+        # על הגבול של החלון (48 שעות)
+        past_window = kickoff_passed(row, hours=window.total_seconds() / 3600)
+        if not likely_over(row):
             continue
         recheck = row["league_key"] in TIMING_LEAGUES
+
+        def wants_full_version(source):
+            key = (row["id"], source["id"])
+            if key not in have:
+                return False
+            found, has_ext, at = have[key]
+            if not found or has_ext:
+                return False
+            try:
+                age = datetime.now(timezone.utc) - datetime.fromisoformat(at)
+            except (ValueError, TypeError):
+                return False
+            return timedelta(hours=12) < age < timedelta(days=HIGHLIGHT_MAX_DAYS)
 
         def needs_check(source):
             key = (row["id"], source["id"])
             if key not in have:
                 return True
-            found, at = have[key]
+            found, _has_ext, at = have[key]
             if found:
-                return False
+                # נמצא רק תקציר קצר: המלא עולה יום-יומיים אחרי, וברקע
+                # אף פעם לא חזרנו לבדוק. החלון זהה לזה שבפתיחה של משתמש —
+                # ההבדל היחיד היה מי מפעיל אותו
+                return wants_full_version(source)
             if recheck:        # מדידת "מי מעלה ראשון" — בכל סבב
                 return True
             # "לא נמצא" שפג תוקפו. בלי זה, מקור שהוחזר ריק פעם אחת לא
@@ -4597,14 +4630,17 @@ def prefetch_highlights_once() -> int:
 
         todo = [s for s in get_sources_for_match(row)
                 if s.get("channel_id") and needs_check(s)]
+        if past_window:
+            todo = [s for s in todo if wants_full_version(s)]
         # סיבוב מוקדם בגביע מביא עשרות משחקי חובבים. בדיקה בתשלום עליהם
         # הייתה בולעת את תקציב הרקע שהליגות צריכות — ברקע הם חינם בלבד
         # (משחק שמשתמש פותח בפועל עדיין נבדק במלוא המקורות).
         is_cup = LEAGUES.get(row["league_key"], {}).get("cup")
         paid_ok = _yt_units_today() < PREFETCH_UNIT_BUDGET and not is_cup
         # אתרים (ספורט 1/5): בלי מכסה — נבדקים בכל סבב עד שנמצא קישור
-        webs = [w for w in LEAGUES.get(row["league_key"], {}).get("web_sources", [])
-                if (row["id"], f"web_{w['name']}") not in have]
+        webs = [] if past_window else [
+            w for w in LEAGUES.get(row["league_key"], {}).get("web_sources", [])
+            if (row["id"], f"web_{w['name']}") not in have]
         if not todo and not webs:
             continue
         for s in todo:
