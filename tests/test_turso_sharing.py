@@ -203,3 +203,24 @@ def test_the_failure_reason_is_recorded(turso):
     assert "stream closed" in st["last_error"]
     assert st["last_error"].startswith("RuntimeError")
     assert st["last_error_at"] and st["last_error_thread"]
+
+
+def test_startup_does_not_look_like_a_failure(db):
+    """בעלייה מתווספות שבע עמודות שכבר קיימות. כשזה נעשה דרך שגיאה
+    צפויה, כל אחת מהן זרקה את החיבור המשותף ונספרה ככשל — ושלושה
+    כאלה מכבים את השיתוף. נמדד בפרודקשן: duplicate column name:
+    home_score (26.9.26)."""
+    src = open("main.py", encoding="utf-8").read()
+    assert "PRAGMA table_info" in src
+    assert "ALTER TABLE matches ADD COLUMN" not in src   # לא עוד ניחוש
+    # הרצה שנייה על אותו DB לא מוסיפה כלום ולא זורקת
+    main._add_missing_columns(db, "matches", ("home_score INTEGER",))
+    main._add_missing_columns(db, "matches", ("home_score INTEGER",))
+    cols = {r["name"] for r in db.execute("PRAGMA table_info(matches)").fetchall()}
+    assert "home_score" in cols
+
+
+def test_a_missing_column_is_still_added(db):
+    main._add_missing_columns(db, "matches", ("brand_new_col TEXT",))
+    cols = {r["name"] for r in db.execute("PRAGMA table_info(matches)").fetchall()}
+    assert "brand_new_col" in cols
