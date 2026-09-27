@@ -58,3 +58,47 @@ def test_and_a_failed_search_afterwards_does_not_lose_it(db, monkeypatch):
     assert "GOOD" in [v["video_id"] for s in out["sources"] for v in s["videos"]]
     data = c.get("/matches/israel").json()
     assert next(m["highlight"] for m in data["matches"] if m["id"] == "s2") == "yes"
+
+
+# ── T1: הכפתור חייב להיות מסוגל גם לשחרר תקציר קצר שנתקע ─────────────
+SHORT = [{"video_id": "SHORT1", "label": "תקציר", "extended": False}]
+FULL = [{"video_id": "SHORT1", "label": "תקציר קצר", "extended": False},
+        {"video_id": "LONG1", "label": "תקציר מלא", "extended": True}]
+
+
+def _sport1(out):
+    return [v["video_id"] for s in out["sources"]
+            if s["source_id"] == "sport1" for v in s["videos"]]
+
+
+def test_search_again_can_free_a_stuck_short_highlight(db, monkeypatch):
+    """מאז שהכפתור מפסיק למחוק תקציר שנמצא, לא הייתה שום דרך לשחרר
+    תקציר קצר שנתקע — למשל כשרק הוא היה ב-RSS בזמן הבדיקה, והשורה
+    התיישנה מעבר לחלון. הבונדסליגה מעלה 18 סרטונים בערב אחד ו-RSS
+    מחזיק 15, אז זה קורה בכל מחזור."""
+    _match(db, "t1", hours_ago=24 * 9)          # מעבר לכל חלון
+    _cache(db, "t1", "sport1", SHORT, minutes_ago=60 * 24 * 9)
+    c = TestClient(main.app)
+    monkeypatch.setattr(main, "search_youtube", lambda **kw: FULL)
+
+    assert _sport1(c.get("/highlights/t1?client=2").json()) == ["SHORT1"]
+
+    c.delete("/cache/t1")                        # מה שהכפתור עושה
+    assert "LONG1" in _sport1(c.get("/highlights/t1?client=2&force=1").json())
+
+
+def test_a_forced_search_that_fails_does_not_lose_what_was_there(db, monkeypatch):
+    """זה מה שה-QA תפס ב-#83, ומה שהתיקון הזה לא מבטל."""
+    _match(db, "t2", hours_ago=24 * 9)
+    _cache(db, "t2", "sport1", SHORT, minutes_ago=60 * 24 * 9)
+    c = TestClient(main.app)
+    c.delete("/cache/t2")
+    monkeypatch.setattr(main, "search_youtube", lambda **kw: None)     # מכסה/תקלה
+    assert _sport1(c.get("/highlights/t2?client=2&force=1").json()) == ["SHORT1"]
+
+
+def test_the_button_asks_for_it(db):
+    html = open("index.html", encoding="utf-8").read()
+    assert "force ? '&force=1' : ''" in html
+    retry = html[html.index("async function retryHighlights(matchId)"):]
+    assert "true, false, true);" in retry[:600]
