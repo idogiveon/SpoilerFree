@@ -4379,7 +4379,8 @@ def _mark_first_seen(conn, match_id, source_id, seen, published=None):
                  (match_id, source_id, seen, published))
 
 
-def _source_highlights(row, source, free_only: bool = False) -> dict:
+def _source_highlights(row, source, free_only: bool = False,
+                       force: bool = False) -> dict:
     """תקציר ממקור אחד למשחק: מהקאש, או חיפוש ושמירה בקאש.
     משותף ל-/highlights ולחיפוש-מראש ברקע."""
     match_id    = row["id"]
@@ -4416,6 +4417,12 @@ def _source_highlights(row, source, free_only: bool = False) -> dict:
             retry_after = _not_found_retry(row)
             if retry_after is not None and (age is None or age > retry_after):
                 cache_age_ok = False
+        elif force:
+            # "חפש שוב" של המשתמש. מאז שהכפתור מפסיק למחוק תקציר שנמצא
+            # (#83), לא הייתה לו שום דרך לשחרר תקציר קצר שנתקע — למשל
+            # כשרק הוא היה ב-RSS בזמן הבדיקה. חיפוש שייכשל לא מוחק כלום
+            # (had_videos), ולכן אין כאן מה להפסיד
+            cache_age_ok = False
         elif not any(v.get("extended") for v in videos):
             # נמצא רק תקציר קצר — המלא עולה לרוב יום-יומיים אחרי.
             # מרעננים לכל היותר פעם ב-12 שעות, כל עוד התקציר עוד יכול
@@ -4449,8 +4456,10 @@ def _source_highlights(row, source, free_only: bool = False) -> dict:
         free_only=free_only,
     )
     if videos is None:
-        # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך
-        return {**base, "videos": [], "status": "api_error"}
+        # שגיאת API / בלם יומי — לא שומרים בקאש, ינוסה שוב בהמשך.
+        # had_videos: תקציר שכבר נמצא לא נעלם מהמסך בגלל תקלה רגעית,
+        # גם כשהמשתמש עצמו ביקש לחפש שוב
+        return {**base, "videos": had_videos, "status": "api_error"}
 
     # בדיקה חוזרת שלא מצאה כלום לא מוחקת את מה שכבר נמצא. הבדיקה הזו
     # מחפשת גרסה מורחבת, או מוודאת "לא נמצא" — ואין סיבה שתעלים תקציר
@@ -4680,7 +4689,8 @@ CLIENT_EMBED_VERSION = 2
 
 
 @app.get("/highlights/{match_id}")
-def get_highlights(request: Request, match_id: str, lang: str = "he", client: int = 1):
+def get_highlights(request: Request, match_id: str, lang: str = "he", client: int = 1,
+                   force: bool = False):
     require_auth(request)
     conn = get_db()
     row  = conn.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
@@ -4720,7 +4730,9 @@ def get_highlights(request: Request, match_id: str, lang: str = "he", client: in
                     "sources": []}
 
     sources = get_sources_for_match(row)
-    results = [_source_highlights(row, source) for source in sources]
+    # force: "חפש שוב" — המשתמש ביקש במפורש, ולכן גם שורה שנמצא בה
+    # תקציר נבדקת שוב (בלי למחוק אותה אם החיפוש ייכשל)
+    results = [_source_highlights(row, source, force=force) for source in sources]
     if client < CLIENT_EMBED_VERSION:
         for r in results:
             r["allow_embed"] = False
