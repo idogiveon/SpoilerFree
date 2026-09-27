@@ -98,7 +98,7 @@ def test_the_first_request_is_repeated_once_we_know_the_preference():
     """`loadDay()` יצא לפני `loadScorePref()`, כלומר בלי scores=1. אחר כך
     הכפתור התעדכן ל"הסתר תוצאות" — ועל המסך לא היו תוצאות, כי rerender
     צובע מחדש את אותם נתונים. רק לחיצה שנייה הביאה אותן."""
-    boot = HTML[HTML.index("loadUserBar().then(loadFavorites).then(loadScorePref)"):]
+    boot = HTML[HTML.index("favsReady = loadUserBar().then(loadFavorites)"):]
     boot = boot[:boot.index("maybeOnboard")]
     assert "if (showScores) return" in boot
     assert "loadDay()" in boot and "openLeague(currentLeague)" in boot

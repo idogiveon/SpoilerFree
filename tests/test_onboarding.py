@@ -74,3 +74,39 @@ def test_popular_teams_in_curated_order_then_filled(db):
 def test_onboarding_wired_in_app():
     html = open("index.html", encoding="utf-8").read()
     assert ".then(maybeOnboard)" in html and "FAV_LEAGUES.has(m.league_key)" in html
+
+
+# ── ביקורת מוצר (26.9.26): שלושת הפתוחים במסך הפתיחה ─────────────────
+PAGE = open("index.html", encoding="utf-8").read()
+
+
+def test_the_hint_points_at_something_that_exists_after_the_screen_closes():
+    """ההבטחה הייתה "ב-⚙ שליד הליגות" — אבל שורת הטאבים מגיעה סגורה
+    ונשארת סגורה ב"לפי יום", כלומר ברגע שהמסך נסגר אין ⚙ על המסך."""
+    import re
+    hints = re.findall(r'"ob_hint1": "(.*?)"', PAGE)
+    assert len(hints) == 4
+    assert all("⚙" not in h and "☰" in h for h in hints), hints
+
+
+def test_skip_says_what_it_actually_does():
+    """המשפט מעל הכפתור אומר "רק הן יוצגו", ו"דלג" נתן 17 ליגות."""
+    import re
+    skips = re.findall(r'"ob_skip": "(.*?)"', PAGE)
+    assert len(skips) == 4
+    assert all(len(s) > len("דלג") for s in skips), skips
+
+
+def test_continue_with_nothing_picked_is_not_a_silent_skip():
+    assert "const syncNext = sel => { next.disabled = !sel.size; };" in PAGE
+    assert ".ob-next:disabled" in PAGE
+
+
+def test_the_feed_is_not_painted_before_the_hidden_leagues_are_known():
+    """loadDay() התחיל לפני ש-loadFavorites חזר, ולכן הפיד נצבע עם כל
+    17 הליגות ורק אחר כך הצטמצם."""
+    assert "favsReady = loadUserBar().then(loadFavorites);" in PAGE
+    assert "if (favsReady) { try { await favsReady; } catch (e) {} }" in PAGE
+    # הבקשה עצמה עדיין יוצאת במקביל — רק הצביעה מחכה
+    boot = PAGE[PAGE.index("favsReady = loadUserBar()"):]
+    assert boot.index("enterDayView();") < boot.index("loadScorePref")
