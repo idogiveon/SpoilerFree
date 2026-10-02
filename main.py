@@ -4617,8 +4617,11 @@ PREFETCH_UNIT_BUDGET = 1500
 
 
 def prefetch_highlights_once() -> int:
-    widest = max([_highlight_window(k) for k in LEAGUES] or [timedelta(hours=48)])
-    since = (datetime.now(timezone.utc) - widest).strftime("%Y-%m-%d")
+    # הגבול הוא "עד מתי תקציר עוד יכול להופיע", לא החלון של הליגה
+    # האיטית ביותר: ליגות sportsdb מגיעות מהדפדפן (TheSportsDB חסום
+    # מ-Render), ומחזור שלם יכול להיכנס ל-DB שבוע אחרי ששוחק
+    since = (datetime.now(timezone.utc)
+             - timedelta(days=HIGHLIGHT_MAX_DAYS)).strftime("%Y-%m-%d")
     conn = get_db()
     rows = conn.execute("SELECT * FROM matches WHERE date_utc >= ?", (since,)).fetchall()
     # (משחק, מקור) → האם נמצא משהו
@@ -4645,11 +4648,17 @@ def prefetch_highlights_once() -> int:
         if done >= PREFETCH_MAX_MATCHES:
             break
         window = _highlight_window(row["league_key"])
-        # מחוץ לחלון הרקע לא מחפש תקציר חדש — אבל כן חוזר למשחק שיש בו
-        # רק תקציר קצר. בבונדסליגה המלא עולה יומיים אחרי, כלומר בדיוק
-        # על הגבול של החלון (48 שעות)
+        # מחוץ לחלון הליגה הרקע ממשיך לחזור — אבל רק כל עוד תקציר עוד
+        # יכול להופיע. הקצב עצמו נקבע ב-needs_check (_not_found_retry:
+        # כל 30 דק' בתוך החלון, כל 6 שעות אחריו).
+        #
+        # קודם היה כאן דילוג מוחלט, וזה הותיר ליגה שלמה בלי כלום:
+        # ליל–ריאל בטיס מה-8.9 נכנס ל-DB רק ב-19.9 (ליגות sportsdb
+        # מגיעות מהדפדפן), כלומר נולד מחוץ לחלון — ולא נבדק מעולם.
+        # 18 משחקי צ'מפיונס, אפס שורות קאש, אפילו לא ריקות.
         past_window = kickoff_passed(row, hours=window.total_seconds() / 3600)
-        if not likely_over(row):
+        too_old = kickoff_passed(row, hours=24 * HIGHLIGHT_MAX_DAYS)
+        if not likely_over(row) or (past_window and too_old):
             continue
         recheck = row["league_key"] in TIMING_LEAGUES
 
@@ -4691,8 +4700,6 @@ def prefetch_highlights_once() -> int:
 
         todo = [s for s in get_sources_for_match(row)
                 if s.get("channel_id") and needs_check(s)]
-        if past_window:
-            todo = [s for s in todo if wants_full_version(s)]
         # סיבוב מוקדם בגביע מביא עשרות משחקי חובבים. בדיקה בתשלום עליהם
         # הייתה בולעת את תקציב הרקע שהליגות צריכות — ברקע הם חינם בלבד
         # (משחק שמשתמש פותח בפועל עדיין נבדק במלוא המקורות).

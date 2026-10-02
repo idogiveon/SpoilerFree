@@ -61,9 +61,12 @@ def test_uploads_cap_before_match_day_falls_back_to_search(monkeypatch, db):
 
 
 def test_prefetch_searches_recent_finished_matches_once(db, monkeypatch):
+    """הגבול הוא HIGHLIGHT_MAX_DAYS, לא החלון של הליגה: משחק שנכנס
+    ל-DB אחרי שהחלון נסגר (ליגות sportsdb מגיעות מהדפדפן) חייב להיבדק
+    בכל זאת — אחרת ליגה שלמה נשארת בלי שורת קאש אחת."""
     now = datetime.now(timezone.utc)
     _row(db, "recent", now - timedelta(hours=10))                      # כן
-    _row(db, "old", now - timedelta(days=3))                           # ישן מדי
+    _row(db, "old", now - timedelta(days=9))                           # ישן מדי
     _row(db, "future", now + timedelta(hours=5), status="SCHEDULED")   # עוד לא שוחק
     searched = []
 
