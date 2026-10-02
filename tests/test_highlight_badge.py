@@ -181,3 +181,25 @@ def test_one_source_out_of_many_is_not_an_answer(db):
     assert _state("b11", league="israel") is None
     _all_empty(db, "b11", minutes_ago=5)
     assert _state("b11", league="israel") == "none"
+
+
+def test_a_match_without_any_cache_costs_nothing_to_decide(db):
+    """ביקורת דאטה (2.10.26): servable חושב לכל שורה בפיד — שתי
+    שאילתות ל-clubs לכל משחק פרמייר — עוד לפני שנבדק אם יש בכלל שורת
+    קאש להסיק ממנה. בפרודקשן זה הרוב המוחלט של הפיד."""
+    class Counting:
+        def __init__(self, c): self._c, self.n = c, 0
+        def execute(self, *a, **k):
+            self.n += 1
+            return self._c.execute(*a, **k)
+        def __getattr__(self, k): return getattr(self._c, k)
+
+    for i in range(30):
+        db.execute("INSERT INTO matches (id, league_key, home_team, away_team, "
+                   "date_utc, time_utc, status) VALUES (?, 'premier', 'Arsenal FC', "
+                   "'Chelsea FC', '2026-09-20', '18:00:00', 'FINISHED')", (f"p{i}",))
+    db.commit()
+    rows = db.execute("SELECT * FROM matches WHERE league_key='premier'").fetchall()
+    c = Counting(db)
+    assert main._highlight_states(c, rows) == {}
+    assert c.n == 1, f"שאילתה אחת לקאש, ולא עוד שתיים לכל שורה ({c.n})"
