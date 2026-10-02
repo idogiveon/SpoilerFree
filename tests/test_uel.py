@@ -42,3 +42,37 @@ def test_no_israeli_web_source_yet():
     """ספורט 5 כנראה לא משדרים את הליגה האירופית — המקור הישראלי ייקבע
     אחרי מחזור 1, כשיהיה ברור איפה התקצירים עולים."""
     assert not main.LEAGUES["uel"].get("web_sources")
+
+
+# ── M2 (2.10.26): המשחקים שאין להם מקור, ומה המסך אומר עליהם ────────
+def test_a_match_with_no_club_channel_says_so_about_the_match(db):
+    """בליגה האירופית 64 מתוך 72 המשחקים מכוסים דרך ערוץ של אחת
+    הקבוצות. בשמונה הנותרים לשתיהן אין ערוץ — ושם המסך אמר "מקור
+    תקצירים לליגה זו עדיין לא הוגדר · בקרוב". שתי אמירות לא נכונות:
+    לליגה יש מקורות, ו"בקרוב" הוא הבטחה שלא תתקיים (בדקתי את שלושת
+    המשחקים ששוחקו — אין להם תקציר באף ערוץ רשמי)."""
+    from fastapi.testclient import TestClient
+    db.execute("INSERT INTO matches (id, league_key, home_team, away_team, date_utc, "
+               "time_utc, status) VALUES ('m2a', 'uel', 'OFI', 'Hoffenheim', "
+               "'2026-09-17', '19:00:00', 'FINISHED')")
+    db.commit()
+    out = TestClient(main.app).get("/highlights/m2a?client=2").json()
+    assert out["sources"] == []
+    assert out["no_source_scope"] == "match"
+
+
+def test_a_covered_match_does_not_get_that_message(db):
+    from fastapi.testclient import TestClient
+    db.execute("INSERT INTO matches (id, league_key, home_team, away_team, date_utc, "
+               "time_utc, status) VALUES ('m2b', 'uel', 'OFI', 'AC Milan', "
+               "'2026-09-17', '19:00:00', 'FINISHED')")
+    db.commit()
+    out = TestClient(main.app).get("/highlights/m2b?client=2").json()
+    assert out["no_source_scope"] is None
+
+
+def test_the_client_tells_the_two_apart():
+    html = open("index.html", encoding="utf-8").read()
+    assert "data.no_source_scope === 'match'" in html
+    for key in ('"no_source_match":', '"no_source_match_hint":'):
+        assert html.count(key) == 4, key

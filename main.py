@@ -4911,6 +4911,12 @@ def get_highlights(request: Request, match_id: str, lang: str = "he", client: in
         "match":     f"{row['home_team']} vs {row['away_team']}",
         "sources":   results,
         "web_links": web_links,
+        # ליגה שהמקורות שלה הם ערוצי מועדונים: אין מקור *למשחק הזה*,
+        # כי לאף אחת משתי הקבוצות אין ערוץ. זה לא "הליגה עוד לא
+        # הוגדרה", ובמדידה (2.10.26) זה 8 מתוך 72 משחקי הליגה
+        # האירופית — ולשלושת אלה שכבר שוחקו אין תקציר באף ערוץ רשמי
+        "no_source_scope": ("match" if (not sources and league.get("club_channels"))
+                            else None),
     }
 
 

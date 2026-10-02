@@ -463,7 +463,7 @@
   "diag_past": "אחרונים", "diag_next": "הבאים", "diag_rounds": "מחזורים",
   "vs": "נגד", "searching": "מחפש תקצירים", "updating_results": "מעדכן תוצאות",
   "web_note": "🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד",
-  "no_source": "🎬 מקור תקצירים לליגה זו עדיין לא הוגדר", "no_source_hint": "בקרוב",
+  "no_source": "🎬 מקור תקצירים לליגה זו עדיין לא הוגדר", "no_source_hint": "בקרוב", "no_source_match": "🎬 אין לנו מקור לתקציר של המשחק הזה", "no_source_match_hint": "לאף אחת משתי הקבוצות אין ערוץ שמעלה תקצירים",
   "not_uploaded": "התקציר עדיין לא הועלה ליוטיוב", "try_again": "↻ נסה שוב",
   "cant_check": "לא ניתן לבדוק כרגע — נסה שוב בעוד כמה דקות",
   "choose_version": "בחר גרסה לצפייה", "opens_youtube": "↗ = נפתח ביוטיוב",
@@ -520,7 +520,7 @@
   "diag_past": "recent", "diag_next": "upcoming", "diag_rounds": "rounds",
   "vs": "vs", "searching": "Looking for highlights", "updating_results": "Updating results",
   "web_note": "🔗 Website links — open the first result; the page title may contain spoilers",
-  "no_source": "🎬 No highlights source for this league yet", "no_source_hint": "Coming soon",
+  "no_source": "🎬 No highlights source for this league yet", "no_source_hint": "Coming soon", "no_source_match": "🎬 No highlights source for this match", "no_source_match_hint": "Neither club has a channel that posts highlights",
   "not_uploaded": "The highlights aren't on YouTube yet", "try_again": "↻ Try again",
   "cant_check": "Can't check right now — try again in a few minutes",
   "choose_version": "Choose a version to watch", "opens_youtube": "↗ = opens on YouTube",
@@ -577,7 +577,7 @@
   "diag_past": "recientes", "diag_next": "próximos", "diag_rounds": "jornadas",
   "vs": "vs", "searching": "Buscando resúmenes", "updating_results": "Actualizando resultados",
   "web_note": "🔗 Enlaces web — abren el primer resultado; el título de la página puede contener spoilers",
-  "no_source": "🎬 Todavía no hay fuente de resúmenes para esta liga", "no_source_hint": "Próximamente",
+  "no_source": "🎬 Todavía no hay fuente de resúmenes para esta liga", "no_source_hint": "Próximamente", "no_source_match": "🎬 No tenemos fuente para este partido", "no_source_match_hint": "Ninguno de los dos clubes tiene un canal con resúmenes",
   "not_uploaded": "El resumen aún no está en YouTube", "try_again": "↻ Reintentar",
   "cant_check": "No se puede comprobar ahora — inténtalo en unos minutos",
   "choose_version": "Elige una versión", "opens_youtube": "↗ = se abre en YouTube",
@@ -634,7 +634,7 @@
   "diag_past": "récents", "diag_next": "à venir", "diag_rounds": "journées",
   "vs": "contre", "searching": "Recherche des résumés", "updating_results": "Mise à jour des résultats",
   "web_note": "🔗 Liens web — ouvrent le premier résultat ; le titre de la page peut contenir des spoilers",
-  "no_source": "🎬 Pas encore de source de résumés pour cette ligue", "no_source_hint": "Bientôt",
+  "no_source": "🎬 Pas encore de source de résumés pour cette ligue", "no_source_hint": "Bientôt", "no_source_match": "🎬 Pas de source pour ce match", "no_source_match_hint": "Aucun des deux clubs n’a de chaîne qui publie des résumés",
   "not_uploaded": "Le résumé n'est pas encore sur YouTube", "try_again": "↻ Réessayer",
   "cant_check": "Impossible de vérifier pour l'instant — réessayez dans quelques minutes",
   "choose_version": "Choisissez une version", "opens_youtube": "↗ = s'ouvre sur YouTube",
@@ -1835,10 +1835,15 @@
           : '';
 
         if (!hasChannel && !webBtns.length) {
+          // "לליגה אין מקור" מול "לשתי הקבוצות האלה אין ערוץ" — בליגה
+          // האירופית 64 מתוך 72 המשחקים כן מכוסים, ו"בקרוב" שם הוא
+          // הבטחה שלא תתקיים
+          const perMatch = data.no_source_scope === 'match';
           body.innerHTML = `
             <div class="no-highlight-msg">
-              ${t('no_source')}
-              <br><small style="opacity:0.5">${t('no_source_hint')}</small>
+              ${t(perMatch ? 'no_source_match' : 'no_source')}
+              <br><small style="opacity:0.5">${
+                t(perMatch ? 'no_source_match_hint' : 'no_source_hint')}</small>
             </div>`;
           return;
         }
