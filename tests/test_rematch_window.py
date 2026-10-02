@@ -47,7 +47,9 @@ def test_only_the_meeting_being_watched_comes_back(monkeypatch):
 
 
 def test_the_limit_is_stated_once(monkeypatch):
-    assert main.HIGHLIGHT_MAX_DAYS == 7
+    """שישה ולא שבעה: שבעה הם בדיוק המרחק בין שני מפגשים בנוק-אאוט
+    של אופ"א, והגבול מכיל."""
+    assert main.HIGHLIGHT_MAX_DAYS == 6
 
 
 # ── קישור אתר: לחיפוש ביוטיוב יש גבול עליון, ל-find_web_highlight לא היה ──
@@ -82,3 +84,25 @@ def test_a_fresh_match_still_gets_its_website_link(db, monkeypatch):
     ])
     w = main.LEAGUES["israel"]["web_sources"][0]
     assert main._web_link(row, w) == "https://sport1.maariv.co.il/video/9999"
+
+
+# ── ביקורת דאטה (2.10.26): שני מפגשים במרחק שבעה ימים בדיוק ─────────
+def test_the_second_leg_is_not_offered_for_the_first(monkeypatch):
+    """בנוק-אאוט של אופ"א רבע הגמר הוא שלישי ושלישי — בדיוק שבעה ימים.
+    גבול מכיל של שבעה החזיר את תקציר הגומלין, עם התוצאה בכותרת, כתקציר
+    של משחק ההלוך שהמשתמש עוד לא ראה."""
+    leg1, leg2 = "2026-04-07", "2026-04-14"
+    assert (datetime.fromisoformat(leg2) - datetime.fromisoformat(leg1)).days == 7
+    assert not main._within_days(leg2, leg1, main.HIGHLIGHT_MAX_DAYS)
+    feed = [("ret", "Arsenal 2-1 Real Madrid | Highlights | UEFA Champions League",
+             f"{leg2}T22:00:00+00:00")]
+    monkeypatch.setattr(main, "_rss_feed", lambda cid: feed)
+    monkeypatch.setattr(main, "_video_durations", lambda ids: {})
+    assert main.search_youtube("Real Madrid", "Arsenal", leg1, "UC123") == []
+
+
+def test_but_a_channel_that_is_three_days_late_still_counts():
+    """שחטאר מעלים אחרי שלושה ימים, והמקסימום שנמדד בכל הליגות הוא
+    2.7 ימים — הקיצור ל-6 לא מפסיד אף דגימה שראינו."""
+    assert main._within_days("2026-04-10", "2026-04-07", main.HIGHLIGHT_MAX_DAYS)
+    assert main.HIGHLIGHT_MAX_DAYS >= 3

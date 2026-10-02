@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
-from test_auth import ADMIN, FRIEND, client
+from test_auth import ADMIN, FRIEND, auth_on, client, login  # noqa: F401
 
 
 def _row(db):
@@ -131,3 +131,25 @@ def test_the_app_itself_is_still_served(monkeypatch):
     assert r.headers["X-SF-App"] == "1"
     assert r.headers["Cache-Control"] == "no-store"
     assert "<title>SpoilerFree" in r.text and 'id="matches-container"' in r.text
+
+
+# ── ביקורת דאטה (2.10.26) ───────────────────────────────────────────
+def test_only_an_admin_can_wipe_finished_history(db, auth_on, monkeypatch):
+    """hard=true עוקף את שלושת התנאים ששומרים על ההיסטוריה ומוחק עונה
+    שלמה. ל-sportsdb אין שחזור מצד השרת, ועד היום כל משתמש מחובר יכול
+    היה לשלוח את זה."""
+    db.execute("INSERT INTO matches (id, league_key, home_team, away_team, date_utc, "
+               "time_utc, status) VALUES ('keep', 'ucl', 'A', 'B', '2026-09-08', "
+               "'19:00:00', 'FINISHED')")
+    db.commit()
+    friend = login(auth_on, FRIEND)
+    body = {"events": [], "purge": True, "hard": True}
+    assert friend.post("/refresh/ucl", json=body).status_code == 403
+    assert db.execute("SELECT COUNT(*) AS n FROM matches WHERE id='keep'").fetchone()["n"] == 1
+    admin = login(auth_on, ADMIN)
+    assert admin.post("/refresh/ucl", json=body).status_code == 200
+
+
+def test_a_plain_refresh_is_still_open_to_everyone(db, auth_on):
+    c = login(auth_on, FRIEND)
+    assert c.post("/refresh/ucl", json={"events": []}).status_code == 200

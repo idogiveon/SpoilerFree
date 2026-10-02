@@ -102,3 +102,28 @@ def test_the_button_asks_for_it(db):
     assert "force ? '&force=1' : ''" in html
     retry = html[html.index("async function retryHighlights(matchId)"):]
     assert "true, false, true);" in retry[:600]
+
+
+def test_pressing_it_again_immediately_does_not_search_again(db, monkeypatch):
+    """זו הפעולה היחידה שאפשר לחזור עליה בלי הגבלה, ובתקרה היא 660
+    יחידות ללחיצה. 15 הדקות הן אותו קירור שכבר קיים ב-clear_cache."""
+    _match(db, "cool", hours_ago=30)
+    _cache(db, "cool", "sport1", SHORT, minutes_ago=1)
+    calls = []
+    monkeypatch.setattr(main, "search_youtube", lambda **kw: calls.append(1) or FULL)
+    row = db.execute("SELECT * FROM matches WHERE id='cool'").fetchone()
+    src = next(s for s in main.get_sources_for_match(row) if s["id"] == "sport1")
+    main._source_highlights(row, src, force=True)
+    assert calls == []                       # שורה בת דקה — לא מחפשים שוב
+    _cache(db, "cool", "sport1", SHORT, minutes_ago=30)
+    main._source_highlights(row, src, force=True)
+    assert len(calls) == 1                   # אחרי הקירור — כן
+
+
+def test_the_letter_fold_matches_a_name_spelled_in_english():
+    """ø ו-ł שורדים את NFD. "Bodo/Glimt" ו-"Bodø/Glimt" היו שני מפתחות
+    שונים, והערוץ לא היה נמצא — בשקט."""
+    for a, b in [("Bodø/Glimt", "Bodo/Glimt"),
+                 ("Jagiellonia Białystok", "Jagiellonia Bialystok"),
+                 ("Lillestrøm", "Lillestrom")]:
+        assert main.team_key(a) == main.team_key(b), a

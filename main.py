@@ -2670,8 +2670,15 @@ TEAM_KEY_ALIASES = {
 }
 
 
+# אותיות שאינן סימן משולב, ולכן NFD לא מפרק אותן: "Bodø" ו-"Bodo" היו
+# שני מפתחות שונים, וההתאמה לערוץ הייתה נכשלת בשקט ברגע שמישהו מאיית
+# באנגלית (ביקורת דאטה, 2.10.26 — שלושת השמות כבר ב-DB)
+_LETTER_FOLD = str.maketrans({"ø": "o", "ł": "l", "đ": "d", "ð": "d",
+                              "æ": "ae", "þ": "th", "ß": "ss", "ı": "i"})
+
+
 def team_key(name: str) -> str:
-    s = unicodedata.normalize("NFD", (name or "").lower())
+    s = unicodedata.normalize("NFD", (name or "").lower()).translate(_LETTER_FOLD)
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = re.sub(r"[^\w\s]", " ", s)                    # פיסוק, &, /, '
     s = re.sub(r"\b(fc|afc|cf|sc)\b", " ", s)           # סיומות מועדון
@@ -3324,9 +3331,15 @@ def _uploads_since(channel_id: str, match_date: str):
 
 # כמה ימים אחרי המשחק תקציר עוד יכול לעלות. הגבול הזה הוא שמבדיל בין
 # ניוקאסל–האל של מחזור 5 לניוקאסל–האל של מחזור 24: אותן קבוצות, אותה
-# כותרת, והדבר היחיד שמפריד הוא מתי הסרטון עלה. שבעה ימים מכסים גם
-# ערוצים שמאחרים (שחטאר העלו אחרי שלושה ימים).
-HIGHLIGHT_MAX_DAYS = 7
+# כותרת, והדבר היחיד שמפריד הוא מתי הסרטון עלה.
+#
+# שישה ולא שבעה (ביקורת דאטה, 2.10.26): בנוק-אאוט של אופ"א שני המפגשים
+# מרוחקים *בדיוק* שבעה ימים (שלישי ושלישי), והגבול היה מכיל — כלומר
+# תקציר הגומלין, עם התוצאה בכותרת, התקבל כתקציר של משחק ההלוך שהמשתמש
+# עוד לא ראה. זה הספוילר שהמוצר קיים כדי למנוע.
+# שישה ימים לא מפסידים כלום: המדידה ב-#97 מראה שהמקסימום שנצפה בכל
+# הליגות הוא 64.8 שעות (2.7 ימים), וגם שחטאר המאחרים הם שלושה.
+HIGHLIGHT_MAX_DAYS = 6
 
 
 def search_youtube(home: str, away: str, match_date: str,
@@ -4348,9 +4361,16 @@ def refresh_from_client(request: Request, league_key: str,
     conn = get_db()
     # purge סלקטיבי: רק משחקים עתידיים — היסטוריה שהסתיימה ושורות
     # הלוח הידני שורדות רענון. לאיפוס מלא (עונה חדשה): "hard": true.
+    # hard עוקף את שלושת התנאים ששומרים על ההיסטוריה (סטטוס שהסתיים,
+    # שורות manual-, ומשחק שכבר נפתח) ומוחק עונה שלמה. ל-sportsdb אין
+    # שחזור מצד השרת — TheSportsDB חסום מ-Render — ולכן זו פעולה של
+    # מנהל בלבד. הלקוח לא שולח אותה בכלל (ביקורת דאטה, 2.10.26)
+    hard = bool(payload.get("hard"))
+    if hard:
+        require_admin(request)
     stored = _store_sportsdb_events(conn, league_key, events,
                                     purge=bool(payload.get("purge")),
-                                    hard=bool(payload.get("hard")))
+                                    hard=hard)
     conn.commit()
     conn.close()
 
@@ -4469,11 +4489,14 @@ def _source_highlights(row, source, free_only: bool = False,
             retry_after = _not_found_retry(row)
             if retry_after is not None and (age is None or age > retry_after):
                 cache_age_ok = False
-        elif force:
+        elif force and (age is None or age > timedelta(minutes=15)):
             # "חפש שוב" של המשתמש. מאז שהכפתור מפסיק למחוק תקציר שנמצא
             # (#83), לא הייתה לו שום דרך לשחרר תקציר קצר שנתקע — למשל
             # כשרק הוא היה ב-RSS בזמן הבדיקה. חיפוש שייכשל לא מוחק כלום
-            # (had_videos), ולכן אין כאן מה להפסיד
+            # (had_videos), ולכן אין כאן מה להפסיד.
+            # 15 הדקות הן אותו קירור שכבר קיים ב-clear_cache: בלעדיהן
+            # זו הפעולה היחידה במערכת שאפשר לחזור עליה בלי שום הגבלה,
+            # ובתקרה היא 660 יחידות ללחיצה (ביקורת דאטה, 2.10.26)
             cache_age_ok = False
         elif not any(v.get("extended") for v in videos):
             # נמצא רק תקציר קצר — המלא עולה לרוב יום-יומיים אחרי.
@@ -4643,7 +4666,7 @@ def prefetch_highlights_once() -> int:
             last_checked[mid] = at
     rows = sorted(rows, key=lambda r: last_checked.get(r["id"], ""))
 
-    done = 0
+    done = tried = 0
     for row in rows:
         if done >= PREFETCH_MAX_MATCHES:
             break
@@ -4711,14 +4734,27 @@ def prefetch_highlights_once() -> int:
             if (row["id"], f"web_{w['name']}") not in have]
         if not todo and not webs:
             continue
+        got = []
         for s in todo:
             # בדיקה חוזרת (מעקב "מי מעלה ראשון") — תמיד חינם בלבד;
             # בדיקה ראשונה למקור — בתשלום רק בתוך תקציב הרקע
             first_time = (row["id"], s["id"]) not in have
-            _source_highlights(row, s, free_only=not (first_time and paid_ok))
+            got.append(_source_highlights(row, s,
+                                          free_only=not (first_time and paid_ok)))
         for w in webs:
             _web_link(row, w)
-        done += 1
+        tried += 1
+        # done סופר התקדמות, לא נגיעה. מקור שהחזיר api_error לא כותב
+        # שורת קאש (וזה נכון — תקלה אינה "אין תקציר"), ולכן המיון, שמעלה
+        # משחקים בלי קאש, מחזיר אותו לראש התור בסבב הבא. כשהוא גם סופר
+        # כ"נבדק", 20 המקומות נבלעים והליגות שמאחוריו לא נבדקות לעולם:
+        # בגביע האנגלי is_cup → free_only תמיד → כישלון של רשימת
+        # ההעלאות מחזיר None, ו-51 משחקים כאלה נופלים בחלון אחד
+        if webs or any(g.get("status") != "api_error" for g in got):
+            done += 1
+        # ובכל זאת תקרה לסבב: בלי זה סבב אחד היה מנסה את כל הבריכה
+        if tried >= PREFETCH_MAX_MATCHES * 3:
+            break
     print(f"[prefetch] searched {done} match(es)")
     return done
 
