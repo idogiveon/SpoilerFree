@@ -36,7 +36,10 @@ def test_the_settings_button_stays_reachable():
 def test_favourites_come_first_and_cups_come_after_a_divider():
     fn = HTML[HTML.index("function orderLeagueTabs()"):]
     fn = fn[:fn.index("\n  }")]
-    assert "FAV_LEAGUES.has(t.dataset.league)" in fn
+    assert "leagueRank(t.dataset.league)" in fn
+    # מועדפת קודמת לכל סדר אחר — הכלל עצמו עבר ל-leagueRank
+    rank = HTML[HTML.index("function leagueRank(key)"):]
+    assert "FAV_LEAGUES.has(key)) return -1" in rank[:200]
     assert "isCup(t.dataset.league)" in fn
     assert "cup-sep" in fn
 

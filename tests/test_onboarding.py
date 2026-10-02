@@ -73,7 +73,8 @@ def test_popular_teams_in_curated_order_then_filled(db):
 
 def test_onboarding_wired_in_app():
     html = open("index.html", encoding="utf-8").read()
-    assert ".then(maybeOnboard)" in html and "FAV_LEAGUES.has(m.league_key)" in html
+    assert ".then(maybeOnboard)" in html
+    assert "seen.sort((a, b) => leagueRank(a) - leagueRank(b))" in html
 
 
 # ── ביקורת מוצר (26.9.26): שלושת הפתוחים במסך הפתיחה ─────────────────
