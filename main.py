@@ -2882,12 +2882,47 @@ def scrape_sport1_vod(home_he: str, away_he: str):
                               base="https://sport1.maariv.co.il")
 
 
+# המכסה החינמית של Google CSE היא 100 שאילתות ליום, והיא הייתה המקור
+# היחיד בתשלום בלי מונה ובלי בלם (ביקורת דאטה, 2.10.26). 80 ולא 100 —
+# מקום לפתיחות של משתמשים אחרי שהרקע סיים את שלו.
+CSE_DAILY_BUDGET = 80
+
+
+def _cse_today() -> int:
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT value FROM meta WHERE key=?",
+                           (f"cse_calls:{day}",)).fetchone()
+        conn.close()
+        return int(row["value"]) if row else 0
+    except Exception:
+        return 0
+
+
+def _cse_used(n: int = 1):
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        conn = get_db()
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + ?",
+                     (f"cse_calls:{day}", str(n), n))
+        conn.commit()
+        conn.close()
+    except Exception as ex:
+        print(f"[weblink/cse] counter: {ex}")
+
+
 def resolve_web_link(query: str, domain: str):
     """מחלץ URL ישיר לכתבה הראשונה מהדומיין המבוקש — רק דרך Google Custom
     Search (כשמוגדר מפתח). DuckDuckGo הוסר: חסום (גם מ-Render), ועמוד
     התוצאות שלו כלל ספוילרים בכותרות."""
     # מסלול 1: Google CSE
     if GOOGLE_SEARCH_KEY and GOOGLE_CSE_ID:
+        if _cse_today() >= CSE_DAILY_BUDGET:
+            print(f"[weblink/cse] daily budget reached ({CSE_DAILY_BUDGET})")
+            return None
+        _cse_used()
         try:
             r = requests.get(
                 "https://www.googleapis.com/customsearch/v1",
@@ -4570,12 +4605,26 @@ def _web_link(row, w):
     cache_key = f"web_{w['name']}"
     conn = get_db()
     cached = conn.execute(
-        "SELECT videos_json FROM highlight_cache WHERE match_id=? AND source_id=?",
-        (match_id, cache_key)
+        "SELECT videos_json, found_at FROM highlight_cache "
+        "WHERE match_id=? AND source_id=?", (match_id, cache_key)
     ).fetchone()
     conn.close()
     if cached:
-        return json.loads(cached["videos_json"])["url"]
+        try:
+            data = json.loads(cached["videos_json"])
+        except (ValueError, TypeError):
+            data = None
+        if isinstance(data, dict) and data.get("url"):
+            return data["url"]
+        # "נבדק ולא נמצא" — נשמר כ-[] בדיוק כמו ביוטיוב, כדי שהחיווי
+        # בפיד לא יספור אותו כתקציר שנמצא, ונבדק שוב לפי אותו כלל
+        retry = _not_found_retry(row)
+        try:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(cached["found_at"])
+        except (ValueError, TypeError):
+            age = None
+        if age is not None and age <= retry:
+            return None
 
     # לחיפוש ביוטיוב יש גבול תאריך משני הצדדים; לאתרים אין שום דרך לדעת
     # על איזה מפגש הכתבה מדברת — התנאי היחיד הוא ששתי הקבוצות מופיעות
@@ -4602,18 +4651,21 @@ def _web_link(row, w):
         wq = w["query"].format(home=to_hebrew_team(row["home_team"]),
                                away=to_hebrew_team(row["away_team"]))
         url = resolve_web_link(wq, w["domain"])
+    # גם כישלון נשמר. קודם לא — ולכן הרשימה ב-prefetch ("מקורות web בלי
+    # שורת קאש") לא התכנסה לעולם: אותו משחק נבדק מחדש בכל סבב, כל חצי
+    # שעה, במשך כל החלון. לוואלה אין scrape_pages בכלל, כלומר כל סבב
+    # כזה הוא שאילתת CSE — מול מכסה חינמית של 100 ליום
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute("""
+        INSERT OR REPLACE INTO highlight_cache
+        (match_id, source_id, videos_json, found_at)
+        VALUES (?,?,?,?)
+    """, (match_id, cache_key, json.dumps({"url": url}) if url else "[]", now))
     if url:
-        # קאש רק לקישור ישיר — כישלון ינוסה שוב בפתיחה הבאה
-        now = datetime.now(timezone.utc).isoformat()
-        conn = get_db()
-        conn.execute("""
-            INSERT OR REPLACE INTO highlight_cache
-            (match_id, source_id, videos_json, found_at)
-            VALUES (?,?,?,?)
-        """, (match_id, cache_key, json.dumps({"url": url}), now))
         _mark_first_seen(conn, match_id, cache_key, now)
-        conn.commit()
-        conn.close()
+    conn.commit()
+    conn.close()
     return url
 
 
@@ -4729,9 +4781,10 @@ def prefetch_highlights_once() -> int:
         is_cup = LEAGUES.get(row["league_key"], {}).get("cup")
         paid_ok = _yt_units_today() < PREFETCH_UNIT_BUDGET and not is_cup
         # אתרים (ספורט 1/5): בלי מכסה — נבדקים בכל סבב עד שנמצא קישור
-        webs = [] if past_window else [
-            w for w in LEAGUES.get(row["league_key"], {}).get("web_sources", [])
-            if (row["id"], f"web_{w['name']}") not in have]
+        # _web_link עצמו מחליט אם הגיע הזמן לנסות שוב (אותו כלל של
+        # _not_found_retry); כאן רק לא מציפים אותו כשהחלון נסגר
+        webs = [] if past_window else LEAGUES.get(row["league_key"], {}).get(
+            "web_sources", [])
         if not todo and not webs:
             continue
         got = []

@@ -140,3 +140,62 @@ def test_direct_link_shown_and_cached(monkeypatch, db):
                       "url": "https://sport1.maariv.co.il/israeli-soccer/ligat-haal/video/1943700/"}]
     _pages(monkeypatch, {})                                   # האתר "נעלם" — מהקאש
     assert c.get("/highlights/i2").json()["web_links"] == links
+
+
+# ── ביקורת דאטה (2.10.26): המקור היחיד בתשלום בלי מונה ובלי בלם ─────
+def _il_match(db, mid="cse1", hours_ago=20):
+    kick = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    db.execute("INSERT INTO matches (id, league_key, home_team, away_team, date_utc, "
+               "time_utc, status) VALUES (?, 'israel', 'Maccabi Haifa', "
+               "'Hapoel Petah Tikva', ?, ?, 'FINISHED')",
+               (mid, kick.strftime("%Y-%m-%d"), kick.strftime("%H:%M:%S")))
+    db.commit()
+    return db.execute("SELECT * FROM matches WHERE id=?", (mid,)).fetchone()
+
+
+def test_a_failed_lookup_is_remembered(db, monkeypatch):
+    """קודם כישלון לא נשמר, ולכן הרשימה ב-prefetch ("מקורות web בלי
+    שורת קאש") לא התכנסה לעולם: אותו משחק נבדק מחדש בכל סבב, כל חצי
+    שעה, במשך כל החלון. לוואלה אין scrape_pages — כל סבב כזה הוא
+    שאילתת CSE, מול מכסה חינמית של 100 ליום."""
+    row = _il_match(db)
+    w = main.LEAGUES["israel"]["web_sources"][0]
+    calls = []
+    monkeypatch.setattr(main, "_site_anchors", lambda url: calls.append(1) or [])
+    monkeypatch.setattr(main, "resolve_web_link", lambda q, d: calls.append(1) or None)
+    assert main._web_link(row, w) is None
+    n = len(calls)
+    assert n > 0
+    assert main._web_link(row, w) is None
+    assert len(calls) == n, "נבדק שוב מיד אחרי כישלון"
+
+
+def test_the_failure_is_not_counted_as_a_highlight(db, monkeypatch):
+    """אם הכישלון נשמר כ-{"url": null}, הפיד היה סופר אותו כ"יש תקציר"
+    — כי הבדיקה היא על מחרוזת לא ריקה. נשמר כ-[] בדיוק כמו ביוטיוב."""
+    row = _il_match(db, "cse2")
+    monkeypatch.setattr(main, "_site_anchors", lambda url: [])
+    monkeypatch.setattr(main, "resolve_web_link", lambda q, d: None)
+    main._web_link(row, main.LEAGUES["israel"]["web_sources"][0])
+    saved = db.execute("SELECT videos_json FROM highlight_cache WHERE match_id='cse2'"
+                       ).fetchone()["videos_json"]
+    assert saved == "[]"
+
+
+def test_the_daily_budget_stops_the_queries(db, monkeypatch):
+    monkeypatch.setattr(main, "GOOGLE_SEARCH_KEY", "k")
+    monkeypatch.setattr(main, "GOOGLE_CSE_ID", "cx")
+    hits = []
+    monkeypatch.setattr(main.requests, "get",
+                        lambda *a, **k: hits.append(1) or _Resp({"items": []}))
+    for _ in range(3):
+        main.resolve_web_link("q", "sport5.co.il")
+    assert len(hits) == 3 and main._cse_today() == 3
+    monkeypatch.setattr(main, "CSE_DAILY_BUDGET", 3)
+    assert main.resolve_web_link("q", "sport5.co.il") is None
+    assert len(hits) == 3, "המשיך לשאול מעל התקציב"
+
+
+class _Resp:
+    def __init__(self, data): self._d = data
+    def json(self): return self._d
