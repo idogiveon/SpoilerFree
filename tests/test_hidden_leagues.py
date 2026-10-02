@@ -54,9 +54,11 @@ HTML = open("index.html", encoding="utf-8").read()
 def test_the_day_view_says_how_many_leagues_are_hidden():
     """הטאב יורד ב-display:none והמונה סופר רק את הנראים — מי שבחר שלוש
     ליגות במסך הפתיחה ותוהה חודש אחרי "איפה הבונדסליגה" לא קיבל רמז."""
-    assert "function hiddenNoteHTML(matches)" in HTML
-    assert "container.innerHTML = html + hiddenNoteHTML(matches)" in HTML
-    assert 'class="hidden-note" onclick="openLeaguePicker()"' in HTML
+    assert "function showHiddenNote(matches)" in HTML
+    # בשורת הסטטוס שבראש הפיד: בתחתית הוא ישב 11 מסכים מתחת לקיפול
+    status = HTML[HTML.index('<div class="status-bar">'):]
+    assert 'id="hidden-note"' in status[:400]
+    assert "el.onclick = openLeaguePicker;" in HTML
 
 
 def test_it_is_written_in_four_languages_and_counts_one_properly():

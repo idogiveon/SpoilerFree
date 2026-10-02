@@ -99,7 +99,10 @@ def test_skip_says_what_it_actually_does():
 
 
 def test_continue_with_nothing_picked_is_not_a_silent_skip():
-    assert "const syncNext = sel => { next.disabled = !sel.size; };" in PAGE
+    assert "next.disabled = !sel.size" in PAGE
+    # וגם אומר למה: כפתור מושבת לא יורה אירוע, כלומר אפס משוב בטלפון
+    assert "need.hidden = !!sel.size" in PAGE
+    assert PAGE.count('"ob_pick_one":') == 4
     assert ".ob-next:disabled" in PAGE
 
 
