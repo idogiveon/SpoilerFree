@@ -21,10 +21,26 @@ from html import unescape as _unescape, escape as _html_escape
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
-app = FastAPI()
+class Utf8JSONResponse(JSONResponse):
+    """application/json בלי charset: בפתיחה ישירה של כתובת בדפדפן (לא
+    דרך fetch) ספארי מפרש את הגוף כ-Latin-1, והעברית הופכת לג'יבריש —
+    "× ×\"×¨×©×ª" במקום "נדרשת התחברות". נתפס בצילום מסך, 2.10.26."""
+    media_type = "application/json; charset=utf-8"
+
+
+app = FastAPI(default_response_class=Utf8JSONResponse)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _json_error(request: Request, exc: StarletteHTTPException):
+    # שגיאות לא עוברות ב-default_response_class, והן דווקא אלה שמישהו
+    # פותח ישירות בדפדפן
+    return Utf8JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                            headers=getattr(exc, "headers", None))
 
 app.add_middleware(
     CORSMiddleware,
