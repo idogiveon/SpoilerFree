@@ -4204,11 +4204,17 @@ def _highlight_states(conn, rows: list) -> dict:
     states = {}
     for row in rows:
         mid = row["id"]
+        # משחק בלי שום שורת קאש לא יכול להגיע לשום מצב, ולכן אין טעם
+        # לברר מה המקורות שלו. בפרמייר ליג זה הרוב המוחלט של הפיד, וכל
+        # בירור כזה הוא שתי שאילתות ל-clubs (ביקורת דאטה, 2.10.26:
+        # 761 שאילתות לפיד של 380 שורות)
+        if not per.get(mid):
+            continue
         servable = {s["id"] for s in get_sources_for_match(row, conn)
                     if s.get("channel_id")}
         servable |= {f"web_{w['name']}" for w in
                      LEAGUES.get(row["league_key"], {}).get("web_sources", [])}
-        cached = [c for c in per.get(mid, []) if c["source_id"] in servable]
+        cached = [c for c in per[mid] if c["source_id"] in servable]
         if not cached:
             continue
         if any(c["videos_json"] not in ("[]", "") for c in cached):
