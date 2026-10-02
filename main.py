@@ -6138,3 +6138,83 @@ def pwa_icon(name: str):
 
 # ── Init ───────────────────────────────────────────────
 init_db()
+
+
+# ── מדידה: כמה זמן אחרי המשחק עולה התקציר ──────────────────────────
+def _timing_samples(rows) -> dict:
+    """ליגה → דגימות של (שעות מהפתיחה עד שהסרטון עלה), לפי published
+    של הסרטונים השמורים.
+
+    לא לפי found_at: הוא אומר מתי *אנחנו* בדקנו, כלומר מודד את קצב
+    הסריקה שלנו ולא את הערוץ. published הוא מה שהערוץ באמת עשה.
+    """
+    per: dict = {}
+    for r in rows:
+        try:
+            kick = datetime.fromisoformat(f"{r['date_utc']}T{r['time_utc']}+00:00")
+            vids = json.loads(r["videos_json"])
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(vids, list):
+            continue
+        for v in vids:
+            pub = (v or {}).get("published")
+            if not pub:
+                continue                      # שורות ישנות, לפני שנשמר published
+            try:
+                when = datetime.fromisoformat(str(pub).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            hours = (when - kick).total_seconds() / 3600
+            # מחוץ לטווח ההגיוני: סרטון של מפגש אחר שנתפס בטעות
+            if not -2 <= hours <= 24 * HIGHLIGHT_MAX_DAYS:
+                continue
+            d = per.setdefault(r["league_key"], {"full": [], "short": [], "days": set()})
+            d["full" if v.get("extended") else "short"].append(round(hours, 1))
+            d["days"].add(r["date_utc"])
+    return per
+
+
+def _pct(values: list, p: float):
+    if not values:
+        return None
+    s = sorted(values)
+    return s[min(len(s) - 1, int(round((len(s) - 1) * p)))]
+
+
+@app.get("/debug/timing")
+def debug_timing(request: Request, days: int = 30):
+    """המקור לחלונות (_highlight_window), במקום מספרים שנקבעו בעין.
+
+    מציג לכל ליגה כמה דגימות יש ומכמה ימי משחקים — הפסקת נבחרות של
+    עשרה ימים הופכת "שלושה שבועות" לחצי מזה, וזה חייב להיראות.
+    """
+    require_admin(request)
+    since = (_now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT m.league_key, m.date_utc, m.time_utc, c.videos_json "
+        "FROM matches m JOIN highlight_cache c ON c.match_id = m.id "
+        "WHERE m.date_utc >= ? AND c.videos_json NOT IN ('[]', '')", (since,)
+    ).fetchall()
+    played = conn.execute(
+        "SELECT league_key, COUNT(*) AS n FROM matches "
+        "WHERE date_utc >= ? AND status='FINISHED' GROUP BY league_key", (since,)
+    ).fetchall()
+    conn.close()
+
+    per = _timing_samples(rows)
+    out = {}
+    for lk, d in sorted(per.items()):
+        entry = {"window_now_h": _highlight_window(lk).total_seconds() / 3600,
+                 "match_days": len(d["days"]),
+                 "from": min(d["days"]), "to": max(d["days"])}
+        for kind in ("short", "full"):
+            vals = d[kind]
+            entry[kind] = {"n": len(vals), "p50": _pct(vals, 0.5),
+                           "p90": _pct(vals, 0.9), "max": max(vals) if vals else None}
+        out[lk] = entry
+    return {"since": since,
+            "finished_matches": {r["league_key"]: r["n"] for r in played},
+            "note": "שעות מפתיחת המשחק עד שהסרטון עלה (published), לא עד שמצאנו",
+            "leagues": out}
