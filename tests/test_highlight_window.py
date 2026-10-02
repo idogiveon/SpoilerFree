@@ -1,7 +1,9 @@
 """כמה זמן ממשיכים לחפש תקציר — לפי ליגה.
 
-באירופה זה כמעט חוזה: משחק בשבת, תקציר עד אותו לילה. בישראל זה לוקח
-יותר (המשתמש, 20.9.26), ולכן חלון של 48 שעות היה מוותר שם מוקדם מדי.
+עד 2.10.26 היו כאן שני מספרים שנקבעו בעין: 48 שעות, ו-120 לישראל.
+מאז הם נמדדו (/debug/timing, 30 יום, לפי published של הסרטון) —
+והתברר ששלוש ליגות חורגות מ-48, כי הגרסה המלאה עולה יום-יומיים אחרי
+הקצרה. הטבלה למטה היא המדידה עצמה: חלון שיירד מתחתיה ייפול כאן.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -18,13 +20,38 @@ def _row(db, mid, league, hours_ago):
     return db.execute("SELECT * FROM matches WHERE id=?", (mid,)).fetchone()
 
 
+# המקסימום שנמדד בפועל, בשעות מהפתיחה (n = דגימות, d = ימי משחקים).
+# התקופה כוללת הפסקת נבחרות, ולכן מה שנראה כחודש הוא 2–11 ימי משחקים.
+MEASURED_MAX = {
+    "israel": 64.8, "bundesliga": 51.5, "uel": 45.0, "premier": 44.5,
+    "seriea": 43.0, "laliga": 39.3, "eredivisie": 38.7, "ligue1": 30.8,
+    "championship": 13.4, "argentina": 4.6, "mls": 3.4,
+}
+
+
 def test_israel_gets_longer_than_europe():
     assert main._highlight_window("israel") > main._highlight_window("premier")
-    assert main._highlight_window("premier") == timedelta(hours=48)
+    assert main._highlight_window("premier") == timedelta(hours=72)
 
 
-def test_an_unknown_league_gets_the_european_window():
-    assert main._highlight_window("whatever") == timedelta(hours=48)
+def test_an_unknown_league_gets_the_default_window():
+    assert main._highlight_window("whatever") == timedelta(hours=72)
+
+
+def test_every_window_covers_what_was_actually_measured():
+    """זו הבדיקה שמחזיקה את T2: חלון שמקצר מתחת למה שנמדד מוותר על
+    תקציר שראינו בעיניים שכן מגיע."""
+    for league, observed in MEASURED_MAX.items():
+        assert main._highlight_window(league) >= timedelta(hours=observed), league
+
+
+def test_the_fast_leagues_are_not_searched_for_three_days():
+    """MLS וארגנטינה: 85 דגימות על פני 21 ימי משחקים, והכול בתוך 5
+    שעות. חלון ארוך שם הוא בדיקות רקע על ריק."""
+    for league in ("mls", "argentina"):
+        w = main._highlight_window(league)
+        assert w <= timedelta(hours=24), league
+        assert w >= timedelta(hours=2 * MEASURED_MAX[league]), league
 
 
 def test_a_three_day_old_israeli_match_is_still_checked_often(db):
