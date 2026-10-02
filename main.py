@@ -6069,7 +6069,29 @@ def serve_frontend(request: Request):
     if not is_authed(request):
         return HTMLResponse(render_login_page(), headers=no_store)
     # X-SF-App: ה-service worker שומר בקאש רק את הדף הזה, לא את מסך הכניסה
-    return FileResponse("index.html", headers={"X-SF-App": "1", **no_store})
+    return HTMLResponse(_app_html(), headers={"X-SF-App": "1", **no_store})
+
+
+_APP_HTML: dict = {}
+
+
+def _app_html() -> str:
+    """index.html עם שם ההתקנה של המופע הזה.
+
+    ב-iOS שם האפליקציה במסך הבית נלקח מ-apple-mobile-web-app-title, לא
+    מה-manifest — ולכן גם אחרי #88 שתי הכתובות היו מותקנות בשם זהה,
+    שני ריבועים שאי אפשר להבדיל ביניהם. נקרא פעם אחת ונשמר לפי mtime.
+    """
+    lab = bool(EMBED_IN_APP or ALLOWED_EMAILS)
+    key = (os.stat("index.html").st_mtime, lab)
+    if _APP_HTML.get("key") != key:
+        html = open("index.html", encoding="utf-8").read()
+        if lab:
+            html = html.replace(
+                '<meta name="apple-mobile-web-app-title" content="SpoilerFree">',
+                '<meta name="apple-mobile-web-app-title" content="SpoilerFree LAB">')
+        _APP_HTML.update(key=key, html=html)
+    return _APP_HTML["html"]
 
 
 # ── PWA ────────────────────────────────────────────────
