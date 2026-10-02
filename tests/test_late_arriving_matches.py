@@ -64,3 +64,41 @@ def test_the_fresh_match_still_comes_first(db, monkeypatch):
     rows = {r["match_id"] for r in db.execute(
         "SELECT DISTINCT match_id FROM highlight_cache").fetchall()}
     assert "fresh" in rows
+
+
+# ── ביקורת דאטה (2.10.26): התור נסתם בראשו ─────────────────────────
+def test_a_match_that_cannot_be_checked_does_not_eat_the_queue(db, monkeypatch):
+    """משחק שכל מקורותיו החזירו api_error לא כותב שורת קאש — ולכן
+    המיון (שמעלה משחקים בלי קאש) מחזיר אותו לראש התור בסבב הבא. אם הוא
+    סופר כ"נבדק", 20 המקומות נבלעים והליגות שמאחוריו לא נבדקות לעולם.
+
+    זה המצב הרגיל בגביע האנגלי: is_cup → free_only תמיד → כישלון של
+    רשימת ההעלאות מחזיר None, ואין שורה. 51 משחקים כאלה בחלון אחד."""
+    for i in range(25):
+        _match(db, f"cup{i}", days_ago=3, league="facup")
+    _match(db, "wanted", days_ago=1, league="laliga")
+
+    def fake_search(**kw):
+        # הגביע נכשל תמיד; מה שאחריו היה נמצא — אם רק היו מגיעים אליו
+        return None if kw["channel_id"] == main.LEAGUES["facup"]["sources"][0]["channel_id"] \
+            else [{"video_id": "v", "label": "תקציר", "extended": False}]
+
+    monkeypatch.setattr(main, "search_youtube", lambda **kw: fake_search(**kw))
+    monkeypatch.setattr(main, "_web_link", lambda row, w: None)
+    main.prefetch_highlights_once()
+    checked = {r["match_id"] for r in db.execute(
+        "SELECT DISTINCT match_id FROM highlight_cache").fetchall()}
+    assert "wanted" in checked, "הגביע בלע את כל 20 המקומות"
+
+
+def test_and_one_round_still_has_a_ceiling(db, monkeypatch):
+    """אם לא סופרים משחקים שנכשלו, סבב אחד עלול לנסות את כל הבריכה.
+    יש תקרת ניסיונות נפרדת."""
+    for i in range(120):
+        _match(db, f"c{i}", days_ago=3, league="facup")
+    calls = []
+    monkeypatch.setattr(main, "search_youtube",
+                        lambda **kw: calls.append(1) or None)
+    monkeypatch.setattr(main, "_web_link", lambda row, w: None)
+    main.prefetch_highlights_once()
+    assert len(calls) <= main.PREFETCH_MAX_MATCHES * 3
