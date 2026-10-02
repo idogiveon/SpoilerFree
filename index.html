@@ -879,6 +879,7 @@
         FAVS = new Set(r.favorites);
         FAV_LEAGUES = new Set(r.leagues || []);
         HIDDEN_LEAGUES = new Set(r.hidden || []);
+        LEAGUE_ORDER = r.league_order || null;
       } else {
         FAVS = new Set(JSON.parse(localStorage.getItem(FAVS_LOCAL) || '[]'));
         FAV_LEAGUES = new Set(JSON.parse(localStorage.getItem(FAV_LEAGUES_LOCAL) || '[]'));
@@ -2252,8 +2253,11 @@
     // ליגות מועדפות קודם (סדר השרת נשמר בתוך כל קבוצה)
     // ליגות מוסתרות לא מוצגות (משחקי קבוצה מועדפת כן — ב"מועדפים" למעלה)
     const rest = matches.filter(m => !isFavMatch(m) && !HIDDEN_LEAGUES.has(m.league_key));
-    const ordered = [...rest.filter(m => FAV_LEAGUES.has(m.league_key)),
-                     ...rest.filter(m => !FAV_LEAGUES.has(m.league_key))];
+    // אותו סדר שבשורת הטאבים, כדי שהפיד לא יסתור את מה שלמעלה
+    const seen = [];
+    for (const m of rest) if (!seen.includes(m.league_key)) seen.push(m.league_key);
+    seen.sort((a, b) => leagueRank(a) - leagueRank(b));
+    const ordered = seen.flatMap(lk => rest.filter(m => m.league_key === lk));
     for (const m of ordered) {
       if (m.league_key !== lastLeague) {
         if (lastLeague !== null) html += '</div>';
@@ -2278,10 +2282,36 @@
   // ברשימה עצמה — שנשארת פתוחה כדי לעבור בין ליגות בלחיצה אחת.
   // סדר: מועדפות קודם, ואז השאר; גביעים אחרי קו מפריד. בלי זה הליגה
   // שאתה עוקב אחריה יכולה להיות הרחק ימינה בתוך הגוללן.
+  // סדר הליגות: מועדפות (בחירה מפורשת) → הסדר שהמשתמש הרוויח אחרי
+  // חמישה ימי שימוש, אם יש → ברירת המחדל → כל השאר.
+  // ליגת העל ראשונה רק כשהחיבור מישראל: אזור זמן או שפת הממשק. הלקוח
+  // מחליט כי רק לו יש את הנתון, ובלי לשלוח IP לשום שירות חיצוני.
+  const DEFAULT_ORDER = ['israel', 'premier', 'laliga', 'seriea',
+                         'bundesliga', 'ligue1'];
+  let LEAGUE_ORDER = null;
+
+  function fromIsrael() {
+    try {
+      if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Asia/Jerusalem') return true;
+    } catch (e) {}
+    return LANG === 'he';
+  }
+
+  function effectiveOrder() {
+    const base = LEAGUE_ORDER && LEAGUE_ORDER.length ? LEAGUE_ORDER : DEFAULT_ORDER;
+    return fromIsrael() ? base : base.filter(l => l !== 'israel');
+  }
+
+  function leagueRank(key) {
+    if (FAV_LEAGUES.has(key)) return -1;          // בחירה מפורשת קודמת לכול
+    const i = effectiveOrder().indexOf(key);
+    return i === -1 ? 99 : i;
+  }
+
   function orderLeagueTabs() {
     const scroll = document.getElementById('league-scroll');
     const tabs = [...scroll.querySelectorAll('.tab[data-league]')];
-    const rank = t => (FAV_LEAGUES.has(t.dataset.league) ? 0 : 1);
+    const rank = t => leagueRank(t.dataset.league);
     const leagues = tabs.filter(t => !isCup(t.dataset.league));
     const cups    = tabs.filter(t => isCup(t.dataset.league));
     const sorted = [...leagues.sort((a, b) => rank(a) - rank(b)),

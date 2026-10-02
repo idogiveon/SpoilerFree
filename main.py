@@ -5685,6 +5685,63 @@ def auth_delete_account(request: Request, payload: dict = Body(...)):
 # נשמרים בחשבון (זהים בכל המכשירים). בלי חשבון אישי (סיסמה ישנה / פיתוח
 # מקומי) — הפרונט שומר במכשיר.
 
+# ── סדר הליגות בתצוגה ──────────────────────────────────────────────
+# ברירת המחדל (מהבעלים, 2.10.26). ליגת העל ראשונה רק כשהחיבור מישראל —
+# את זה הלקוח קובע (אזור זמן או שפה), כי רק לו יש את הנתון.
+DEFAULT_LEAGUE_ORDER = ["israel", "premier", "laliga", "seriea",
+                        "bundesliga", "ligue1"]
+# כמה ימים *שונים* של שימוש צריך לפני שמתאימים את הסדר למשתמש. לא
+# חמישה תקצירים ולא חמש פתיחות באותו ערב — חמישה ימים.
+PERSONALIZE_AFTER_DAYS = 5
+
+
+def _league_order_for(conn, email: str):
+    """(סדר מותאם או None, כמה ימי שימוש). הסדר מחושב מחדש רק כשמספר
+    הימים חוצה כפולה של חמש — אחרת שורת הליגות הייתה מסתדרת מחדש
+    מתחת לאצבע בכל כניסה."""
+    days = conn.execute(
+        "SELECT COUNT(DISTINCT substr(ts, 1, 10)) AS d FROM events WHERE email=?",
+        (email,)).fetchone()["d"] or 0
+    bucket = days // PERSONALIZE_AFTER_DAYS
+    if bucket < 1:
+        return None, days
+
+    row = conn.execute("SELECT value FROM prefs WHERE email=? AND key='league_order'",
+                       (email,)).fetchone()
+    if row:
+        try:
+            saved = json.loads(row["value"])
+            if saved.get("bucket") == bucket and saved.get("order"):
+                return saved["order"], days
+        except (ValueError, TypeError):
+            pass
+
+    # מה שהמשתמש באמת עשה: פתיחת משחק והפעלת תקציר שוות יותר מהצצה
+    # בטאב. הליגה נגזרת מהמשחק עצמו, כי ב"לפי יום" האירוע נשלח בלי ליגה
+    score: dict = {}
+    for r in conn.execute(
+            "SELECT m.league_key AS lk, COUNT(*) AS n FROM events e "
+            "JOIN matches m ON m.id = e.match_id "
+            "WHERE e.email=? AND e.type IN ('match_open', 'highlight_play') "
+            "GROUP BY m.league_key", (email,)).fetchall():
+        score[r["lk"]] = score.get(r["lk"], 0) + 3 * r["n"]
+    for r in conn.execute(
+            "SELECT league AS lk, COUNT(*) AS n FROM events "
+            "WHERE email=? AND type='league_view' AND league IS NOT NULL "
+            "GROUP BY league", (email,)).fetchall():
+        score[r["lk"]] = score.get(r["lk"], 0) + r["n"]
+    if not score:
+        return None, days
+
+    order = [lk for lk, _ in sorted(score.items(), key=lambda kv: -kv[1])
+             if lk in LEAGUES]
+    conn.execute("INSERT OR REPLACE INTO prefs (email, key, value) VALUES (?,?,?)",
+                 (email, "league_order",
+                  json.dumps({"bucket": bucket, "order": order})))
+    conn.commit()
+    return order, days
+
+
 @app.get("/favorites")
 def get_favorites(request: Request):
     require_auth(request)
@@ -5698,9 +5755,11 @@ def get_favorites(request: Request):
                        (email,)).fetchall()
     hid = conn.execute("SELECT league_key FROM hidden_leagues WHERE email=? ORDER BY league_key",
                        (email,)).fetchall()
+    order, days = _league_order_for(conn, email)
     conn.close()
     return {"favorites": [r["team"] for r in rows], "leagues": [r["league_key"] for r in lgs],
-            "hidden": [r["league_key"] for r in hid]}
+            "hidden": [r["league_key"] for r in hid],
+            "league_order": order, "active_days": days}
 
 
 @app.post("/favorites")

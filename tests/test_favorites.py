@@ -46,7 +46,9 @@ def test_different_teams_different_keys(a, b):
 
 def test_add_list_remove_normalizes(auth_on):
     admin = login(auth_on, ADMIN)
-    assert admin.get("/favorites").json() == {"favorites": [], "leagues": [], "hidden": []}
+    got = admin.get("/favorites").json()
+    assert {k: got[k] for k in ("favorites", "leagues", "hidden")} == {
+        "favorites": [], "leagues": [], "hidden": []}
     admin.post("/favorites", json={"team": "Liverpool FC", "on": True})        # שם מקור → מנורמל
     admin.post("/favorites", json={"team": "liverpool", "on": True})           # אותה קבוצה — פעם אחת
     admin.post("/favorites", json={"team": "Newell's Old Boys", "on": True})
