@@ -49,9 +49,13 @@
     .drawer-sep { border-top:1px solid var(--border); margin:0.4rem 0; }
 
     .app-footer { max-width:960px; margin:0 auto; padding:0 2rem 2rem; text-align:center; position:relative; z-index:1; }
-    .hidden-note { display:block; margin:1.2rem auto 0; background:none; border:none;
-      color:#6b6b80; font-family:'Heebo',sans-serif; font-size:0.78rem;
+    /* בשורת הסטטוס שבראש הפיד, לא בתחתית: נמדד שבשבת עם 92 משחקים
+       הוא ישב 11 מסכים מתחת לקיפול — ומי שתוהה "איפה הבונדסליגה" לא
+       גולל לשם לעולם. padding: יעד המגע היה 18.5px */
+    .hidden-note { background:none; border:none; color:#6b6b80;
+      font-family:'Heebo',sans-serif; font-size:0.78rem; padding:0.5rem 0.2rem;
       text-decoration:underline; cursor:pointer; }
+    .hidden-note[hidden] { display:none; }
     .cookie-link { background:none; border:none; color:#4a4a5a; font-family:'Heebo',sans-serif; font-size:0.7rem; text-decoration:underline; cursor:pointer; }
     .sheet-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1100; display:flex; align-items:center; justify-content:center; padding:1rem; }
     .sheet { background:var(--surface); border:1px solid var(--border); border-radius:12px; max-width:460px; width:100%; max-height:80vh; overflow:auto; padding:1.5rem; }
@@ -109,9 +113,11 @@
     .tab:hover { border-color:var(--accent); color:var(--accent); }
     .tab.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:700; }
 
-    .matchday-nav { max-width:960px; margin:0 auto; padding:0 2rem 1rem; display:flex; align-items:center; gap:0.75rem; position:relative; z-index:1; }
+    /* flex-wrap: "Revenir à aujourd'hui" לא מתכווץ מתחת לרוחב
+       min-content שלו, ובצרפתית הדף כולו נעשה 398px ונגלל לצדדים */
+    .matchday-nav { max-width:960px; margin:0 auto; padding:0 2rem 1rem; display:flex; align-items:center; gap:0.75rem; position:relative; z-index:1; flex-wrap:wrap; }
     .matchday-nav.hidden { display:none; }
-    .md-btn { background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; transition:all 0.2s; }
+    .md-btn { background:transparent; border:1px solid var(--border); color:var(--muted); font-family:'Heebo',sans-serif; font-size:0.85rem; padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; transition:all 0.2s; min-width:0; }
     .md-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
     .md-btn:disabled { opacity:0.3; cursor:default; }
     .md-label { font-family:'Bebas Neue',sans-serif; font-size:1.1rem; color:var(--text); letter-spacing:1px; min-width:90px; text-align:center; }
@@ -180,7 +186,10 @@
     .modal-overlay.open .modal { transform:translateY(0); }
     .modal-header { padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
     .modal-title { font-size:1rem; font-weight:700; }
-    .match-score { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--accent); letter-spacing:2px; margin-top:0.3rem; }
+    /* בלי margin-top כאן: הכלל הזה בא אחרי זה שלמעלה ובאותה ספציפיות,
+       ולכן הוא מחק בשקט את המרווח שמפריד את "הצג תוצאה" מכפתורי
+       הקבוצות — 4.8px במקום 14.4, חפיפה אופקית כמעט מלאה בטלפון */
+    .match-score { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--accent); letter-spacing:2px; }
     .modal-close { background:transparent; border:none; color:var(--muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px; transition:all 0.2s; }
     .modal-close:hover { color:var(--text); background:var(--border); }
 
@@ -216,10 +225,16 @@
     /* פקדים משלנו — מתחת לנגן, לא מעליו */
     .vid-bar { display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.75rem;
       background:#000; border-top:1px solid var(--border); }
+    /* 44×44: נמדד 17.5×17.6 — מתחת לכל מינימום מגע, ודווקא במסך
+       שנמצא בשימוש יומיומי. ה-flex של הסרגל מרכז אותם בתוך היעד */
     .vid-btn { background:none; border:none; color:var(--accent); font-size:1.1rem;
-      cursor:pointer; padding:0 0.2rem; line-height:1; }
+      cursor:pointer; padding:0; line-height:1; min-width:44px; min-height:44px;
+      display:flex; align-items:center; justify-content:center; }
     .vid-time { font-size:0.7rem; color:var(--muted); font-variant-numeric:tabular-nums; }
-    .vid-seek { flex:1; accent-color:var(--accent); height:3px; cursor:pointer; }
+    /* פס של 3px הוא יעד גרירה בלתי אפשרי באצבע; הגובה הוא אזור המגע,
+       והמראה נשאר דק כי ה-thumb והמסילה מצוירים בנפרד */
+    .vid-seek { flex:1; accent-color:var(--accent); height:28px; cursor:pointer;
+      background:transparent; }
     /* תצוגה מורחבת. באייפון אי אפשר להגדיל אלמנט רגיל למסך מלא (רק
        וידאו), ולכן זה נעשה ב-CSS. הקופסה נשארת ביחס 16:9 — המסכות
        ממוקמות יחסית אליה, ואילו הן היו נמתחות למסך שלם הן היו מפספסות
@@ -265,7 +280,11 @@
       .view-switch .tab { flex:1; }
       .team-name { font-size:0.82rem; }
       .venue { display:none; }
-      .live-badge { display:none; }
+      /* קודם היה כאן display:none — ועם תוצאות דלוקות משבצת הזמן מציגה
+         "2 : 1" ולא "LIVE", כלומר שום דבר בכרטיס לא אומר שהמשחק רץ.
+         אותו תיקון בדיוק שנעשה לחיווי התקציר שורה מתחת */
+      .live-badge { position:static; transform:none; display:inline-block;
+        margin-top:0.35rem; font-size:0.6rem; padding:0.1rem 0.45rem; letter-spacing:0; }
       /* בטלפון אין מקום לצד הכרטיס — החיווי יושב מתחת ל-VS.
          קודם הוא פשוט הוסתר, וכל הפיד בטלפון היה בלי שום חיווי. */
       .highlight-badge { position:static; transform:none; display:inline-block;
@@ -358,6 +377,7 @@
 <main>
   <div class="status-bar">
     <div class="match-count" id="match-count"></div>
+    <button class="hidden-note" id="hidden-note" hidden></button>
     <div class="sync-note" id="sync-note"></div>
     <button class="refresh-btn" id="scores-btn"></button>
     <button class="refresh-btn" id="refresh-btn">↻ רענון</button>
@@ -424,7 +444,7 @@
   "ob_title1": "ברוך הבא! באילו ליגות אתה מתעניין?",
   "ob_hint1": "רק הן יוצגו באתר. אפשר לשנות בכל רגע ב-☰ ← ליגות.",
   "ob_title2": "קבוצות פופולריות — סמן את שלך", "ob_hint2": "המשחקים שלהן יופיעו ראשונים, בכל מפעל.",
-  "ob_next": "המשך", "ob_skip": "דלג — להציג את כולן", "ob_done": "סיום",
+  "ob_next": "המשך", "ob_skip": "דלג — להציג את כולן", "ob_pick_one": "בחר ליגה אחת לפחות כדי להמשיך", "ob_done": "סיום",
   "ob_no_teams": "עוד אין קבוצות לליגות האלה — אפשר להוסיף אחר כך ב-☰ ← מועדפים.",
   "my_account": "החשבון שלי", "email": "מייל", "joined": "הצטרפת", "last_login": "כניסה אחרונה", "logins": "כניסות",
   "delete_account": "מחיקת החשבון",
@@ -481,7 +501,7 @@
   "ob_title1": "Welcome! Which leagues do you follow?",
   "ob_hint1": "Only these will be shown. You can change it anytime in ☰ → Leagues.",
   "ob_title2": "Popular teams — pick yours", "ob_hint2": "Their matches will show first, in every competition.",
-  "ob_next": "Continue", "ob_skip": "Skip — show them all", "ob_done": "Done",
+  "ob_next": "Continue", "ob_skip": "Skip — show them all", "ob_pick_one": "Pick at least one league to continue", "ob_done": "Done",
   "ob_no_teams": "No teams for these leagues yet — add some later in ☰ → Favorites.",
   "my_account": "My account", "email": "Email", "joined": "Joined", "last_login": "Last login", "logins": "Logins",
   "delete_account": "Delete account",
@@ -538,7 +558,7 @@
   "ob_title1": "¡Bienvenido! ¿Qué ligas sigues?",
   "ob_hint1": "Solo estas se mostrarán. Puedes cambiarlo cuando quieras en ☰ → Ligas.",
   "ob_title2": "Equipos populares — elige los tuyos", "ob_hint2": "Sus partidos aparecerán primero, en todas las competiciones.",
-  "ob_next": "Continuar", "ob_skip": "Omitir — mostrarlas todas", "ob_done": "Listo",
+  "ob_next": "Continuar", "ob_skip": "Omitir — mostrarlas todas", "ob_pick_one": "Elige al menos una liga para continuar", "ob_done": "Listo",
   "ob_no_teams": "Aún no hay equipos para estas ligas — añádelos luego en ☰ → Favoritos.",
   "my_account": "Mi cuenta", "email": "Correo", "joined": "Alta", "last_login": "Último acceso", "logins": "Accesos",
   "delete_account": "Eliminar cuenta",
@@ -595,7 +615,7 @@
   "ob_title1": "Bienvenue ! Quelles ligues suivez-vous ?",
   "ob_hint1": "Seules celles-ci seront affichées. Modifiable à tout moment dans ☰ → Ligues.",
   "ob_title2": "Équipes populaires — choisissez les vôtres", "ob_hint2": "Leurs matchs s'afficheront en premier, dans toutes les compétitions.",
-  "ob_next": "Continuer", "ob_skip": "Passer — toutes les afficher", "ob_done": "Terminé",
+  "ob_next": "Continuer", "ob_skip": "Passer — toutes les afficher", "ob_pick_one": "Choisissez au moins une ligue pour continuer", "ob_done": "Terminé",
   "ob_no_teams": "Pas encore d'équipes pour ces ligues — ajoutez-en plus tard dans ☰ → Favoris.",
   "my_account": "Mon compte", "email": "E-mail", "joined": "Inscription", "last_login": "Dernière connexion", "logins": "Connexions",
   "delete_account": "Supprimer le compte",
@@ -1157,12 +1177,16 @@
     const picked = new Set(FAV_LEAGUES);
     openSheet(`<h2>👋 ${t('ob_title1')}</h2><p>${t('ob_hint1')}</p>
       <div class="chips" id="ob-leagues">${chipsHTML(allLeagues().map(l => [l, t('lg_' + l)]), picked)}</div>
+      <p class="hint" id="ob-need" hidden>${t('ob_pick_one')}</p>
       <div class="ob-actions"><button class="ob-skip" id="ob-skip">${t('ob_skip')}</button>
         <button class="ob-next" id="ob-next">${t('ob_next')}</button></div>`, false);
     // "המשך" בלי בחירה התנהג כ"דלג" בשקט, כלומר נתן את ההיפך מהמשפט
     // שמעליו. הדרך היחידה ל-17 הליגות היא הכפתור שאומר את זה
     const next = document.getElementById('ob-next');
-    const syncNext = sel => { next.disabled = !sel.size; };
+    const need = document.getElementById('ob-need');
+    // כפתור מושבת לא יורה אירוע — בטלפון הלחיצה עליו היא אפס משוב,
+    // והוא המצב הראשון שמשתמש חדש רואה (picked מתחיל ריק)
+    const syncNext = sel => { next.disabled = !sel.size; need.hidden = !!sel.size; };
     bindChips(document.getElementById('ob-leagues'), picked, syncNext);
     syncNext(picked);
     document.getElementById('ob-skip').onclick = finishOnboarding;
@@ -2165,6 +2189,8 @@
   function exitDayView() {
     document.getElementById('day-nav').classList.add('hidden');
     document.getElementById('refresh-btn').style.display = '';
+    const note = document.getElementById('hidden-note');
+    if (note) note.hidden = true;        // שייך ל"לפי יום" בלבד
   }
 
   function updateDayUI() {
@@ -2223,14 +2249,17 @@
 
   // מי שבחר שלוש ליגות במסך הפתיחה ותוהה חודש אחרי "איפה הבונדסליגה"
   // לא קיבל שום רמז: הטאב ב-display:none, והמונה סופר רק את הנראים
-  function hiddenNoteHTML(matches) {
+  function showHiddenNote(matches) {
+    const el = document.getElementById('hidden-note');
+    if (!el) return;
     const hidden = new Set(matches.filter(m => !isFavMatch(m)
                                             && HIDDEN_LEAGUES.has(m.league_key))
                                   .map(m => m.league_key));
-    if (!hidden.size) return '';
-    return `<button class="hidden-note" onclick="openLeaguePicker()">
-              ${t(hidden.size === 1 ? 'hidden_1' : 'hidden_n',
-                      { n: hidden.size })}</button>`;
+    el.hidden = !hidden.size;
+    if (!hidden.size) return;
+    el.textContent = t(hidden.size === 1 ? 'hidden_1' : 'hidden_n',
+                       { n: hidden.size });
+    el.onclick = openLeaguePicker;
   }
 
   function renderDayMatches(matches) {
@@ -2238,8 +2267,8 @@
     const countEl   = document.getElementById('match-count');
     if (!matches.length) {
       container.innerHTML = `<div class="empty">${t('no_matches_day')}<br>` +
-        `<small style="opacity:0.6">${t('no_matches_day_hint')}</small></div>` +
-        hiddenNoteHTML(matches);
+        `<small style="opacity:0.6">${t('no_matches_day_hint')}</small></div>`;
+      showHiddenNote(matches);
       countEl.textContent = '';
       return;
     }
@@ -2270,7 +2299,8 @@
     if (lastLeague !== null) html += '</div>';
     // כל הליגות של היום מוסתרות: קודם זה היה מסך ריק לגמרי, בלי מילה
     if (!html) html = `<div class="empty">${t('no_matches_day')}</div>`;
-    container.innerHTML = html + hiddenNoteHTML(matches);
+    container.innerHTML = html;
+    showHiddenNote(matches);
     bindMatchCards(container);
   }
 
@@ -2426,6 +2456,7 @@
     applyStatic();
     updateLeaguesToggle();
     updateRefreshBtn();
+    updateScoresBtn();     // הטקסט שלו נקבע ב-JS, לא ב-data-i18n
     loadUserBar();
     setSyncNote('');
     // שמות הקבוצות מגיעים מהשרת בשפה שנבחרה — טוענים מחדש
