@@ -110,3 +110,24 @@ def test_the_lab_tag_follows_what_the_user_feels():
     html = open("index.html", encoding="utf-8").read()
     assert "!(me.embed || me.private)" in html
     assert '"embed": EMBED_IN_APP' in open("main.py", encoding="utf-8").read()
+
+
+def test_the_iphone_home_screen_name_differs_too(monkeypatch):
+    """ב-iOS שם האפליקציה במסך הבית נלקח מ-apple-mobile-web-app-title,
+    לא מה-manifest — ולכן אחרי #88 שתי ההתקנות עדיין נראו זהות בטלפון."""
+    monkeypatch.setattr(main, "EMBED_IN_APP", False)
+    monkeypatch.setattr(main, "ALLOWED_EMAILS", set())
+    assert 'content="SpoilerFree"' in main._app_html()
+    assert "SpoilerFree LAB" not in main._app_html()
+    monkeypatch.setattr(main, "EMBED_IN_APP", True)
+    assert 'content="SpoilerFree LAB"' in main._app_html()
+
+
+def test_the_app_itself_is_still_served(monkeypatch):
+    """הדף עבר מ-FileResponse ל-HTML מעובד — הוא עדיין האפליקציה."""
+    monkeypatch.setattr(main, "is_authed", lambda r: True)
+    from fastapi.testclient import TestClient
+    r = TestClient(main.app).get("/")
+    assert r.headers["X-SF-App"] == "1"
+    assert r.headers["Cache-Control"] == "no-store"
+    assert "<title>SpoilerFree" in r.text and 'id="matches-container"' in r.text
