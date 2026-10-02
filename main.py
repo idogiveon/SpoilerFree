@@ -3479,6 +3479,14 @@ def search_youtube(home: str, away: str, match_date: str,
     SHORT_MAX = 150        # עד 2:30 = קצר
     LONG_CAP  = 20 * 60    # מעל 20 דק' = שידור חוזר, לא תקציר
 
+    def _one_label(dur):
+        # מועמד יחיד: עד עכשיו נכתב "תקציר" סתם, והמשתמש גילה רק אחרי
+        # הלחיצה שקיבל דקה. את המשך אנחנו כבר יודעים — אז נגיד אותו.
+        # בלי משך (גרידה שנכשלה) נשארת התווית הסתמית
+        if not dur:
+            return "תקציר"
+        return "תקציר קצר" if dur <= SHORT_MAX else "תקציר מלא"
+
     titled_ext = next((v for v in pool if v["extended"]), None)
     shorts = [v for v in pool if 0 < v["_dur"] <= SHORT_MAX]
     longs  = [v for v in pool if SHORT_MAX < v["_dur"] <= LONG_CAP
@@ -3501,7 +3509,8 @@ def search_youtube(home: str, away: str, match_date: str,
         for v in (regular, titled_ext):
             if v:
                 final.append({"video_id": v["video_id"],
-                              "label": "תקציר מורחב" if v["extended"] else "תקציר",
+                              "label": ("תקציר מורחב" if v["extended"]
+                                        else _one_label(v["_dur"])),
                               "extended": v["extended"]})
     pub = {v["video_id"]: v.get("published", "") for v in pool}
     for f in final:

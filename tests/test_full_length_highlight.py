@@ -93,3 +93,41 @@ def test_a_user_opening_it_later_in_the_week_also_gets_the_full_one(db, monkeypa
     src = main.LEAGUES["bundesliga"]["sources"][0]
     out = main._source_highlights(row, src)
     assert [v["video_id"] for v in out["videos"]] == ["SHORT1", "LONG1"]
+
+
+# ── התווית: מהצילום של המשתמש (2.10.26) ─────────────────────────────
+TITLE = "The Kane and Olise Late Night Show | FC BAYERN - UNION BERLIN | Highlights"
+
+
+def _search(monkeypatch, feed, durs):
+    monkeypatch.setattr(main, "_rss_feed", lambda cid: feed)
+    monkeypatch.setattr(main, "_video_durations", lambda ids: durs)
+    monkeypatch.setattr(main, "_is_short", lambda vid: False)
+    return main.search_youtube("Bayern Munich", "Union Berlin", "2026-09-18",
+                               "UC6UL29enLNe4mqwTfAyeNuw") or []
+
+
+def _item(vid):
+    return (vid, TITLE, "2026-09-20T20:00:00+00:00")
+
+
+def test_a_single_candidate_says_which_version_it_is(monkeypatch):
+    """הכפתור אמר "תקציר" סתם, והמשתמש גילה רק אחרי הלחיצה שקיבל דקה.
+    את המשך כבר מדדנו — אז הוא כתוב. (4:04 הוא הסרטון האמיתי של
+    באיירן–אוניון ברלין ממחזור 4.)"""
+    assert [v["label"] for v in _search(monkeypatch, [_item("LONG")], {"LONG": 244})] \
+        == ["תקציר מלא"]
+    assert [v["label"] for v in _search(monkeypatch, [_item("SHORT")], {"SHORT": 62})] \
+        == ["תקציר קצר"]
+
+
+def test_without_a_duration_it_does_not_guess(monkeypatch):
+    """הגרידה מדף הסרטון יכולה להיכשל — ואז אנחנו לא יודעים, ולא ממציאים."""
+    assert [v["label"] for v in _search(monkeypatch, [_item("X")], {})] == ["תקציר"]
+
+
+def test_when_both_are_there_nothing_changed(monkeypatch):
+    out = _search(monkeypatch, [_item("SHORT"), _item("LONG")],
+                  {"SHORT": 62, "LONG": 244})
+    assert [v["label"] for v in out] == ["תקציר קצר", "תקציר מלא"]
+    assert [v["extended"] for v in out] == [False, True]
