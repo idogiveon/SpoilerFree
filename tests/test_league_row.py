@@ -77,3 +77,13 @@ def test_the_reveal_runs_after_the_reorder():
     fn = HTML[HTML.index("function orderLeagueTabs()"):]
     fn = fn[:fn.index("\n  }")]
     assert fn.index("scroll.append") < fn.index("revealActiveTab()")
+
+
+def test_the_arrow_glyphs_are_not_mirrored_by_the_browser():
+    """‹ ו-› מסומנים ב-Unicode כ-Bidi_Mirrored: ה-textContent היה נכון
+    והדפדפן צייר אותם הפוך בעברית. באג שלא רואים בקוד, רק בעין
+    (הבעלים, 9.10.26)."""
+    i = HTML.index("@media (hover:hover) and (pointer:fine)")
+    block = HTML[i:HTML.index("}", HTML.index(".scroll-arrow:hover", i))]
+    assert "direction:ltr" in block
+    assert "unicode-bidi:isolate" in block
