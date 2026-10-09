@@ -736,7 +736,12 @@
   // כי ככה רוב האנשים מבינים את המילה, ו"ארוך" הוא המורחב (הבעלים, 9.10.26)
   const HE_LABEL_KIND = { 'תקציר קצר': 'kind_short', 'תקציר מלא': 'kind_full',
                           'תקציר מורחב': 'kind_extended', 'תקציר': 'kind_regular' };
-  const kindLabel = v => HE_LABEL_KIND[v.label] ? t(HE_LABEL_KIND[v.label]) : v.label;
+  // alone: מקור עם אפשרות אחת בלבד. "קצר" מול "ארוך" הוא הבדל שמשמעותי
+  // רק כשיש במה לבחור — וחשוב מזה, התווית נשמרת בקאש, ולכן משחקים
+  // ישנים נושאים עדיין "תקציר מלא" מכלל שכבר בוטל בשרת. ההכרעה כאן
+  // מתקנת גם אותם, בלי לגעת בשורה אחת בקאש (הבעלים, 9.10.26)
+  const kindLabel = (v, alone) => alone ? t('kind_regular')
+    : (HE_LABEL_KIND[v.label] ? t(HE_LABEL_KIND[v.label]) : v.label);
   // שמות מקורות: אתרים ישראליים באנגלית, ערוץ מועדון — שם הקבוצה
   const SRC_NAMES = { 'ספורט 1': 'Sport 1', 'ספורט 5': 'Sport 5', 'וואלה': 'Walla' };
   function srcName(s) {
@@ -1838,7 +1843,7 @@
           if (!source.videos || !source.videos.length) continue;
           for (const v of source.videos) {
             // תמיד מציגים את סוג התקציר — שקיפות מלאה על מה לוחצים
-            const label = `${srcName(source)} — ${kindLabel(v)}`;
+            const label = `${srcName(source)} — ${kindLabel(v, source.videos.length === 1)}`;
             if (source.allow_embed) {
               allBtns.push(
                 `<button class="play-btn ${v.extended ? 'extended' : ''}"
