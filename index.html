@@ -928,7 +928,7 @@
     showScores = !showScores;
     updateScoresBtn();
     if (currentLeague === '__byday') await loadDay();
-    else await openLeague(currentLeague);
+    else await openLeague(currentLeague, true);   // נשארים על המחזור שנבחר
   }
 
   async function loadFavorites() {
@@ -1656,11 +1656,14 @@
     if (league === currentLeague && currentMatchday === md) renderMatches([], false);
   }
 
-  async function openLeague(league) {
+  // keepMd: טעינה מחדש שאינה אמורה להזיז את המשתמש. בלי זה "הצג
+  // תוצאות" על מחזור 5 קפץ למחזור 6 — showLeague מחשב מחדש את "המחזור
+  // הרלוונטי" (הראשון שטרם נגמר) בכל טעינה קדמית (הבעלים, 9.10.26)
+  async function openLeague(league, keepMd = false) {
     setSyncNote('');
     updateRefreshBtn();
     const cached = cacheGet(league);
-    if (cached && cached.matches) showLeague(league, cached.matches);
+    if (cached && cached.matches) showLeague(league, cached.matches, keepMd);
     else document.getElementById('matches-container').innerHTML = `<div class="loading">${t('loading_matches')}</div>`;
 
     let data;
@@ -1674,7 +1677,7 @@
       return;
     }
     cachePut(league, data);
-    showLeague(league, data.matches, !!cached);
+    showLeague(league, data.matches, keepMd || !!cached);
 
     // נתונים מיושנים (3+ שעות) או ריקים — רענון ברקע, פעם אחת לליגה לביקור.
     // המסך כבר מציג את מה שיש; הרענון רק מעדכן בשקט כשהוא מסתיים.
