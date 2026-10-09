@@ -180,10 +180,12 @@
     .team.home { text-align:end; }
     .team.away { text-align:start; }
     .fav-row { display:flex; gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap; }
-    /* התוצאה יושבת בצד הנגדי לכפתורי הקבוצות ובמרווח מהם: לחיצה בטעות
-       כאן חושפת תוצאה, וזה בדיוק מה שהאתר קיים כדי למנוע */
-    .match-score { display:flex; align-items:center; gap:0.5rem;
-      justify-content:flex-end; margin-top:0.9rem; }
+    /* התוצאה יושבת בפינה של ה-✕, רחוק מכפתורי הקבוצות: לחיצה בטעות
+       כאן חושפת תוצאה, וזה בדיוק מה שהאתר קיים כדי למנוע. המרווח
+       מה-✕ קיים מאותה סיבה הפוכה — שלא ייסגר החלון בטעות */
+    .modal-side { display:flex; align-items:center; gap:1.5rem; flex:0 0 auto;
+      align-self:flex-start; }
+    .match-score { display:flex; align-items:center; gap:0.5rem; }
     .score-val { font-size:1.1rem; font-weight:700; letter-spacing:1px; }
     .fav-btn { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:100px; padding:0.15rem 0.6rem; font-size:0.72rem; cursor:pointer; font-family:'Heebo',sans-serif; }
     .fav-btn:hover { border-color:#ffc107; color:#ffc107; }
@@ -430,9 +432,11 @@
       <div>
         <div class="modal-title" id="modal-title"></div>
         <div class="fav-row" id="modal-favs"></div>
-        <div class="match-score" id="modal-score"></div>
       </div>
-      <button class="modal-close" id="modal-close">✕</button>
+      <div class="modal-side">
+        <div class="match-score" id="modal-score"></div>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
     </div>
     <div id="modal-body"></div>
   </div>
