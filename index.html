@@ -743,7 +743,8 @@
   const kindLabel = (v, alone) => alone ? t('kind_regular')
     : (HE_LABEL_KIND[v.label] ? t(HE_LABEL_KIND[v.label]) : v.label);
   // שמות מקורות: אתרים ישראליים באנגלית, ערוץ מועדון — שם הקבוצה
-  const SRC_NAMES = { 'ספורט 1': 'Sport 1', 'ספורט 5': 'Sport 5', 'וואלה': 'Walla' };
+  const SRC_NAMES = { 'ספורט 1': 'Sport 1', 'ספורט 5': 'Sport 5', 'וואלה': 'Walla',
+                      'מנהלת הליגות': 'IPFL' };
   function srcName(s) {
     if (s.club_name) return s.club_name;   // ערוץ מועדון — שם הקבוצה בשפה שנבחרה
     if (LANG === 'he') return s.name;
