@@ -116,3 +116,17 @@ def test_the_settings_hint_does_not_contradict_the_chosen_chip():
     האתר", מעל הצ'יפ המסומן שלו."""
     for word in ("ברירת המחדל היא בלי תוצאות", "Scores are off by default"):
         assert word not in HTML
+
+
+def test_showing_scores_keeps_the_matchday_you_are_looking_at():
+    """מחזור 5 בפרמייר + "הצג תוצאות" קפץ למחזור 6, שעוד לא התחיל.
+    showLeague מחשב מחדש את "המחזור הרלוונטי" (הראשון שטרם נגמר) בכל
+    טעינה קדמית, ו-toggleScores טוען מחדש (הבעלים, 9.10.26).
+
+    נמדד בדפדפן על אותם נתונים: בלי הדגל → 6, איתו → 5."""
+    assert "async function openLeague(league, keepMd = false)" in HTML
+    assert "showLeague(league, cached.matches, keepMd)" in HTML
+    assert "showLeague(league, data.matches, keepMd || !!cached)" in HTML
+    toggle = HTML[HTML.index("async function toggleScores()"):]
+    toggle = toggle[:toggle.index("\n  }")]
+    assert "openLeague(currentLeague, true)" in toggle
