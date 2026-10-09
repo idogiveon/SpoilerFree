@@ -3492,7 +3492,8 @@ def search_youtube(home: str, away: str, match_date: str,
         return {"video_id": video_id,
                 "extended": "extended" in tl or "מורחב" in title,
                 "published": published,   # #10 — מתי המקור העלה
-                "_title":   tl}
+                "_title":   tl,
+                "_orig":    title}
 
     # 1. RSS (חינם). אם הפיד מגיע אחורה עד יום המשחק ואין בו תקציר —
     #    התקציר פשוט עוד לא עלה, ואין טעם לשלם על חיפוש.
@@ -3636,9 +3637,13 @@ def search_youtube(home: str, away: str, match_date: str,
                               "label": ("תקציר מורחב" if v["extended"]
                                         else _one_label(v["_dur"])),
                               "extended": v["extended"]})
-    pub = {v["video_id"]: v.get("published", "") for v in pool}
+    # הכותרת נשמרת יחד עם המזהה. בלעדיה אי אפשר להריץ כללי זיהוי
+    # חדשים על מה שכבר בקאש, וכל תיקון מחייב חיפוש מחדש מול יוטיוב —
+    # ביום אחד (9.10.26) זה קרה שלוש פעמים: תקציר של קבוצת הנשים, של
+    # הנוער, ותווית שגויה. עם הכותרת אפשר לאמת מחדש בלי אף קריאת רשת
+    meta = {v["video_id"]: (v.get("published", ""), v.get("_orig", "")) for v in pool}
     for f in final:
-        f["published"] = pub.get(f["video_id"], "")
+        f["published"], f["title"] = meta.get(f["video_id"], ("", ""))
     return final
 
 

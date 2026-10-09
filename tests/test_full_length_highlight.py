@@ -156,3 +156,24 @@ def test_the_server_marks_an_extended_title(monkeypatch):
                   [("LONG", 'מחזור 5 | תקציר מורחב: מכבי חיפה - עירוני טבריה 2-3',
                     "2026-09-22T10:00:00+00:00")], {"LONG": 400})
     assert [(v["label"], v["extended"]) for v in out] == [("תקציר מורחב", True)]
+
+
+def test_the_title_is_stored_with_the_video(monkeypatch):
+    """בלי הכותרת אי אפשר להריץ כללי זיהוי חדשים על מה שכבר בקאש, וכל
+    תיקון מחייב חיפוש מחדש מול יוטיוב. ביום אחד (9.10.26) זה קרה שלוש
+    פעמים — תקציר של קבוצת הנשים, של הנוער, ותווית שגויה — ובכל פעם
+    השורה השמורה המשיכה להגיש את התוצאה הישנה."""
+    out = _search(monkeypatch, [_item("X")], {"X": 200})
+    assert out[0]["title"] == TITLE               # המקורית, לא lowercase
+    assert "_title" not in out[0] and "_orig" not in out[0]
+
+
+def test_both_versions_carry_their_own_title(monkeypatch):
+    short = ("S", "מחזור 5 | תקציר: א - ב 1-0", "2026-09-20T20:00:00+00:00")
+    long_ = ("L", "מחזור 5 | תקציר מורחב: א - ב 1-0", "2026-09-20T20:05:00+00:00")
+    monkeypatch.setattr(main, "_rss_feed", lambda cid: [short, long_])
+    monkeypatch.setattr(main, "_video_durations", lambda ids: {"S": 90, "L": 300})
+    monkeypatch.setattr(main, "_is_short", lambda vid: False)
+    out = main.search_youtube("א", "ב", "2026-09-20", "UC1", il_both=True,
+                              home_alt="א", away_alt="ב") or []
+    assert [(v["video_id"], "מורחב" in v["title"]) for v in out] == [("S", False), ("L", True)]
