@@ -70,3 +70,24 @@ def test_but_a_rematch_is_still_out_of_reach():
     """זה מה שהתקרה שמרה מפניו: אותן שתי קבוצות נפגשות שוב."""
     assert not main.is_il_both_teams(OFFICIAL, "הפועל תל אביב", "הפועל פתח תקווה",
                                      "2026-10-20", "2026-09-18")
+
+
+def test_kiryat_shmona_is_written_hapoel_on_the_channels():
+    """הקבוצה נקראת אצלנו "עירוני קריית שמונה", והערוצים כותבים
+    "הפועל" — גם בשם המלא וגם בקיצור ק"ש. באר שבע–קריית שמונה ממחזור 5
+    לא הציע את התקציר של המנהלת בגלל זה (הבעלים, 9.10.26)."""
+    he_h = main.to_hebrew_team("Hapoel Be'er Sheva")
+    he_a = main.to_hebrew_team("Hapoel Ironi Kiryat Shmona")
+    for t in ('מחזור 5 | תקציר: הפועל ב"ש - הפועל ק"ש 2-1',
+              'מחזור 5 | תקציר מורחב: הפועל ק"ש - הפועל ב"ש 0-1',
+              "מחזור 5 | תקציר: הפועל באר שבע - הפועל קריית שמונה 2-1"):
+        assert main.is_il_both_teams(t, he_h, he_a), t
+
+
+def test_the_source_is_named_after_the_channel_not_the_league():
+    """"ליגת העל — תקציר" נקרא כאילו הליגה היא המקור."""
+    src = next(s for s in main.LEAGUES["israel"]["sources"] if s["id"] == "ipfl")
+    assert src["name"] == "מנהלת הליגות"
+    assert src["name"] != main.LEAGUES["israel"]["name"]
+    html = open("index.html", encoding="utf-8").read()
+    assert "'מנהלת הליגות': 'IPFL'" in html      # שם לועזי לשאר השפות

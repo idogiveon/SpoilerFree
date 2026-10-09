@@ -131,3 +131,13 @@ def test_when_both_are_there_nothing_changed(monkeypatch):
                   {"SHORT": 62, "LONG": 244})
     assert [v["label"] for v in out] == ["תקציר קצר", "תקציר מלא"]
     assert [v["extended"] for v in out] == [False, True]
+
+
+def test_an_old_cached_label_does_not_survive_on_screen():
+    """התווית נשמרת ב-videos_json, ולכן משחקים שנבדקו לפני השינוי
+    נושאים עדיין "תקציר מלא" — והמשתמש ראה "תקציר ארוך" על מקור עם
+    אפשרות אחת (הבעלים, 9.10.26). ההכרעה עברה לרגע התצוגה, כך שגם
+    שורות ישנות מתוקנות בלי לגעת בקאש."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "const kindLabel = (v, alone) => alone ? t('kind_regular')" in html
+    assert "kindLabel(v, source.videos.length === 1)" in html

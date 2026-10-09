@@ -30,7 +30,7 @@ def test_one_variable_takes_them_all_out(db, monkeypatch):
     """אם יגיע מכתב, הכיבוי חייב להיות מיידי ובלי deploy."""
     monkeypatch.setattr(main, "UNOFFICIAL_SOURCES", False)
     names = [s["name"] for s in main.get_sources_for_match(_row(db))]
-    assert names == ["ספורט 1", "ערוץ הספורט", "ליגת העל"]
+    assert names == ["ספורט 1", "ערוץ הספורט", "מנהלת הליגות"]
 
 
 def test_the_three_are_marked_in_the_config():
