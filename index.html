@@ -469,7 +469,7 @@
   "choose_version": "בחר גרסה לצפייה", "opens_youtube": "↗ = נפתח ביוטיוב",
   "search_again": "↻ חפש שוב (מנקה קאש)", "search_error": "שגיאה בחיפוש תקציר",
   "no_matches_day": "אין משחקים בתאריך זה", "no_matches_day_hint": "מהליגות שנאספות — ליגה מתעדכנת דרך הטאב שלה",
-  "kind_short": "תקציר קצר", "kind_full": "תקציר מלא", "kind_extended": "תקציר מורחב", "kind_regular": "תקציר",
+  "kind_short": "תקציר", "kind_full": "תקציר ארוך", "kind_extended": "תקציר ארוך", "kind_regular": "תקציר",
   "favorites": "מועדפים", "fav_hint": "סמן/בטל קבוצה מועדפת",
   "reason_not_over": "המשחק עדיין לא נגמר",
   "reason_stale": "עדיין לא התקבל עדכון שהמשחק הסתיים — נסה שוב בעוד כמה דקות",
@@ -526,7 +526,7 @@
   "choose_version": "Choose a version to watch", "opens_youtube": "↗ = opens on YouTube",
   "search_again": "↻ Search again", "search_error": "Couldn't search for highlights",
   "no_matches_day": "No matches on this date", "no_matches_day_hint": "From the leagues we follow — a league updates from its own tab",
-  "kind_short": "Short highlights", "kind_full": "Full highlights", "kind_extended": "Extended highlights", "kind_regular": "Highlights",
+  "kind_short": "Highlights", "kind_full": "Extended highlights", "kind_extended": "Extended highlights", "kind_regular": "Highlights",
   "favorites": "Favorites", "fav_hint": "Add/remove favorite team",
   "reason_not_over": "The match hasn't finished yet",
   "reason_stale": "We haven't received confirmation that the match has finished — try again in a few minutes",
@@ -583,7 +583,7 @@
   "choose_version": "Elige una versión", "opens_youtube": "↗ = se abre en YouTube",
   "search_again": "↻ Buscar de nuevo", "search_error": "Error al buscar el resumen",
   "no_matches_day": "No hay partidos en esta fecha", "no_matches_day_hint": "De las ligas que seguimos — una liga se actualiza desde su pestaña",
-  "kind_short": "Resumen corto", "kind_full": "Resumen completo", "kind_extended": "Resumen extendido", "kind_regular": "Resumen",
+  "kind_short": "Resumen", "kind_full": "Resumen extendido", "kind_extended": "Resumen extendido", "kind_regular": "Resumen",
   "favorites": "Favoritos", "fav_hint": "Añadir/quitar equipo favorito",
   "reason_not_over": "El partido aún no ha terminado",
   "reason_stale": "Aún no hemos recibido la confirmación de que el partido terminó — inténtalo en unos minutos",
@@ -640,7 +640,7 @@
   "choose_version": "Choisissez une version", "opens_youtube": "↗ = s'ouvre sur YouTube",
   "search_again": "↻ Rechercher à nouveau", "search_error": "Erreur lors de la recherche du résumé",
   "no_matches_day": "Aucun match à cette date", "no_matches_day_hint": "Parmi les ligues suivies — une ligue se met à jour depuis son onglet",
-  "kind_short": "Résumé court", "kind_full": "Résumé complet", "kind_extended": "Résumé long", "kind_regular": "Résumé",
+  "kind_short": "Résumé", "kind_full": "Résumé long", "kind_extended": "Résumé long", "kind_regular": "Résumé",
   "favorites": "Favoris", "fav_hint": "Ajouter/retirer une équipe favorite",
   "reason_not_over": "Le match n'est pas encore terminé",
   "reason_stale": "Nous n'avons pas encore la confirmation que le match est terminé — réessayez dans quelques minutes",
@@ -708,6 +708,9 @@
   }
 
   // השרת מחזיר את סוג התקציר בעברית — מתורגם כאן
+  // המחרוזות מהשרת הן מזהים פנימיים — הן שמורות בקאש של משחקים ישנים,
+  // ולכן לא משנים אותן. מה שהמשתמש רואה נקבע כאן: "תקציר" הוא הקצר,
+  // כי ככה רוב האנשים מבינים את המילה, ו"ארוך" הוא המורחב (הבעלים, 9.10.26)
   const HE_LABEL_KIND = { 'תקציר קצר': 'kind_short', 'תקציר מלא': 'kind_full',
                           'תקציר מורחב': 'kind_extended', 'תקציר': 'kind_regular' };
   const kindLabel = v => HE_LABEL_KIND[v.label] ? t(HE_LABEL_KIND[v.label]) : v.label;

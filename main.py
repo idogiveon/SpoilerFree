@@ -3112,6 +3112,12 @@ def is_match_highlight(title: str, home: str, away: str,
 
     exclude = exclude or any(
         re.search(rf"(?<!\w){m}(?!\w)", t) for m in _WOMENS_MARKERS)
+    # נוער: U14 עד U23, עם מקף או בלי. הרשימה הקבועה כללה u19/u20/u23
+    # ו**לא** u18 — וצ'לסי–ברנטפורד החזיר "Chelsea U18 5-0 Bournemouth
+    # U18" (מהמשתמש, 9.10.26). חשוב מעבר לחור הנקודתי: קבוצת הנוער
+    # משחקת לרוב את אותו מפגש, ואז הכותרת מזהה את שתי הקבוצות הנכונות
+    # ועוברת את כל הכללים האחרים
+    exclude = exclude or bool(re.search(r"(?<!\w)u-?(1[0-9]|2[0-3])(?!\w)", t))
 
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
