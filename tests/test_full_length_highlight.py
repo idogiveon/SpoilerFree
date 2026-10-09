@@ -139,5 +139,20 @@ def test_an_old_cached_label_does_not_survive_on_screen():
     אפשרות אחת (הבעלים, 9.10.26). ההכרעה עברה לרגע התצוגה, כך שגם
     שורות ישנות מתוקנות בלי לגעת בקאש."""
     html = open("index.html", encoding="utf-8").read()
-    assert "const kindLabel = (v, alone) => alone ? t('kind_regular')" in html
+    assert "const kindLabel = (v, alone) => (alone && !v.extended) ? t('kind_regular')" in html
     assert "kindLabel(v, source.videos.length === 1)" in html
+
+
+def test_a_lone_extended_video_still_says_long():
+    """כשהמנהלת העלתה רק "תקציר מורחב", הכפתור אמר "תקציר" והפנה
+    לגרסה הארוכה. הכלל "אחד = תקציר" חל רק כשההבחנה הוסקה מהמשך;
+    כותרת שאומרת "מורחב" היא עובדה מהמקור (הבעלים, 9.10.26)."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "(alone && !v.extended)" in html
+
+
+def test_the_server_marks_an_extended_title(monkeypatch):
+    out = _search(monkeypatch,
+                  [("LONG", 'מחזור 5 | תקציר מורחב: מכבי חיפה - עירוני טבריה 2-3',
+                    "2026-09-22T10:00:00+00:00")], {"LONG": 400})
+    assert [(v["label"], v["extended"]) for v in out] == [("תקציר מורחב", True)]
