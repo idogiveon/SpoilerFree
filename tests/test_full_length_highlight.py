@@ -111,14 +111,14 @@ def _item(vid):
     return (vid, TITLE, "2026-09-20T20:00:00+00:00")
 
 
-def test_a_single_candidate_says_which_version_it_is(monkeypatch):
-    """הכפתור אמר "תקציר" סתם, והמשתמש גילה רק אחרי הלחיצה שקיבל דקה.
-    את המשך כבר מדדנו — אז הוא כתוב. (4:04 הוא הסרטון האמיתי של
-    באיירן–אוניון ברלין ממחזור 4.)"""
-    assert [v["label"] for v in _search(monkeypatch, [_item("LONG")], {"LONG": 244})] \
-        == ["תקציר מלא"]
-    assert [v["label"] for v in _search(monkeypatch, [_item("SHORT")], {"SHORT": 62})] \
-        == ["תקציר קצר"]
+def test_a_single_candidate_is_just_highlights(monkeypatch):
+    """ניסיתי לתייג מועמד יחיד לפי המשך ("קצר"/"ארוך"), כדי שהמשתמש
+    ידע מה הוא מקבל. בפועל זה בלבל: תקציר יחיד של ערוץ ישראלי הופיע
+    כ"תקציר ארוך" בלי שקיימת גרסה שנייה בכלל (הבעלים, 9.10.26).
+    כשאין במה לבחור, התווית לא מוסיפה מידע."""
+    for dur in (244, 62):
+        assert [v["label"] for v in _search(monkeypatch, [_item("X")], {"X": dur})] \
+            == ["תקציר"], dur
 
 
 def test_without_a_duration_it_does_not_guess(monkeypatch):

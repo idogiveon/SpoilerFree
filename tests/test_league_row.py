@@ -21,8 +21,21 @@ def test_the_row_does_not_wrap():
 
 
 def test_there_is_a_hint_that_more_exists():
-    """גוללן בלי סרגל וללא רמז נראה כמו רשימה שנגמרה."""
-    assert "mask-image:linear-gradient" in _css(".league-scroll {")
+    """גוללן בלי סרגל וללא רמז נראה כמו רשימה שנגמרה. הדהייה תלויה
+    עכשיו במצב הגלילה — קודם היא הופיעה בשני הקצוות תמיד, כלומר רמזה
+    "יש עוד" גם בצד שנגמר."""
+    assert "mask-image:linear-gradient" in _css(".league-scroll.can-left.can-right {")
+    assert "mask-image:none" in _css(".league-scroll {")
+
+
+def test_a_mouse_gets_arrows_and_a_finger_does_not():
+    """בלפטופ אין החלקה, והגלילה הצדית לא גלויה (מהבעלים, 9.10.26).
+    בטלפון מחליקים, ושם החצים רק גונבים מקום."""
+    assert 'id="lg-start"' in HTML and 'id="lg-end"' in HTML
+    assert ".scroll-arrow { display:none; }" in HTML
+    assert "@media (hover:hover) and (pointer:fine)" in HTML
+    # הכיוון מחושב פיזית, לא לוגית — scrollLeft גדל ימינה בשני הכיוונים
+    assert "const fromLeft = rtl ? sc.scrollLeft + max : sc.scrollLeft;" in HTML
 
 
 def test_the_settings_button_stays_reachable():

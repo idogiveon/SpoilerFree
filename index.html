@@ -95,9 +95,26 @@
     .league-scroll { display:flex; gap:0.5rem; overflow-x:auto; flex:1;
       scroll-behavior:smooth; -webkit-overflow-scrolling:touch;
       scrollbar-width:none; padding-bottom:2px;
-      /* דהייה בקצוות — הרמז היחיד שיש עוד */
-      mask-image:linear-gradient(to right, transparent, #000 14px,
-                                 #000 calc(100% - 14px), transparent); }
+      /* הדהייה תלויה במצב: קודם היא הופיעה בשני הקצוות תמיד, כלומר
+         רמזה "יש עוד" גם בצד שנגמר */
+      mask-image:none; }
+    .league-scroll.can-left.can-right { mask-image:linear-gradient(to right,
+      transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+    .league-scroll.can-left:not(.can-right) {
+      mask-image:linear-gradient(to right, transparent, #000 14px); }
+    .league-scroll.can-right:not(.can-left) {
+      mask-image:linear-gradient(to right, #000 calc(100% - 14px), transparent); }
+    /* חצי גלילה — במסך עם עכבר. בטלפון מחליקים, ושם הם רק גונבים מקום */
+    .scroll-arrow { display:none; }
+    @media (hover:hover) and (pointer:fine) {
+      .scroll-arrow { display:flex; align-items:center; justify-content:center;
+        flex:0 0 auto; width:30px; height:30px; border-radius:50%;
+        background:var(--card); border:1px solid var(--border);
+        color:var(--muted); cursor:pointer; font-size:1.2rem; line-height:1;
+        font-family:'Heebo',sans-serif; transition:all 0.2s; }
+      .scroll-arrow:hover { color:var(--accent); border-color:var(--accent); }
+      .scroll-arrow[hidden] { display:none; }
+    }
     .league-scroll::-webkit-scrollbar { display:none; }
     .league-scroll .tab { flex:0 0 auto; white-space:nowrap; }
     /* קו מפריד בין הליגות לגביעים */
@@ -336,6 +353,7 @@
   <button class="tab" id="leagues-toggle" aria-expanded="false">🏆 ליגות</button>
 </div>
 <div class="league-tabs collapsed" id="league-tabs">
+<button class="scroll-arrow" id="lg-start" data-i18n-title="more_leagues" hidden>‹</button>
 <div class="league-scroll" id="league-scroll">
   <button class="tab" data-league="premier" data-i18n="lg_premier" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 פרמייר ליג</button>
   <button class="tab" data-league="championship" data-i18n="lg_championship" data-prefix="🏴󠁧󠁢󠁥󠁮󠁧󠁿 ">🏴󠁧󠁢󠁥󠁮󠁧󠁿 צ'מפיונשיפ</button>
@@ -355,6 +373,7 @@
   <button class="tab" data-league="copadelrey" data-i18n="lg_copadelrey" data-prefix="🏆 ">🏆 גביע המלך</button>
   <button class="tab" data-league="coupedefrance" data-i18n="lg_coupedefrance" data-prefix="🏆 ">🏆 הגביע הצרפתי</button>
 </div>
+<button class="scroll-arrow" id="lg-end" data-i18n-title="more_leagues" hidden>›</button>
   <button class="tab tab-edit" id="edit-leagues"
           data-i18n-title="leagues_screen" title="ליגות">⚙</button>
 </div>
@@ -435,7 +454,7 @@
   "fav_search": "חפש קבוצה להוספה…", "fav_add": "הוסף", "fav_remove": "הסר", "fav_no_results": "לא נמצאו קבוצות",
   "fav_leagues": "ליגות מועדפות", "fav_teams": "קבוצות מועדפות",
   "hidden_leagues": "הסתרת ליגות", "hidden_n": "{n} ליגות מוסתרות בתצוגה הזו — לשינוי", "hidden_1": "ליגה אחת מוסתרת בתצוגה הזו — לשינוי",
-  "leagues_screen": "ליגות", "leagues_hint": "ליגות מסומנות מוצגות באתר. ליגה שתבטל לא תופיע בכפתורים למעלה ולא בתצוגה לפי יום.",
+  "leagues_screen": "ליגות", "more_leagues": "עוד ליגות", "leagues_hint": "ליגות מסומנות מוצגות באתר. ליגה שתבטל לא תופיע בכפתורים למעלה ולא בתצוגה לפי יום.",
   "settings": "הגדרות", "scores_title": "הצגת תוצאות", "scores_show": "הצג תוצאות", "scores_hide": "הסתר תוצאות",
   "score_show_one": "הצג תוצאה", "score_hide_one": "הסתר",
   "scores_hint": "הכפתור שלמעלה חל על התצוגה הפתוחה בלבד.",
@@ -492,7 +511,7 @@
   "fav_search": "Search a team to add…", "fav_add": "Add", "fav_remove": "Remove", "fav_no_results": "No teams found",
   "fav_leagues": "Favorite leagues", "fav_teams": "Favorite teams",
   "hidden_leagues": "Hide leagues", "hidden_n": "{n} leagues hidden from this view — change", "hidden_1": "One league hidden from this view — change",
-  "leagues_screen": "Leagues", "leagues_hint": "Checked leagues are shown. A league you uncheck disappears from the buttons above and from the day view.",
+  "leagues_screen": "Leagues", "more_leagues": "More leagues", "leagues_hint": "Checked leagues are shown. A league you uncheck disappears from the buttons above and from the day view.",
   "settings": "Settings", "scores_title": "Showing scores", "scores_show": "Show scores", "scores_hide": "Hide scores",
   "score_show_one": "Show the score", "score_hide_one": "Hide",
   "scores_hint": "The button above applies to the open view only.",
@@ -549,7 +568,7 @@
   "fav_search": "Busca un equipo para añadir…", "fav_add": "Añadir", "fav_remove": "Quitar", "fav_no_results": "No se encontraron equipos",
   "fav_leagues": "Ligas favoritas", "fav_teams": "Equipos favoritos",
   "hidden_leagues": "Ocultar ligas", "hidden_n": "{n} ligas ocultas en esta vista — cambiar", "hidden_1": "Una liga oculta en esta vista — cambiar",
-  "leagues_screen": "Ligas", "leagues_hint": "Las ligas marcadas se muestran. La que desmarques desaparece de los botones de arriba y de la vista por día.",
+  "leagues_screen": "Ligas", "more_leagues": "Más ligas", "leagues_hint": "Las ligas marcadas se muestran. La que desmarques desaparece de los botones de arriba y de la vista por día.",
   "settings": "Ajustes", "scores_title": "Mostrar resultados", "scores_show": "Mostrar resultados", "scores_hide": "Ocultar resultados",
   "score_show_one": "Mostrar el resultado", "score_hide_one": "Ocultar",
   "scores_hint": "El botón de arriba afecta solo a la vista abierta.",
@@ -606,7 +625,7 @@
   "fav_search": "Cherchez une équipe à ajouter…", "fav_add": "Ajouter", "fav_remove": "Retirer", "fav_no_results": "Aucune équipe trouvée",
   "fav_leagues": "Ligues favorites", "fav_teams": "Équipes favorites",
   "hidden_leagues": "Masquer des ligues", "hidden_n": "{n} ligues masquées dans cette vue — modifier", "hidden_1": "Une ligue masquée dans cette vue — modifier",
-  "leagues_screen": "Ligues", "leagues_hint": "Les ligues cochées sont affichées. Une ligue décochée disparaît des boutons ci-dessus et de la vue par jour.",
+  "leagues_screen": "Ligues", "more_leagues": "Plus de ligues", "leagues_hint": "Les ligues cochées sont affichées. Une ligue décochée disparaît des boutons ci-dessus et de la vue par jour.",
   "settings": "Réglages", "scores_title": "Afficher les scores", "scores_show": "Afficher les scores", "scores_hide": "Masquer les scores",
   "score_show_one": "Afficher le score", "score_hide_one": "Masquer",
   "scores_hint": "Le bouton ci-dessus s'applique à la vue ouverte uniquement.",
@@ -2365,6 +2384,7 @@
     sep.hidden = !cups.some(t => !t.classList.contains('is-hidden'));
     // הסידור מאפס את מיקום הגלילה, ולכן החשיפה חייבת לבוא אחריו
     revealActiveTab();
+    updateScrollArrows();
   }
 
   // הליגה שנבחרה יכולה להיות מחוץ לתחום הנראה בגוללן. חישוב מפורש
@@ -2381,6 +2401,34 @@
                   behavior: 'instant' });
   }
 
+  // חצי הגלילה ומצב הדהייה. הכול במונחים פיזיים (שמאל/ימין על המסך)
+  // ולא לוגיים: scrollLeft מתנהג אותו דבר בשני הכיוונים — גדל = ימינה —
+  // ורק הערכים ב-RTL שליליים
+  function updateScrollArrows() {
+    const sc = document.getElementById('league-scroll');
+    const a = document.getElementById('lg-start'), b = document.getElementById('lg-end');
+    if (!sc || !a || !b) return;
+    const rtl = document.documentElement.dir === 'rtl';
+    const max = sc.scrollWidth - sc.clientWidth;
+    const fromLeft = rtl ? sc.scrollLeft + max : sc.scrollLeft;
+    const canLeft = max > 2 && fromLeft > 1;
+    const canRight = max > 2 && fromLeft < max - 1;
+    sc.classList.toggle('can-left', canLeft);
+    sc.classList.toggle('can-right', canRight);
+    // "התחלה" היא שמאל ב-LTR וימין ב-RTL
+    a.hidden = !(rtl ? canRight : canLeft);
+    b.hidden = !(rtl ? canLeft : canRight);
+    a.textContent = rtl ? '›' : '‹';
+    b.textContent = rtl ? '‹' : '›';
+  }
+
+  function scrollTabs(toStart) {
+    const sc = document.getElementById('league-scroll');
+    const rtl = document.documentElement.dir === 'rtl';
+    const step = Math.max(140, sc.clientWidth * 0.8);
+    sc.scrollBy({ left: (toStart === rtl ? 1 : -1) * step });
+  }
+
   function updateLeaguesToggle() {
     const btn = document.getElementById('leagues-toggle');
     btn.textContent = '🏆 ' + t('by_league');
@@ -2390,6 +2438,8 @@
   function toggleLeagueTabs(open) {
     const row = document.getElementById('league-tabs');
     const isOpen = open === undefined ? row.classList.contains('collapsed') : open;
+    // בזמן שהשורה סגורה clientWidth הוא אפס, ולכן המדידה חייבת לחכות לה
+    if (isOpen) setTimeout(updateScrollArrows, 0);
     row.classList.toggle('collapsed', !isOpen);
     document.getElementById('leagues-toggle').setAttribute('aria-expanded', String(isOpen));
   }
@@ -2454,6 +2504,11 @@
   document.getElementById('sheet-close').addEventListener('click', closeSheet);
   document.getElementById('sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
   document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
+  document.getElementById('lg-start').addEventListener('click', () => scrollTabs(true));
+  document.getElementById('lg-end').addEventListener('click', () => scrollTabs(false));
+  document.getElementById('league-scroll')
+    .addEventListener('scroll', updateScrollArrows, { passive: true });
+  window.addEventListener('resize', updateScrollArrows);
   document.getElementById('refresh-btn').addEventListener('click', doRefresh);
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
