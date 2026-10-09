@@ -857,7 +857,7 @@ LOGIN_I18N = {
            "set_pw_title": "בחר סיסמה לכניסות הבאות", "new_password": "סיסמה (8 תווים לפחות)",
            "confirm_password": "הקלד אותה שוב", "save": "שמירה וכניסה", "pw_mismatch": "הסיסמאות לא זהות",
            "back_to_email": "חזרה לכניסה במייל",
-           "legacy_link": "כניסה עם סיסמה (זמני)", "privacy_link": "פרטיות", "terms_link": "תנאי שימוש",
+           "legacy_link": "כניסה עם סיסמה (זמני)", "privacy_link": "פרטיות", "name_optional": "שם (לא חובה)", "terms_link": "תנאי שימוש",
            "agree": "בהרשמה אתה מסכים ל{t} ול{p}.", "ok": "אישור", "generic_err": "שגיאה — נסה שוב",
            "code_len": "הקוד הוא 6 ספרות", "wrong_password": "סיסמה שגויה",
            "err_invalid_email": "כתובת מייל לא תקינה", "err_send_failed": "שליחת המייל נכשלה — נסה שוב בעוד דקה",
@@ -884,7 +884,7 @@ LOGIN_I18N = {
            "set_pw_title": "Choose a password for next time", "new_password": "Password (at least 8 characters)",
            "confirm_password": "Type it again", "save": "Save and continue", "pw_mismatch": "Passwords don't match",
            "back_to_email": "Back to email login",
-           "legacy_link": "Log in with password (temporary)", "privacy_link": "Privacy", "terms_link": "Terms",
+           "legacy_link": "Log in with password (temporary)", "privacy_link": "Privacy", "name_optional": "Name (optional)", "terms_link": "Terms",
            "agree": "By signing up you agree to the {t} and the {p} notice.", "ok": "OK", "generic_err": "Something went wrong — try again",
            "code_len": "The code has 6 digits", "wrong_password": "Wrong password",
            "err_invalid_email": "Invalid email address", "err_send_failed": "Couldn't send the email — try again in a minute",
@@ -911,7 +911,7 @@ LOGIN_I18N = {
            "set_pw_title": "Elige una contraseña para la próxima vez", "new_password": "Contraseña (mínimo 8 caracteres)",
            "confirm_password": "Repítela", "save": "Guardar y entrar", "pw_mismatch": "Las contraseñas no coinciden",
            "back_to_email": "Volver al acceso por correo",
-           "legacy_link": "Entrar con contraseña (temporal)", "privacy_link": "Privacidad", "terms_link": "Términos",
+           "legacy_link": "Entrar con contraseña (temporal)", "privacy_link": "Privacidad", "name_optional": "Nombre (opcional)", "terms_link": "Términos",
            "agree": "Al registrarte aceptas los {t} y la {p}.", "ok": "Aceptar", "generic_err": "Algo salió mal — inténtalo de nuevo",
            "code_len": "El código tiene 6 dígitos", "wrong_password": "Contraseña incorrecta",
            "err_invalid_email": "Correo no válido", "err_send_failed": "No se pudo enviar el correo — inténtalo en un minuto",
@@ -941,7 +941,7 @@ LOGIN_I18N = {
            "new_password": "Mot de passe (8 caractères min.)", "confirm_password": "Retapez-le",
            "save": "Enregistrer et continuer", "pw_mismatch": "Les mots de passe ne correspondent pas",
            "back_to_email": "Retour à la connexion par e-mail",
-           "legacy_link": "Connexion par mot de passe (temporaire)", "privacy_link": "Confidentialité", "terms_link": "Conditions",
+           "legacy_link": "Connexion par mot de passe (temporaire)", "privacy_link": "Confidentialité", "name_optional": "Nom (facultatif)", "terms_link": "Conditions",
            "agree": "En vous inscrivant vous acceptez les {t} et la {p}.", "ok": "OK", "generic_err": "Une erreur est survenue — réessayez",
            "code_len": "Le code comporte 6 chiffres", "wrong_password": "Mot de passe incorrect",
            "err_invalid_email": "Adresse e-mail invalide", "err_send_failed": "L'e-mail n'a pas pu être envoyé — réessayez dans une minute",
@@ -1044,6 +1044,7 @@ border:1px solid #2a2a3a;border-radius:6px;padding:0.2rem 0.4rem;font-size:0.75r
 <div id="step-register" hidden>
   <p data-i18n="register_title">הרשמה — מייל וסיסמה</p>
   <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="username" dir="ltr">
+  <input type="text" id="reg-name" autocomplete="name" maxlength="40">
   <input type="password" id="reg-pw" autocomplete="new-password" dir="ltr">
   <input type="password" id="reg-pw2" autocomplete="new-password" dir="ltr">
   <input type="password" id="reg-admin-key" autocomplete="off" dir="ltr" hidden>
@@ -1122,6 +1123,8 @@ if (!LANG || !L[LANG]) LANG = deviceLang();
 const t = k => (L[LANG] || {})[k] ?? L.he[k] ?? k;
 function applyLang() {
   document.documentElement.lang = LANG;
+  const nm = $('reg-name');
+  if (nm) nm.placeholder = t('name_optional');
   document.documentElement.dir = LANG === 'he' ? 'rtl' : 'ltr';
   document.title = 'SpoilerFree — ' + t('title');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
@@ -1177,7 +1180,9 @@ async function register() {
   if (a !== b) { $('err').textContent = t('pw_mismatch'); return; }
   $('reg-btn').disabled = true; $('err').textContent = '';
   try {
-    await post('/auth/register', {email, password: a, lang: LANG, admin_key: $('reg-admin-key').value});
+    await post('/auth/register', {email, password: a, lang: LANG,
+                                  name: $('reg-name').value,
+                                  admin_key: $('reg-admin-key').value});
     go();
   } catch (e) {
     $('err').textContent = e.message;
@@ -1297,6 +1302,10 @@ a{color:#00e5a0}
 table{border-collapse:collapse;width:100%;font-size:0.85rem;min-width:820px}
 th,td{padding:0.55rem 0.6rem;border-bottom:1px solid #2a2a3a;text-align:right;white-space:nowrap}
 th{color:#6b6b80;font-weight:400;font-size:0.75rem}
+/* השם הוא תא שנראה כמו טקסט ונלחץ כמו כפתור */
+button.nm{border:none;background:none;color:#e8e8f0;padding:0.1rem 0.2rem;margin:0;
+font-size:0.85rem;text-align:right}
+button.nm:hover{text-decoration:underline;color:#00e5a0}
 .st{padding:0.1rem 0.5rem;border-radius:100px;font-size:0.72rem}
 .pending{background:rgba(255,193,7,0.15);color:#ffc107}
 .approved{background:rgba(0,229,160,0.12);color:#00e5a0}
@@ -1315,7 +1324,7 @@ button.no{border-color:#ff4757;color:#ff4757}
 <thead><tr><th>מייל</th><th>סטטוס</th><th>נרשם</th><th>כניסה אחרונה</th>
 <th>כניסות</th><th>פתיחות אפליקציה</th><th>משחקים שנפתחו</th><th>תקצירים שנצפו</th>
 <th>ליגות מובילות</th><th>פעילות אחרונה</th><th></th></tr></thead>
-<tbody id="rows"><tr><td colspan="11" class="muted">טוען...</td></tr></tbody>
+<tbody id="rows"><tr><td colspan="12" class="muted">טוען...</td></tr></tbody>
 </table></div>
 <h1 style="margin-top:2rem">מי מעלה ראשון — ליגת העל (21 ימים)</h1>
 <div class="sub muted">דקות מסיום המשחק (משוער: פתיחה + 115 דק') עד שהתקציר עלה.
@@ -1341,7 +1350,7 @@ function when(iso) {
 const ST = {pending:'ממתין', approved:'מאושר', blocked:'חסום'};
 async function load() {
   const r = await fetch('/admin/api/users');
-  if (!r.ok) { document.getElementById('rows').innerHTML = '<tr><td colspan="11">אין הרשאה</td></tr>'; return; }
+  if (!r.ok) { document.getElementById('rows').innerHTML = '<tr><td colspan="12">אין הרשאה</td></tr>'; return; }
   const {users, kpis} = await r.json();
   document.getElementById('kpis').innerHTML =
     [['משתמשים', kpis.total], ['ממתינים', kpis.pending], ['פעילים 7 ימים', kpis.active_7d],
@@ -1361,7 +1370,14 @@ async function load() {
       <td>${u.login_count || 0}</td><td>${u.app_open || 0}</td><td>${u.match_open || 0}</td>
       <td>${u.highlight_play || 0}</td><td>${lg}</td><td>${when(u.last_active)}</td>
       <td>${u.is_admin ? '' : btns + reset}</td></tr>`;
-  }).join('') || '<tr><td colspan="11" class="muted">אין משתמשים עדיין</td></tr>';
+  }).join('') || '<tr><td colspan="12" class="muted">אין משתמשים עדיין</td></tr>';
+}
+async function editName(email, current) {
+  const name = prompt('שם המשתמש (ריק = מחיקה):', current || '');
+  if (name === null) return;
+  const r = await fetch('/admin/api/users/' + encodeURIComponent(email), {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
+  if (!r.ok) alert('נכשל'); load();
 }
 async function setStatus(email, status) {
   const r = await fetch('/admin/api/users/' + encodeURIComponent(email), {
@@ -1680,7 +1696,10 @@ def init_db():
     _add_missing_columns(conn, "users",
                          ("password_hash TEXT", "pw_fails INTEGER DEFAULT 0",
                           "pw_locked_until TEXT", "pw_reset_until TEXT",
-                          "onboarded_at TEXT"))   # מסכי הפתיחה (#32) הוצגו
+                          "onboarded_at TEXT",
+                          # שם אופציונלי: מהמשתמש בהרשמה, או מהבעלים
+                          # ידנית למי שנרשם בכתובת שלא אומרת כלום (9.10.26)
+                          "name TEXT"))   # מסכי הפתיחה (#32) הוצגו
     conn.execute("""
         CREATE TABLE IF NOT EXISTS login_codes (
             email      TEXT PRIMARY KEY,
@@ -5446,6 +5465,16 @@ def _guard_signup(request: Request) -> None:
     _rate_limit("signup:*", REGISTER_PER_HOUR)
 
 
+NAME_MAX_LEN = 40
+
+
+def _clean_name(payload) -> str:
+    """שם אופציונלי: שורה אחת, בלי רווחים כפולים, חתוך לאורך סביר.
+    ריק מוחזר כ-None כדי שלא תישמר מחרוזת ריקה בעמודה."""
+    name = " ".join(str((payload or {}).get("name") or "").split())
+    return name[:NAME_MAX_LEN] or None
+
+
 def _email_from(payload) -> str:
     email = str(payload.get("email") or "").strip().lower()
     if len(email) > 200 or not EMAIL_RE.match(email):
@@ -5555,9 +5584,10 @@ def auth_verify(payload: dict = Body(...)):
     new_user = user is None
     if new_user:
         conn.execute(
-            "INSERT INTO users (email, status, is_admin, created_at, approved_at, login_count) "
-            "VALUES (?, 'approved', ?, ?, ?, 0)",
-            (email, int(email in ADMIN_EMAILS), now.isoformat(), now.isoformat()))
+            "INSERT INTO users (email, status, is_admin, created_at, approved_at, "
+            "login_count, name) VALUES (?, 'approved', ?, ?, ?, 0, ?)",
+            (email, int(email in ADMIN_EMAILS), now.isoformat(), now.isoformat(),
+             _clean_name(payload)))
     elif user["status"] != "approved":
         # ממתינים מהמנגנון הקודם (אישור ידני) — המייל אומת, נכנסים
         conn.execute("UPDATE users SET status='approved', approved_at=? WHERE email=?",
@@ -5620,8 +5650,9 @@ def auth_register(request: Request, payload: dict = Body(...)):
     new_user = u is None
     if new_user:
         conn.execute(
-            "INSERT INTO users (email, status, is_admin, created_at, approved_at, login_count) "
-            "VALUES (?, 'approved', 0, ?, ?, 0)", (email, now.isoformat(), now.isoformat()))
+            "INSERT INTO users (email, status, is_admin, created_at, approved_at, "
+            "login_count, name) VALUES (?, 'approved', 0, ?, ?, 0, ?)",
+            (email, now.isoformat(), now.isoformat(), _clean_name(payload)))
     else:
         # בלי סיסמה (ממתין מהמנגנון הישן / אופס ע"י המנהל) — נרשם מחדש
         conn.execute("UPDATE users SET status='approved', approved_at=COALESCE(approved_at, ?) "
@@ -5721,10 +5752,12 @@ def auth_me(request: Request):
     u = current_user(request) or {}
     # onboarded: האם כבר הוצגו מסכי הפתיחה (#32). מי שכבר יש לו מועדפים —
     # לא מציגים לו. בלי חשבון אישי: None (הפרונט לא מציג)
-    onboarded = None
+    onboarded, name = None, None
     if u.get("email"):
         conn = get_db()
-        r = conn.execute("SELECT onboarded_at FROM users WHERE email=?", (u["email"],)).fetchone()
+        r = conn.execute("SELECT onboarded_at, name FROM users WHERE email=?",
+                         (u["email"],)).fetchone()
+        name = r["name"] if r else None
         has = (conn.execute("SELECT 1 FROM favorites WHERE email=? LIMIT 1", (u["email"],)).fetchone()
                or conn.execute("SELECT 1 FROM favorite_leagues WHERE email=? LIMIT 1",
                                (u["email"],)).fetchone())
@@ -5736,7 +5769,8 @@ def auth_me(request: Request):
             # שתי הכתובות מריצות את אותו קוד ונראות זהות. הסימונים האלה
             # הם מה שמבדיל ביניהן — ומה שמאפשר לענות על "למה זה נפתח
             # ביוטיוב אצלי?" בלי לנחש איזה משתנה הוגדר איפה.
-            "private": bool(ALLOWED_EMAILS), "embed": EMBED_IN_APP}
+            "private": bool(ALLOWED_EMAILS), "embed": EMBED_IN_APP,
+            "name": name}
 
 
 @app.post("/auth/onboarded")
@@ -6247,13 +6281,22 @@ def admin_api_update_user(request: Request, email: str, payload: dict = Body(...
     require_admin(request)
     email = unquote(email).strip().lower()
     status = payload.get("status")
-    if status not in ("approved", "blocked", "pending"):
+    # עדכון שם בלבד: הבעלים יודע מי עומד מאחורי כתובת לא מזוהה
+    name_only = "name" in payload and status is None
+    if not name_only and status not in ("approved", "blocked", "pending"):
         raise HTTPException(400, "סטטוס לא תקין")
     conn = get_db()
     row = conn.execute("SELECT status FROM users WHERE email=?", (email,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(404, "משתמש לא נמצא")
+    if "name" in payload:
+        conn.execute("UPDATE users SET name=? WHERE email=?",
+                     (_clean_name(payload), email))
+    if name_only:
+        conn.commit()
+        conn.close()
+        return {"ok": True, "email": email, "name": _clean_name(payload)}
     conn.execute("UPDATE users SET status=?, "
                  "approved_at = CASE WHEN ?='approved' THEN ? ELSE approved_at END WHERE email=?",
                  (status, status, _now().isoformat(), email))

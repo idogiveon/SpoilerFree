@@ -1295,7 +1295,8 @@
       const user = document.getElementById('drawer-user');
       const items = [];
       if (me.auth_on) {
-        user.textContent = me.email || t('account');
+        // שם אם יש, אחרת הכתובת — זה מה שהמשתמש מזהה כעצמו
+        user.textContent = me.name || me.email || t('account');
         user.hidden = false;
       }
       items.push(`<button class="drawer-item" onclick="closeDrawer(); openFavorites()"><span class="ico">⭐</span>${t('favorites')}</button>`);
