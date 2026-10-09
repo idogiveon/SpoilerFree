@@ -3000,6 +3000,13 @@ _STRONG_HIGHLIGHT = ("highlight", "תקציר", "resumen", "zusammenfassung", "s
                      "sammendrag", "hoydepunkter", "sestrih", "ozet", "sintesi",
                      "resumo", "melhores momentos")
 
+# מפעלי נשים שלא מכילים את המילה women. ארסנל העלו ב-19.9 את
+# "... | Arsenal vs Manchester United (1-1) | WSL" — תקציר של קבוצת
+# הנשים, באותו יום שבו הגברים שיחקו מול ברייטון (מהמשתמש, 9.10.26).
+# גבול מילה ולא תת-מחרוזת: "wsl" יושב גם בתוך "newsletter"
+_WOMENS_MARKERS = ("wsl", "nwsl", "uwcl", "frauen", "femenina", "feminina",
+                   "kvinner", "damallsvenskan", "feminil")
+
 
 def _within_days(published: str, match_date: str, days: int) -> bool:
     """הסרטון עלה ביום המשחק ועד X ימים אחריו."""
@@ -3103,6 +3110,15 @@ def is_match_highlight(title: str, home: str, away: str,
                    # תוכנית אולפן לפני המשחק (Man City, Shakhtar, Wrexham)
                    "matchday live", "match day live"])
 
+    exclude = exclude or any(
+        re.search(rf"(?<!\w){m}(?!\w)", t) for m in _WOMENS_MARKERS)
+    # נוער: U14 עד U23, עם מקף או בלי. הרשימה הקבועה כללה u19/u20/u23
+    # ו**לא** u18 — וצ'לסי–ברנטפורד החזיר "Chelsea U18 5-0 Bournemouth
+    # U18" (מהמשתמש, 9.10.26). חשוב מעבר לחור הנקודתי: קבוצת הנוער
+    # משחקת לרוב את אותו מפגש, ואז הכותרת מזהה את שתי הקבוצות הנכונות
+    # ועוברת את כל הכללים האחרים
+    exclude = exclude or bool(re.search(r"(?<!\w)u-?(1[0-9]|2[0-3])(?!\w)", t))
+
     # "תקציר" בכותרת = תקציר. החיפוש כבר scoped לערוץ הנכון.
     # חשוב: הבדיקה הזו חייבת להיות אחרי הגדרת exclude (UnboundLocalError)
     if "תקציר" in t and not exclude:
@@ -3138,8 +3154,15 @@ def is_match_highlight(title: str, home: str, away: str,
 
     # ערוץ מועדון שלא כותב את היריבה כלל ("HIGHLIGHTS | A proper PSV night"):
     # חייבת מילת תקציר אמיתית — לא "goals"/"vs" הגנריות, שמופיעות גם
-    # בסרטוני שערי החודש ובקומפילציות של שחקן. המתקשר מגביל ליום המשחק/למחרת
-    if loose_club and implicit_team and not exclude and any(w in t for w in _STRONG_HIGHLIGHT):
+    # בסרטוני שערי החודש ובקומפילציות של שחקן. המתקשר מגביל ליום המשחק/למחרת.
+    #
+    # אבל כותרת שכן מצהירה על מפגש ("Arsenal vs Manchester United (1-1)")
+    # אמורה לזהות את היריבה שלנו — ואם לא, זה פשוט משחק אחר באותו יום
+    # ובאותו ערוץ: נשים, נוער, או מפעל אחר. זה הכלל הכללי; רשימת מפעלי
+    # הנשים למעלה היא רק שכבה שנייה
+    names_a_fixture = re.search(r"(?<!\w)vs?\.?(?!\w)|\d{1,2}\s*[-–:]\s*\d{1,2}", t)
+    if (loose_club and implicit_team and not exclude and not names_a_fixture
+            and any(w in t for w in _STRONG_HIGHLIGHT)):
         return True
     return has_both and highlight and not exclude
 
