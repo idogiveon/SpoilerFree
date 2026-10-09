@@ -14,13 +14,21 @@ def _mobile_block():
 
 
 def test_the_score_keeps_its_distance_from_the_team_buttons():
-    """שני כללים ל-.match-score באותה ספציפיות, והשני מחק את המרווח:
-    נמדד 4.8px במקום 14.4, עם חפיפה אופקית כמעט מלאה. לחיצה בטעות על
-    הכוכב של הקבוצה השנייה חשפה תוצאה."""
-    decls = re.findall(r"\.match-score \{([^}]*)\}", HTML)
-    assert len(decls) == 2                       # פריסה + טיפוגרפיה
-    assert sum("margin-top" in d for d in decls) == 1
-    assert "margin-top:0.9rem" in decls[0]
+    """ההגנה הייתה מרווח אנכי, ושני כללים ל-.match-score מחקו אותו
+    בשקט (נמדד 4.8px במקום 14.4). עכשיו ההפרדה היא מבנית: התוצאה
+    יושבת בפינה של ה-✕ ולא מתחת לכפתורי הקבוצות (הבעלים, 9.10.26)."""
+    head = HTML[HTML.index('<div class="modal-header">'):]
+    head = head[:head.index("</div>\n    <div id=\"modal-body\"")]
+    # לא באותו בלוק עם שמות הקבוצות
+    assert head.index('id="modal-favs"') < head.index('class="modal-side"')
+    assert 'id="modal-score"' in head[head.index('class="modal-side"'):]
+    # ומרווח אמיתי מה-✕, שלחיצה לא תסגור את החלון בטעות
+    side = re.search(r"\.modal-side \{([^}]*)\}", HTML).group(1)
+    assert "gap:1.5rem" in side
+    # וכלל אחד בלבד ל-.match-score
+    assert len(re.findall(r"\.match-score \{", HTML)) == 2      # פריסה + טיפוגרפיה
+    assert sum("margin-top" in d for d in
+               re.findall(r"\.match-score \{([^}]*)\}", HTML)) == 0
 
 
 def test_the_day_nav_can_wrap():
