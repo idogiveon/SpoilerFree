@@ -2808,7 +2808,13 @@ def is_il_both_teams(title: str, home_he: str, away_he: str,
         return False
     if published and match_date:
         try:
-            last = datetime.fromisoformat(match_date).date() + timedelta(days=3)
+            # HIGHLIGHT_MAX_DAYS ולא 3: הערוץ של המנהלת העלה את התקציר
+            # של מחזור 5 ארבעה ימים אחרי המשחק ("מחזור 5 | תקציר מורחב:
+            # הפועל ת"א - הפועל פ"ת 0-3", 22.9 מול משחק ב-18.9), והתקרה
+            # הקודמת פסלה אותו בשקט. המדידה שהראתה מקסימום של 2.7 ימים
+            # בישראל הייתה חתוכה בדיוק על ידי התקרה הזו (הבעלים, 9.10.26)
+            last = datetime.fromisoformat(match_date).date() + timedelta(
+                days=HIGHLIGHT_MAX_DAYS)
             if published[:10] > last.isoformat():
                 return False
         except ValueError:
@@ -2848,7 +2854,10 @@ def is_il_both_teams_en(title: str, home_en: str, away_en: str,
         return False
     if any(x in t for x in ("full match", "all the goals", "only goals", "u19", "u21", "women")):
         return False
-    if published and match_date and not _within_days(published, match_date, 3):
+    # אותה תקרה כמו בעברית — ראה ההערה שם (הערוץ של המנהלת העלה
+    # ארבעה ימים אחרי המשחק, והתקרה של 3 פסלה בשקט)
+    if published and match_date and not _within_days(published, match_date,
+                                                     HIGHLIGHT_MAX_DAYS):
         return False
     return _en_team_in(home_en, t) and _en_team_in(away_en, t)
 

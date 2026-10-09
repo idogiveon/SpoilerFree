@@ -44,3 +44,29 @@ def test_wrong_saved_results_are_cleared_once(db):
     main.init_db()
     assert db.execute("SELECT COUNT(*) AS n FROM highlight_cache").fetchone()["n"] == 0
     assert db.execute("SELECT 1 FROM meta WHERE key='israel_cache_v2'").fetchone()
+
+
+# ── המנהלת מעלה מאוחר (מהבעלים, 9.10.26) ────────────────────────────
+OFFICIAL = 'מחזור 5 | תקציר מורחב: הפועל ת"א - הפועל פ"ת 0-3'
+
+
+def test_the_league_channel_uploads_four_days_later():
+    """הפועל ת"א–הפועל פ"ת שוחק ב-18.9; הערוץ של מנהלת הליגות העלה
+    ב-22.9. תקרה של שלושה ימים פסלה את זה בשקט, והמשתמש ראה רק את
+    הערוץ הפיראטי.
+
+    שים לב גם לקיצורים בכותרת — ת"א ו-פ"ת — שכן מזוהים."""
+    assert main.is_il_both_teams(OFFICIAL, "הפועל תל אביב", "הפועל פתח תקווה",
+                                 "2026-09-22", "2026-09-18")
+
+
+def test_and_the_english_rule_moved_with_it():
+    t = "Hapoel Tel Aviv vs. Hapoel Petah Tikva - Game Highlights"
+    assert main.is_il_both_teams_en(t, "Hapoel Tel-Aviv", "Hapoel Petah Tikva",
+                                    "2026-09-22", "2026-09-18")
+
+
+def test_but_a_rematch_is_still_out_of_reach():
+    """זה מה שהתקרה שמרה מפניו: אותן שתי קבוצות נפגשות שוב."""
+    assert not main.is_il_both_teams(OFFICIAL, "הפועל תל אביב", "הפועל פתח תקווה",
+                                     "2026-10-20", "2026-09-18")
