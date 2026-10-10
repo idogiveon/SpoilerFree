@@ -626,8 +626,16 @@ AUTH_DEV = os.environ.get("AUTH_DEV") == "1"
 # מ-Render הייתה פותחת את האתר לכולם.
 # ב-Render (RENDER=true מוגדר אוטומטית) הכניסה תמיד חובה — גם כשכל משתני
 # הסיסמה/המייל נמחקו (הרשמה עם מייל+סיסמה לא צריכה אף אחד מהם).
-AUTH_ON  = bool(APP_PASSWORD or GMAIL_USER or BREVO_API_KEY or GMAIL_CLIENT_ID or AUTH_DEV
-                or os.environ.get("RENDER"))
+# מופע פרטי: רשימת כתובות שמותר להן להיכנס. ריק = פתוח (האתר הציבורי).
+ALLOWED_EMAILS = {e.strip().lower()
+                  for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()}
+
+# כניסה חובה רק כשהאתר באמת סגור: הכתובת הפרטית (ALLOWED_EMAILS), או
+# בקשה מפורשת (REQUIRE_LOGIN=1). בציבורית הדבר הראשון שמשתמש חדש רואה
+# הוא האתר ולא עמוד הרשמה (הבעלים, 10.10.26) — מי שכבר רשום ממשיך
+# להיכנס דרך /login, והמועדפים שלו נשארים בחשבון.
+AUTH_ON  = bool(ALLOWED_EMAILS or AUTH_DEV
+                or os.environ.get("REQUIRE_LOGIN") == "1")
 
 SESSION_DAYS      = 90
 CODE_MINUTES      = 10
@@ -715,9 +723,16 @@ def require_auth(request: Request):
         raise HTTPException(401, "נדרשת התחברות")
 
 
+def _admin_exempt() -> bool:
+    """פיתוח מקומי בלי שום הגדרה — הניהול פתוח. בכל מקום אחר הוא דורש
+    משתמש מנהל, גם כשהכניסה לאתר אינה חובה: `if not AUTH_ON` היה פותח
+    את רשימת המשתמשים לכל אנונימי ברגע שהאתר נפתח (10.10.26)."""
+    return not (AUTH_ON or ADMIN_EMAILS or APP_PASSWORD or os.environ.get("RENDER"))
+
+
 def require_admin(request: Request):
     """נקודות דיבאג/אדמין — רק למנהלים (לא לכל משתמש מאושר)."""
-    if not AUTH_ON:
+    if _admin_exempt():
         return
     u = current_user(request)
     if not u:
@@ -3750,6 +3765,16 @@ def root(request: Request):
     return serve_frontend(request)
 
 
+@app.get("/login")
+def login_page(request: Request):
+    """כניסה למי שכבר רשום. באתר הציבורי הכניסה אינה חובה, ולכן אין
+    הפניה אוטומטית לכאן — אבל מי שיש לו חשבון מגיע דרך הקישור הזה
+    ומקבל בחזרה את המועדפים וההעדפות שלו (10.10.26)."""
+    if is_authed(request) and current_user(request):
+        return RedirectResponse("/", status_code=303)
+    return HTMLResponse(render_login_page(), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/health")
 def health():
     return {"status": "SpoilerFree API ✓"}
@@ -4748,10 +4773,6 @@ EMBED_IN_APP = os.environ.get("EMBED_IN_APP", "1") != "0"
 # יכבה אותם מיד — זו החשיפה המשפטית הממשית היחידה של האתר, ואם יגיע
 # מכתב, הכיבוי צריך להיות משתנה סביבה ולא deploy.
 UNOFFICIAL_SOURCES = os.environ.get("UNOFFICIAL_SOURCES", "1") != "0"
-# מופע פרטי: רשימת כתובות שמותר להן להיכנס. ריק = פתוח (האתר הציבורי).
-ALLOWED_EMAILS = {e.strip().lower()
-                  for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()}
-
 PREFETCH_EVERY_MIN   = 30
 PREFETCH_MAX_MATCHES = 20
 # #10 מי מעלה ראשון: בליגות האלה גם "לא נמצא" נבדק שוב בכל סבב (לפי
@@ -5778,7 +5799,9 @@ def auth_me(request: Request):
         conn.close()
         onboarded = bool((r and r["onboarded_at"]) or has)
     return {"auth_on": AUTH_ON, "email": u.get("email"),
-            "is_admin": bool(u.get("is_admin")) or not AUTH_ON,
+            # לא "or not AUTH_ON": באתר פתוח זה היה הופך כל מבקר למנהל
+            # בעיני הלקוח, ומציג לו את הקישור לעמוד הניהול
+            "is_admin": bool(u.get("is_admin")),
             "legacy": bool(u.get("legacy")), "onboarded": onboarded,
             # שתי הכתובות מריצות את אותו קוד ונראות זהות. הסימונים האלה
             # הם מה שמבדיל ביניהן — ומה שמאפשר לענות על "למה זה נפתח
@@ -6176,7 +6199,7 @@ def list_teams(request: Request, lang: str = "he"):
 
 @app.get("/admin/users")
 def admin_users_page(request: Request):
-    if AUTH_ON and not (current_user(request) or {}).get("is_admin"):
+    if not _admin_exempt() and not (current_user(request) or {}).get("is_admin"):
         return RedirectResponse("/")
     return HTMLResponse(ADMIN_USERS_PAGE)
 
