@@ -245,6 +245,11 @@
     /* גם אירועי עכבר לא מגיעים למסגרת: בלי זה, מעבר עכבר מוציא את
        הסרגל של יוטיוב על הווידאו. הפקדים שלנו ממילא מחוץ לו. */
     .video-container.shielded iframe { pointer-events:none; }
+    /* ה-iframe חסום ללחיצות (אחרת מעבר עכבר מוציא את הסרגל של יוטיוב),
+       ולכן הקליקים נתפסים בשכבה משלנו: לחיצה = הפעלה/השהיה, לחיצה
+       כפולה = דילוג 10 שניות לפי הצד שנלחץ (הבעלים, 10.10.26) */
+    .vid-tap { position:absolute; inset:0; z-index:4; cursor:pointer; }
+    .video-container:not(.shielded) .vid-tap { display:none; }
     /* פקדים משלנו — מתחת לנגן, לא מעליו */
     .vid-bar { display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.75rem;
       background:#000; border-top:1px solid var(--border); }
@@ -1917,6 +1922,7 @@
                       onclick="retryHighlights('${matchId}')">${t('search_again')}</button>
             </div>
             <div id="video-frame"></div>
+            <div class="vid-tap" id="vid-tap"></div>
           </div>`;
         body.innerHTML = pickerHTML;
       })
@@ -2061,7 +2067,10 @@
             container.classList.add('shielded');
             // הממשק של יוטיוב נשאר על המסך עוד כמה שניות אחרי ההפעלה
             clearTimeout(chromeTimer);
-            chromeTimer = setTimeout(() => container.classList.remove('chrome-risk'), 3500);
+            // 6 שניות ולא 3.5: הכותרת של הסרטון הספיקה להסתנן רגע לפני
+            // שהמסכה ירדה (הבעלים, 10.10.26). המסכה מכסה רק פס עליון
+            // ופינה, לא את הווידאו — אין מחיר לשניות הנוספות
+            chromeTimer = setTimeout(() => container.classList.remove('chrome-risk'), 6000);
             showVideoBar();
           } else if (e.data === YT.PlayerState.ENDED) {
             // מסך הסיום מציע משחקים אחרים, עם התוצאה בתמונה הממוזערת
@@ -2104,15 +2113,26 @@
       <span class="vid-time" id="vid-dur">0:00</span>
       <button class="vid-btn" id="vid-full" aria-label="fullscreen">⤢</button>`;
     document.querySelector('.video-container').after(bar);
-    document.getElementById('vid-play').onclick = () => {
-      const playing = ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
-      if (playing) {
-        coverChrome();          // לפני ההשהיה, אחרת הכותרת מבליחה
-        ytPlayer.pauseVideo();
-      } else {
-        ytPlayer.playVideo();
-      }
-    };
+    document.getElementById('vid-play').onclick = togglePlay;
+    // לחיצה על הנגן עצמו. הפרדה בין לחיצה ללחיצה כפולה דורשת השהיה
+    // קצרה — אחרת כל דאבל־קליק היה גם מפעיל ומשהה בדרך
+    const tap = document.getElementById('vid-tap');
+    if (tap) {
+      let tapTimer = null;
+      tap.onclick = e => {
+        if (tapTimer) return;                 // החלק הראשון של לחיצה כפולה
+        tapTimer = setTimeout(() => { tapTimer = null; togglePlay(); }, 260);
+      };
+      tap.ondblclick = e => {
+        clearTimeout(tapTimer); tapTimer = null;
+        const box = tap.getBoundingClientRect();
+        // חצי שמאלי אחורה, ימני קדימה — פיזית, כמו בכל נגן מדיה,
+        // ובלי תלות בכיוון הממשק
+        const back = (e.clientX - box.left) < box.width / 2;
+        const c = ytPlayer.getCurrentTime() || 0, d = ytPlayer.getDuration() || 0;
+        ytPlayer.seekTo(Math.max(0, Math.min(d - 0.5, c + (back ? -10 : 10))), true);
+      };
+    }
     document.getElementById('vid-full').onclick = toggleTheatre;
     const seek = document.getElementById('vid-seek');
     seek.oninput = () => {
@@ -2190,6 +2210,16 @@
     shield.innerHTML = shieldHTML('🛡️', t('loading'));
     ytPlayer.playVideo();
     armPlayNudge(shield);
+  }
+
+  function togglePlay() {
+    if (!ytPlayer || !ytPlayer.getPlayerState) return;
+    if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+      coverChrome();            // לפני ההשהיה, אחרת הכותרת מבליחה
+      ytPlayer.pauseVideo();
+    } else {
+      ytPlayer.playVideo();
+    }
   }
 
   function replayVideo() {

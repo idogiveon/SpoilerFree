@@ -41,9 +41,11 @@ def test_the_masks_are_not_tied_to_hovering():
     assert "function coverChrome()" in HTML
     assert "if (e.data !== YT.PlayerState.PLAYING) coverChrome();" in HTML
     # והשהיה שלנו מכסה לפני הקריאה, כדי שלא תהיה הבלחה
-    block = HTML[HTML.index("document.getElementById('vid-play').onclick"):]
-    block = block[:block.index("};")]
+    # ההשהיה עברה ל-togglePlay, שמשרת גם את הכפתור וגם לחיצה על הנגן
+    block = HTML[HTML.index("function togglePlay()"):]
+    block = block[:block.index("\n  }")]
     assert block.index("coverChrome()") < block.index("pauseVideo()")
+    assert "document.getElementById('vid-play').onclick = togglePlay;" in HTML
 
 
 def test_the_frame_never_receives_the_pointer():
@@ -174,3 +176,28 @@ def test_going_back_stops_the_player():
     back = back[:back.index("\n  }")]
     for call in ("ytPlayer.destroy()", "clearInterval(vidTimer)", "hideVideoBar()"):
         assert call in back, call
+
+
+# ── הנגן נלחץ (הבעלים, 10.10.26) ────────────────────────────────────
+def test_the_player_itself_is_clickable():
+    """ה-iframe חסום ללחיצות כדי שמעבר עכבר לא יוציא את הסרגל של
+    יוטיוב, ולכן הקליקים נתפסים בשכבה משלנו."""
+    assert 'id="vid-tap"' in HTML
+    assert "pointer-events:none" in _css(".video-container.shielded iframe")
+    tap = _css(".vid-tap")
+    assert "position:absolute" in tap and "inset:0" in tap
+
+
+def test_a_single_click_plays_and_a_double_click_skips():
+    """בלי ההשהיה הקצרה, כל לחיצה כפולה הייתה גם מפעילה ומשהה בדרך."""
+    assert "tapTimer = setTimeout(() => { tapTimer = null; togglePlay(); }, 260);" in HTML
+    dbl = HTML[HTML.index("tap.ondblclick"):]
+    dbl = dbl[:dbl.index("\n      };")]
+    assert "clearTimeout(tapTimer)" in dbl
+    assert "c + (back ? -10 : 10)" in dbl
+    assert "box.width / 2" in dbl          # חצי שמאלי אחורה, ימני קדימה
+
+
+def test_the_mask_outlives_the_title():
+    """3.5 שניות לא הספיקו — הכותרת הסתננה רגע לפני שהמסכה ירדה."""
+    assert "container.classList.remove('chrome-risk'), 6000)" in HTML
