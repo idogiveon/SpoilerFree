@@ -1982,6 +1982,10 @@
   // שלושתם מכוסים כאן. בלי שליטה במצב הנגן אי אפשר לדעת מתי בטוח
   // לחשוף אותו, ולכן נטען ה-IFrame API של יוטיוב.
   let ytPlayer = null, ytApi = null, ytNudge = null, chromeTimer = null;
+  // ytReady: פקודת playVideo לפני שהנגן מוכן נבלעת בשקט, וזה מה שגרם
+  // ל"צריך ללחוץ נגן כמה פעמים" (הבעלים, 11.10.26). ytWantsPlay זוכר
+  // את הכוונה ומפעיל ברגע שהנגן מוכן
+  let ytReady = false, ytWantsPlay = false;
 
   // כל מצב שאינו "מתנגן" עלול להציג את הכותרת ואת ההצעות
   function coverChrome() {
@@ -2022,6 +2026,7 @@
     if (!pickerHTML) return;
     try { if (ytPlayer && ytPlayer.destroy) ytPlayer.destroy(); } catch (e) {}
     ytPlayer = null;
+    ytReady = ytWantsPlay = false;
     clearInterval(vidTimer);
     hideVideoBar();
     document.getElementById('modal-body').innerHTML = pickerHTML;
@@ -2049,6 +2054,8 @@
     // יתחיל לבד. במקרה כזה המגן מציג כפתור הפעלה — הנגיעה בו היא
     // מחווה של המשתמש, וזה מה שהדפדפן דורש.
     armPlayNudge(shield);
+    // כל סרטון מקבל נגן חדש, והדגל חייב לרדת לפני היצירה
+    ytReady = ytWantsPlay = false;
     ytPlayer = new YT.Player('yt-player', {
       videoId,
       host: 'https://www.youtube-nocookie.com',
@@ -2060,6 +2067,10 @@
                     iv_load_policy: 3, fs: 0, playsinline: 1, cc_load_policy: 0,
                     hl: 'en' },
       events: {
+        onReady: () => {
+          ytReady = true;
+          if (ytWantsPlay) { ytWantsPlay = false; ytPlayer.playVideo(); }
+        },
         onStateChange: e => {
           if (e.data === YT.PlayerState.PLAYING) {
             clearTimeout(ytNudge);
@@ -2195,8 +2206,11 @@
   function armPlayNudge(shield) {
     clearTimeout(ytNudge);
     ytNudge = setTimeout(() => {
-      if (!ytPlayer || !ytPlayer.getPlayerState) return;
-      if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
+      if (!ytPlayer) return;
+      // נגן שעדיין לא מוכן: הכפתור כן חוזר, והלחיצה תיזכר ל-onReady.
+      // קודם הייתה כאן יציאה שקטה, והמגן נתקע על "טוען"
+      if (ytReady && ytPlayer.getPlayerState
+          && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) return;
       shield.innerHTML = shieldHTML('▶', t('tap_to_play'), t('play_btn'), 'startVideo()');
     }, 2500);
   }
@@ -2208,12 +2222,13 @@
     if (!ytPlayer) return;
     const shield = document.getElementById('shield');
     shield.innerHTML = shieldHTML('🛡️', t('loading'));
-    ytPlayer.playVideo();
+    if (ytReady) ytPlayer.playVideo();
+    else ytWantsPlay = true;      // יופעל ב-onReady, בלי לחיצה נוספת
     armPlayNudge(shield);
   }
 
   function togglePlay() {
-    if (!ytPlayer || !ytPlayer.getPlayerState) return;
+    if (!ytPlayer || !ytReady || !ytPlayer.getPlayerState) return;
     if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
       coverChrome();            // לפני ההשהיה, אחרת הכותרת מבליחה
       ytPlayer.pauseVideo();

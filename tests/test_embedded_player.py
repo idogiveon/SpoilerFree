@@ -201,3 +201,42 @@ def test_a_single_click_plays_and_a_double_click_skips():
 def test_the_mask_outlives_the_title():
     """3.5 שניות לא הספיקו — הכותרת הסתננה רגע לפני שהמסכה ירדה."""
     assert "container.classList.remove('chrome-risk'), 6000)" in HTML
+
+
+# ── "צריך ללחוץ נגן כמה פעמים" (הבעלים, 11.10.26) ───────────────────
+def test_a_press_before_the_player_is_ready_is_not_lost():
+    """playVideo לפני onReady נבלעת בשקט: 2.5 שניות אחר כך הכפתור חזר,
+    הבעלים לחץ שוב, ואז זה עבד. הכוונה נזכרת ומופעלת ברגע המוכנות."""
+    assert "onReady:" in HTML
+    ready = HTML[HTML.index("onReady:"):]
+    ready = ready[:ready.index("onStateChange:")]
+    assert "ytReady = true" in ready
+    assert "ytWantsPlay" in ready and "ytPlayer.playVideo()" in ready
+
+    start = HTML[HTML.index("function startVideo()"):]
+    start = start[:start.index("\n  }")]
+    assert "if (ytReady) ytPlayer.playVideo();" in start
+    assert "else ytWantsPlay = true;" in start
+
+
+def test_each_video_gets_a_fresh_readiness_flag():
+    """נגן חדש נוצר לכל סרטון. דגל שנשאר דולק מהנגן הקודם היה מחזיר
+    בדיוק את אותו באג מהסרטון השני והלאה."""
+    load = HTML[HTML.index("async function loadVideo("):HTML.index("new YT.Player(")]
+    assert "ytReady = ytWantsPlay = false;" in load
+    back = HTML[HTML.index("function backToSources()"):]
+    assert "ytReady = ytWantsPlay = false;" in back[:back.index("\n  }")]
+
+
+def test_the_shield_does_not_get_stuck_on_loading():
+    """קודם היה כאן return שקט כשהנגן לא היה מוכן, והמגן נשאר על
+    "טוען" בלי שום כפתור."""
+    nudge = HTML[HTML.index("function armPlayNudge("):]
+    nudge = nudge[:nudge.index("\n  }")]
+    assert "if (!ytPlayer || !ytPlayer.getPlayerState) return;" not in nudge
+    assert "ytReady && ytPlayer.getPlayerState" in nudge
+
+
+def test_our_play_pause_waits_for_the_player():
+    toggle = HTML[HTML.index("function togglePlay()"):]
+    assert "!ytReady" in toggle[:toggle.index("\n")+200]
