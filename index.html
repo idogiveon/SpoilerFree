@@ -18,6 +18,10 @@
       --bg: #0a0a0f; --surface: #13131a; --card: #1a1a24; --card-hover: #21212e;
       --border: #2a2a3a; --accent: #00e5a0; --text: #e8e8f0; --muted: #6b6b80; --danger: #ff4757;
       --live: #ff6b6b;
+      /* גובה סרגל הנגן. התצוגה המורחבת מחשבת לפיו את הגובה הפנוי,
+         וקודם היה שם 44px קבוע — פחות מהגובה בפועל (44 + ריווח +
+         גבול), ולכן התמונה גלשה מעט בסיבוב לרוחב */
+      --vid-bar-h: 60px;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     /* hidden גובר על display:flex של חלונות (אחרת החלון נפתח בטעינה) */
@@ -251,12 +255,15 @@
     .vid-tap { position:absolute; inset:0; z-index:4; cursor:pointer; }
     .video-container:not(.shielded) .vid-tap { display:none; }
     /* פקדים משלנו — מתחת לנגן, לא מעליו */
-    .vid-bar { display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.75rem;
+    .vid-bar { display:flex; align-items:center; gap:0.7rem; padding:0 0.75rem;
+      min-height:var(--vid-bar-h);
       background:#000; border-top:1px solid var(--border); }
-    /* 44×44: נמדד 17.5×17.6 — מתחת לכל מינימום מגע, ודווקא במסך
-       שנמצא בשימוש יומיומי. ה-flex של הסרגל מרכז אותם בתוך היעד */
-    .vid-btn { background:none; border:none; color:var(--accent); font-size:1.1rem;
-      cursor:pointer; padding:0; line-height:1; min-width:44px; min-height:44px;
+    /* 48×48: נמדד 17.5×17.6 — מתחת לכל מינימום מגע, ודווקא במסך
+       שנמצא בשימוש יומיומי. ה-flex של הסרגל מרכז אותם בתוך היעד.
+       font-size הוא גודל הסמל עצמו ולא היעד: ב-1.1rem היעד היה תקני
+       אבל ⏸ ו-⤢ נראו קטנים (הבעלים, 13.10.26) */
+    .vid-btn { background:none; border:none; color:var(--accent); font-size:1.5rem;
+      cursor:pointer; padding:0; line-height:1; min-width:48px; min-height:48px;
       display:flex; align-items:center; justify-content:center; }
     .vid-time { font-size:0.7rem; color:var(--muted); font-variant-numeric:tabular-nums; }
     /* פס של 3px הוא יעד גרירה בלתי אפשרי באצבע; הגובה הוא אזור המגע,
@@ -274,10 +281,10 @@
        הסרגל. בלי מגבלת הגובה, סיבוב לרוחב גלש מהמסך וחתך את התמונה
        למעלה ולמטה (22.9.26). aspect-ratio שומר 16:9, כך שהמסכות
        נשארות בדיוק על הכותרת ועל ההצעות. */
-    .video-container.theatre { position:fixed; left:50%; top:calc((100vh - 44px) / 2);
-      top:calc((100dvh - 44px) / 2); transform:translate(-50%, -50%);
-      width:min(100vw, calc((100vh - 44px) * 16 / 9));
-      width:min(100vw, calc((100dvh - 44px) * 16 / 9));
+    .video-container.theatre { position:fixed; left:50%; top:calc((100vh - var(--vid-bar-h)) / 2);
+      top:calc((100dvh - var(--vid-bar-h)) / 2); transform:translate(-50%, -50%);
+      width:min(100vw, calc((100vh - var(--vid-bar-h)) * 16 / 9));
+      width:min(100vw, calc((100dvh - var(--vid-bar-h)) * 16 / 9));
       aspect-ratio:16 / 9; height:auto; padding-bottom:0; z-index:3000; }
     .vid-bar.theatre { position:fixed; inset-inline:0; bottom:0; z-index:3001; }
     .shield-icon { font-size:3rem; }

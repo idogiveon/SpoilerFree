@@ -40,11 +40,26 @@ def test_the_day_nav_can_wrap():
 
 def test_the_player_controls_can_be_hit_with_a_finger():
     """נמדד 17.5×17.6 ו-16.1×17.6, ופס גרירה של 3px — במסך שנמצא
-    בשימוש יומיומי."""
+    בשימוש יומיומי. 44 הוא הרצפה ולא המידה: הכפתורים גדלו ל-48
+    (הבעלים, 13.10.26), והבדיקה אמורה לשמור על המינימום, לא לקבע מידה."""
     btn = re.search(r"\.vid-btn \{([^}]*)\}", HTML).group(1)
-    assert "min-width:44px" in btn and "min-height:44px" in btn
+    for prop in ("min-width", "min-height"):
+        px = re.search(rf"{prop}:(\d+)px", btn)
+        assert px and int(px.group(1)) >= 44, f"{prop}: {btn}"
     seek = re.search(r"\.vid-seek \{([^}]*)\}", HTML).group(1)
     assert "height:28px" in seek
+
+
+def test_the_expanded_view_measures_the_real_bar_height():
+    """החישוב החזיק 44px קבוע, בעוד הסרגל גבוה יותר (יעד + ריווח +
+    גבול) — ולכן התמונה גלשה מעט בסיבוב לרוחב. עכשיו שניהם קוראים
+    את אותו משתנה, וזה לא יכול להיפרד שוב."""
+    assert "--vid-bar-h:" in HTML
+    bar = re.search(r"\.vid-bar \{([^}]*)\}", HTML).group(1)
+    assert "min-height:var(--vid-bar-h)" in bar
+    theatre = re.search(r"\.video-container\.theatre \{([^}]*)\}", HTML).group(1)
+    assert "44px" not in theatre
+    assert theatre.count("var(--vid-bar-h)") == 4
 
 
 def test_live_is_not_hidden_on_a_phone():
