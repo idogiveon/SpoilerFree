@@ -3224,6 +3224,16 @@ def is_match_highlight(title: str, home: str, away: str,
 # "חוזרת לנצח: אספניול גוברת על אוססונה 0:2", "2:2 אדיר בין לאציו למילאן",
 # לפעמים רק קבוצה אחת: "מלדיני מוביל את קליארי לעוד ניצחון" (13.9.26).
 HE_GENERIC_WORDS = {"ריאל", "אתלטיק", "מדריד", "דפורטיבו"}   # משותפות לכמה קבוצות
+# מילה גנרית אינה מזהה לבדה — אבל בלעדיה "ריאל מדריד" אינו ניתן לזיהוי
+# בכלל, כי שתי מילות השם גנריות. ספורט 5 כותבת "ריאל השלימה מהפך מול
+# רומא", וההתאמה נפלה (הבעלים, 15.10.26). לכן היא כן מזהה כשהיא עומדת
+# כמילה שלמה ואין בטקסט מילה שמייחדת מועדון אחר מאותה משפחה.
+HE_SIBLINGS = {
+    "ריאל":   ("סוסיאדד", "בטיס", "ויאדוליד", "ויאריאל"),
+    "מדריד":  ("אתלטיקו", "ראיו"),
+    "אתלטיק": ("אתלטיקו",),
+    "דפורטיבו": ("אלאבס", "לה קורוניה"),
+}
 HEADLINE_EXCLUDE = ("#", "בדיוק היום", "ראיון", "מסיבת עיתונאים", "אימון",
                     "החתימה", "הציגה את", "חתם", "פציעה", "נפצע", "פוטר",
                     "שידור חי")
@@ -3236,8 +3246,31 @@ def _he_team_in(team_he: str, title: str) -> bool:
     if any(_he_contains(v, title) for v in he_team_variants(team_he)):
         return True
     # גם "/" מפריד מילים: "בודו/גלימט" → "גלימט" (ספורט 5: "בודה גלימט")
-    return any(_he_contains(w, title) for w in re.split(r"[\s/]+", team_he)
-               if len(w) >= 3 and w not in HE_GENERIC_WORDS)
+    words = re.split(r"[\s/]+", team_he)
+    specific = [w for w in words if len(w) >= 3 and w not in HE_GENERIC_WORDS]
+    if any(_he_contains(w, title) for w in specific):
+        return True
+    # לשם שיש לו מילה מייחדת ("ריאל סוסיאדד") היא חייבת להופיע, אחרת
+    # כותרת על ריאל מדריד הייתה נקראת כסוסיאדד. המוצא הגנרי שמור לשם
+    # שכל מילותיו גנריות — "ריאל מדריד", שאין לו מילה מייחדת כלל
+    if specific:
+        return False
+    return any(_he_generic_identifies(w, title) for w in words)
+
+
+def _he_generic_identifies(word: str, title: str) -> bool:
+    """מילה גנרית מזהה רק כשאין מתחרה מאותה משפחה בטקסט, וכמילה שלמה:
+    "ויאריאל" מכיל את "ריאל" כמחרוזת, ואינו ריאל מדריד."""
+    siblings = HE_SIBLINGS.get(word)
+    if siblings is None or any(s in title for s in siblings):
+        return False
+    return _he_word(word, title)
+
+
+def _he_word(needle: str, text: str) -> bool:
+    """כמילה שלמה, עם אות תחילית אחת מותרת (ב/ו/ל/מ/ש/ה)."""
+    return re.search(r"(?:^|[^֐-׿])[בולמשה]?" + re.escape(needle)
+                     + r"(?:$|[^֐-׿])", text) is not None
 
 
 def _he_contains(needle: str, text: str) -> bool:
@@ -3245,8 +3278,7 @@ def _he_contains(needle: str, text: str) -> bool:
     (ב/ו/ל/מ/ש/ה): "לניס" ✓, "ניסיון" ✗, "לילה" ✗ עבור ליל. ארוך — הכלה."""
     if len(needle) > 3:
         return needle in text
-    return re.search(r"(?:^|[^֐-׿])[בולמשה]?" + re.escape(needle)
-                     + r"(?:$|[^֐-׿])", text) is not None
+    return _he_word(needle, text)
 
 
 def is_headline_highlight(title: str, home_he: str, away_he: str,
