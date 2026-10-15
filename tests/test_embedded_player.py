@@ -223,9 +223,9 @@ def test_each_video_gets_a_fresh_readiness_flag():
     """נגן חדש נוצר לכל סרטון. דגל שנשאר דולק מהנגן הקודם היה מחזיר
     בדיוק את אותו באג מהסרטון השני והלאה."""
     load = HTML[HTML.index("async function loadVideo("):HTML.index("new YT.Player(")]
-    assert "ytReady = ytWantsPlay = false;" in load
+    assert "ytReady = ytWantsPlay = ytFailed = false;" in load
     back = HTML[HTML.index("function backToSources()"):]
-    assert "ytReady = ytWantsPlay = false;" in back[:back.index("\n  }")]
+    assert "ytReady = ytWantsPlay = ytFailed = false;" in back[:back.index("\n  }")]
 
 
 def test_the_shield_does_not_get_stuck_on_loading():
@@ -240,3 +240,22 @@ def test_the_shield_does_not_get_stuck_on_loading():
 def test_our_play_pause_waits_for_the_player():
     toggle = HTML[HTML.index("function togglePlay()"):]
     assert "!ytReady" in toggle[:toggle.index("\n")+200]
+
+
+def test_a_blocked_video_is_not_overwritten_by_a_play_button():
+    """ריאל–רומא (הבעלים, 15.10.26): יוטיוב סירב להטמיע, ההודעה הכנה
+    הופיעה לשנייה, ואז טיימר ההפעלה דרס אותה בכפתור "נגן" שלא יכול היה
+    לעבוד. כל לחיצה הציגה "טוען", חימשה את הטיימר, והכפתור חזר — לולאה
+    שנראית כמו נגן שלא מגיב."""
+    err = HTML[HTML.index("onError:"):]
+    err = err[:err.index("\n        },")]
+    assert "ytFailed = true" in err
+    assert "clearTimeout(ytNudge)" in err
+    nudge = HTML[HTML.index("function armPlayNudge("):]
+    assert "if (!ytPlayer || ytFailed) return;" in nudge[:nudge.index("\n  }")]
+    start = HTML[HTML.index("function startVideo()"):]
+    assert "if (!ytPlayer || ytFailed) return;" in start[:start.index("\n  }")]
+
+
+def test_the_failure_flag_falls_with_every_new_player():
+    assert HTML.count("ytReady = ytWantsPlay = ytFailed = false;") == 2

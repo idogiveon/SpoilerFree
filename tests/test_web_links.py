@@ -199,3 +199,41 @@ def test_the_daily_budget_stops_the_queries(db, monkeypatch):
 class _Resp:
     def __init__(self, data): self._d = data
     def json(self): return self._d
+
+
+# ── ריאל–רומא בצ'מפיונס (הבעלים, 15.10.26) ─────────────────────────
+# "זה מציע רק את התקציר של ריאל, איפה ספורט5". הכתבה הייתה על העמוד:
+# "בלתי שבירים: ריאל השלימה מהפך מטורף מול רומא". שתי מילות השם "ריאל
+# מדריד" נמצאות ב-HE_GENERIC_WORDS (משותפות לסוסיאדד, בטיס, אתלטיקו),
+# ולכן לא נותרה לקבוצה שום מילה שתזהה אותה בכותרת מקוצרת.
+REAL_ROMA_HTML = """
+<a href="https://vod.sport5.co.il/?Vc=893&Vi=563750">בלתי שבירים: ריאל השלימה מהפך מטורף מול רומא</a>
+<a href="https://vod.sport5.co.il/?Vc=893&Vi=563999">ויאריאל 2-1 רומא: התקציר</a>
+"""
+
+
+def test_a_name_of_only_generic_words_is_still_recognised(monkeypatch):
+    _pages(monkeypatch, {"sport5": REAL_ROMA_HTML})
+    cfg = main.LEAGUES["ucl"]["web_sources"][0]
+    url = main.find_web_highlight(cfg["scrape_pages"], cfg["link_pattern"],
+                                  main._he_names("Roma"), main._he_names("Real Madrid"))
+    assert url == "https://vod.sport5.co.il/?Vc=893&Vi=563750"
+
+
+def test_villarreal_is_not_real_madrid():
+    """"ויאריאל" מכיל את "ריאל" כמחרוזת — ההתאמה היא כמילה שלמה."""
+    assert main._web_team_in("ריאל מדריד", "ויאריאל 2-1 רומא") is False
+
+
+def test_a_sibling_in_the_text_cancels_the_generic_word():
+    for other in ("ריאל סוסיאדד נגד רומא", "ריאל בטיס ניצחה את רומא",
+                  "אתלטיקו מדריד נגד רומא"):
+        assert main._web_team_in("ריאל מדריד", other) is False, other
+
+
+def test_a_name_with_a_distinguishing_word_still_needs_it():
+    """הרגרסיה שהבדיקות תפסו: בלי זה כותרת על ריאל מדריד נקראה
+    כריאל סוסיאדד, כי "ריאל" לבדה הספיקה."""
+    t = "ריאל מדריד חוזרת לנצח לאחר 1:4 על ראיו"
+    assert main._web_team_in("ריאל סוסיאדד", t) is False
+    assert main._web_team_in("ריאל סוסיאדד", "תקציר: ריאל סוסיאדד נגד חטאפה")

@@ -1992,7 +1992,10 @@
   // ytReady: פקודת playVideo לפני שהנגן מוכן נבלעת בשקט, וזה מה שגרם
   // ל"צריך ללחוץ נגן כמה פעמים" (הבעלים, 11.10.26). ytWantsPlay זוכר
   // את הכוונה ומפעיל ברגע שהנגן מוכן
-  let ytReady = false, ytWantsPlay = false;
+  // ytFailed: יוטיוב סירב להטמיע. בלי זה טיימר ההפעלה דרס אחרי 2.5
+  // שניות את ההודעה הכנה ואת "פתח ביוטיוב", והציג במקומם כפתור נגן
+  // שלא יכול היה לעבוד לעולם (הבעלים, 15.10.26)
+  let ytReady = false, ytWantsPlay = false, ytFailed = false;
 
   // כל מצב שאינו "מתנגן" עלול להציג את הכותרת ואת ההצעות
   function coverChrome() {
@@ -2033,7 +2036,7 @@
     if (!pickerHTML) return;
     try { if (ytPlayer && ytPlayer.destroy) ytPlayer.destroy(); } catch (e) {}
     ytPlayer = null;
-    ytReady = ytWantsPlay = false;
+    ytReady = ytWantsPlay = ytFailed = false;
     clearInterval(vidTimer);
     hideVideoBar();
     document.getElementById('modal-body').innerHTML = pickerHTML;
@@ -2062,7 +2065,7 @@
     // מחווה של המשתמש, וזה מה שהדפדפן דורש.
     armPlayNudge(shield);
     // כל סרטון מקבל נגן חדש, והדגל חייב לרדת לפני היצירה
-    ytReady = ytWantsPlay = false;
+    ytReady = ytWantsPlay = ytFailed = false;
     ytPlayer = new YT.Player('yt-player', {
       videoId,
       host: 'https://www.youtube-nocookie.com',
@@ -2102,6 +2105,9 @@
           updatePlayPause();
         },
         onError: () => {
+          // הטיימר נעצר כאן: ההודעה הזו היא המסקנה, לא שלב ביניים
+          ytFailed = true;
+          clearTimeout(ytNudge);
           container.classList.remove('shielded');
           shield.style.display = '';
           shield.innerHTML = shieldHTML('↗', t('cant_embed'), t('open_youtube_btn'),
@@ -2213,7 +2219,7 @@
   function armPlayNudge(shield) {
     clearTimeout(ytNudge);
     ytNudge = setTimeout(() => {
-      if (!ytPlayer) return;
+      if (!ytPlayer || ytFailed) return;
       // נגן שעדיין לא מוכן: הכפתור כן חוזר, והלחיצה תיזכר ל-onReady.
       // קודם הייתה כאן יציאה שקטה, והמגן נתקע על "טוען"
       if (ytReady && ytPlayer.getPlayerState
@@ -2226,7 +2232,7 @@
   // האוטומטי בטלפון. גם היא יכולה להיכשל, ואז הכפתור חייב לחזור: בלי
   // זה המגן נתקע על "טוען" ואין דרך לנסות שוב.
   function startVideo() {
-    if (!ytPlayer) return;
+    if (!ytPlayer || ytFailed) return;
     const shield = document.getElementById('shield');
     shield.innerHTML = shieldHTML('🛡️', t('loading'));
     if (ytReady) ytPlayer.playVideo();
