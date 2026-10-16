@@ -1338,7 +1338,7 @@ button.no{border-color:#ff4757;color:#ff4757}
 <a href="/admin/gmail/connect">חיבור Gmail לשליחת קודים</a> · <a href="/debug/mail">בדיקת מייל</a></div>
 <div class="kpis" id="kpis"></div>
 <div class="wrap"><table>
-<thead><tr><th>מייל</th><th>סטטוס</th><th>נרשם</th><th>כניסה אחרונה</th>
+<thead><tr><th>מייל</th><th>סטטוס</th><th>נרשם</th><th>התחברות אחרונה</th>
 <th>כניסות</th><th>פתיחות אפליקציה</th><th>משחקים שנפתחו</th><th>תקצירים שנצפו</th>
 <th>ליגות מובילות</th><th>פעילות אחרונה</th><th></th></tr></thead>
 <tbody id="rows"><tr><td colspan="12" class="muted">טוען...</td></tr></tbody>

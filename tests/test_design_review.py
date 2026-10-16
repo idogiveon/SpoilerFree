@@ -86,3 +86,15 @@ def test_the_hidden_note_is_above_the_fold():
     assert 'id="hidden-note"' in status[:400]
     note = re.search(r"\.hidden-note \{([^}]*)\}", HTML).group(1)
     assert "padding:0.5rem" in note                      # יעד מגע, היה 18.5px
+
+
+def test_the_login_column_does_not_read_as_a_visit():
+    """בעמוד הניהול "כניסה אחרונה" היה 19.9 ו"פעילות אחרונה" 15.10, והבעלים
+    קרא את זה כסתירה (16.10.26). שתי העמודות מודדות דברים שונים: האחת
+    last_login, שנכתב רק ביצירת session, והשנייה האירוע האחרון בטבלת
+    events — ו-SESSION_DAYS=90 מאפשר חודשים של שימוש בלי התחברות נוספת."""
+    src = open("main.py", encoding="utf-8").read()
+    assert "<th>התחברות אחרונה</th>" in src
+    assert "כניסה אחרונה" not in src
+    assert "<th>פעילות אחרונה</th>" in src        # העמודה השנייה נשארת
+    assert '"last_login": "התחברות אחרונה"' in HTML
