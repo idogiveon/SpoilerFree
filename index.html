@@ -193,6 +193,13 @@
     .score-val { font-size:1.1rem; font-weight:700; letter-spacing:1px; }
     .fav-btn { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:100px; padding:0.15rem 0.6rem; font-size:0.72rem; cursor:pointer; font-family:'Heebo',sans-serif; }
     .fav-btn:hover { border-color:#ffc107; color:#ffc107; }
+    /* ★ ולא ⭐: ל-U+2B50 יש ברירת מחדל של אמוג'י, והדפדפן מצייר אותו
+       מגופן צבעוני — כוכב מבריק ומלא לצד ☆ דק מ-Heebo. ★ (U+2605) הוא
+       בן הזוג האמיתי של ☆: אותו גופן, אותן מידות, והצבע נקבע ב-CSS
+       (הבעלים, 17.10.26 — אותה משפחה של תקלה כמו ‹/› ב-RTL) */
+    .fav-btn .star { color:var(--muted); }
+    .fav-btn.is-fav .star { color:#ffc107; }
+    .fav-btn:hover .star { color:#ffc107; }
     .fav-group .date-label .weekday { color:#ffc107; }
     /* תאריך לכל משחק מועדף (בתצוגת ליגה) */
     .fav-date { display:flex; gap:0.6rem; align-items:center; font-size:0.72rem; color:var(--muted); letter-spacing:1px; margin:0.7rem 0 0.3rem; }
@@ -1051,13 +1058,15 @@
     else if (leagueData[currentLeague]) showLeague(currentLeague, leagueData[currentLeague], true);
   }
 
-  // כפתורי ☆/⭐ לשתי הקבוצות בחלון המשחק
+  // כפתורי ☆/★ לשתי הקבוצות בחלון המשחק
   function renderFavRow() {
     const el = document.getElementById('modal-favs');
     if (!favCtx) { el.innerHTML = ''; return; }
     const teams = [[favCtx.home, favCtx.homeName], [favCtx.away, favCtx.awayName]];
     el.innerHTML = teams.map(([key, name], i) =>
-      `<button class="fav-btn" data-i="${i}" title="${t('fav_hint')}">${isFav(key) ? '⭐' : '☆'} ${esc(name)}</button>`
+      `<button class="fav-btn${isFav(key) ? ' is-fav' : ''}" data-i="${i}" `
+      + `title="${t('fav_hint')}"><span class="star">${isFav(key) ? '★' : '☆'}</span> `
+      + `${esc(name)}</button>`
     ).join('');
     el.querySelectorAll('.fav-btn').forEach(btn => btn.addEventListener('click', () => {
       toggleFav(teams[+btn.dataset.i][0]);
