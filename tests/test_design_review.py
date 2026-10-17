@@ -98,3 +98,17 @@ def test_the_login_column_does_not_read_as_a_visit():
     assert "כניסה אחרונה" not in src
     assert "<th>פעילות אחרונה</th>" in src        # העמודה השנייה נשארת
     assert '"last_login": "התחברות אחרונה"' in HTML
+
+
+def test_the_favourite_star_pair_is_one_font_not_two():
+    """בחלון המשחק "נאפולי ⭐" נראה כבד ומבריק לצד "ונציה ☆" הדק (הבעלים,
+    17.10.26). ל-U+2B50 יש ברירת מחדל של אמוג'י, והדפדפן מצייר אותו מגופן
+    צבעוני; ☆ (U+2606) מגיע מ-Heebo. ★ (U+2605) הוא בן הזוג האמיתי —
+    אותו גופן, אותן מידות, והצבע נקבע ב-CSS. אותה משפחה של תקלה כמו
+    ‹/› שהתהפכו ב-RTL: התו קובע את הציור, לא העיצוב."""
+    row = HTML[HTML.index("function renderFavRow()"):]
+    row = row[:row.index("\n  }")]
+    assert "'★'" in row and "'☆'" in row
+    assert "⭐" not in row, "הכוכב המלא חזר להיות אמוג'י"
+    assert "is-fav" in row
+    assert ".fav-btn.is-fav .star { color:#ffc107; }" in HTML
