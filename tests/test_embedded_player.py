@@ -259,3 +259,22 @@ def test_a_blocked_video_is_not_overwritten_by_a_play_button():
 
 def test_the_failure_flag_falls_with_every_new_player():
     assert HTML.count("ytReady = ytWantsPlay = ytFailed = false;") == 2
+
+
+# ── תצוגה מורחבת בטלפון (הבעלים, 20.10.26) ─────────────────────────
+def test_the_black_margins_do_not_close_the_match():
+    """בתצוגה מורחבת התמונה 16:9 ממורכזת, והשטח לצדיה הוא שכבת החלון
+    עצמה. לחיצה עליה סגרה את המשחק — ולכן דאבל קליק לדילוג בקצה
+    הווידאו "זרק אותי החוצה"."""
+    fn = HTML[HTML.index("function backdropClick("):]
+    fn = fn[:fn.index("\n  }")]
+    assert "classList.contains('theatre-on')" in fn and "return;" in fn
+    assert "addEventListener('click', backdropClick)" in HTML
+    # ובלי התצוגה המורחבת ההתנהגות נשמרת: לחיצה ברקע סוגרת
+    assert "closeModal();" in fn
+
+
+def test_the_window_chrome_is_hidden_behind_the_picture():
+    """החלון שקוף בתצוגה מורחבת, אבל ✕, שם המשחק וכפתורי המועדפים
+    המשיכו להצטייר והציצו משני צדי התמונה בסיבוב לרוחב."""
+    assert ".modal-overlay.theatre-on .modal-header { display:none; }" in HTML
