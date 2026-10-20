@@ -284,6 +284,10 @@
     .modal-overlay.theatre-on { background:#000; }
     .modal-overlay.theatre-on .modal { transform:none; background:transparent;
       border:none; box-shadow:none; }
+    /* בתצוגה מורחבת החלון שקוף, אבל ילדיו המשיכו להצטייר — בסיבוב
+       לרוחב הציצו ✕, שם המשחק וכפתורי המועדפים משני צדי התמונה
+       (הבעלים, 20.10.26). רק גוף החלון, שבו הנגן, נשאר */
+    .modal-overlay.theatre-on .modal-header { display:none; }
     /* מתאים את עצמו לקטן מבין השניים — רוחב המסך או הגובה הפנוי מעל
        הסרגל. בלי מגבלת הגובה, סיבוב לרוחב גלש מהמסך וחתך את התמונה
        למעלה ולמטה (22.9.26). aspect-ratio שומר 16:9, כך שהמסכות
@@ -2273,6 +2277,15 @@
     window.open(url, '_blank');
   }
 
+  // בתצוגה מורחבת השטח השחור לצדי התמונה הוא שכבת החלון עצמה, ולחיצה
+  // עליה סגרה את המשחק — דאבל קליק לדילוג בקצה הווידאו "זרק אותי החוצה"
+  // (הבעלים, 20.10.26). שם היא לא עושה כלום; היציאה היא בכפתור ⤡
+  function backdropClick(e) {
+    if (e.target !== e.currentTarget) return;
+    if (e.currentTarget.classList.contains('theatre-on')) return;
+    closeModal();
+  }
+
   function closeModal() {
     exitTheatre();
     document.getElementById('modal').classList.remove('open');
@@ -2591,7 +2604,7 @@
   });
   document.getElementById('sheet-close').addEventListener('click', closeSheet);
   document.getElementById('sheet').addEventListener('click', e => { if (e.target === e.currentTarget) closeSheet(); });
-  document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
+  document.getElementById('modal').addEventListener('click', backdropClick);
   document.getElementById('lg-start').addEventListener('click', () => scrollTabs(true));
   document.getElementById('lg-end').addEventListener('click', () => scrollTabs(false));
   document.getElementById('league-scroll')
