@@ -653,8 +653,12 @@ EMAIL_CODE_REQUIRED = os.environ.get("EMAIL_CODE_REQUIRED") == "1"
 NOTIFY_EMAILS = {e.strip().lower()
                  for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# highlight_play = ניגון בנגן שלנו; highlight_external = נפתח ביוטיוב.
+# עד 20.10.26 שניהם ירו highlight_play, ולכן אי אפשר לפלח אחורה —
+# הדוח מסמן את מה שלפני הפיצול כ"לא ידוע" (הבעלים ביקש את הפילוח)
 EVENT_TYPES = {"app_open", "league_view", "day_view", "match_open",
-               "highlight_play", "web_link"}
+               "highlight_play", "highlight_external", "web_link"}
+PLAY_TYPES  = ("highlight_play", "highlight_external")
 
 
 def _auth_token() -> str:
@@ -1343,6 +1347,22 @@ button.no{border-color:#ff4757;color:#ff4757}
 <th>ליגות מובילות</th><th>פעילות אחרונה</th><th></th></tr></thead>
 <tbody id="rows"><tr><td colspan="12" class="muted">טוען...</td></tr></tbody>
 </table></div>
+<h1 style="margin-top:2rem">צפייה בתקצירים</h1>
+<div class="sub muted">
+  <button onclick="loadReport(7)">7 ימים</button>
+  <button onclick="loadReport(30)">30 יום</button>
+  <button onclick="loadReport(3650)">הכול</button>
+  <span id="rep_note"></span></div>
+<div class="kpis" id="rep_kpis"></div>
+<div class="wrap"><table style="min-width:0">
+<thead><tr><th>ליגה</th><th>תקצירים</th><th>מוטמע</th><th>חיצוני</th><th>לא ידוע</th></tr></thead>
+<tbody id="rep_lg"><tr><td colspan="5" class="muted">טוען...</td></tr></tbody>
+</table></div>
+<div class="wrap" style="margin-top:1rem"><table style="min-width:0">
+<thead><tr><th>משתמש</th><th>תקצירים</th><th>מוטמע</th><th>חיצוני</th><th>לא ידוע</th></tr></thead>
+<tbody id="rep_us"></tbody>
+</table></div>
+
 <h1 style="margin-top:2rem">מי מעלה ראשון — ליגת העל (21 ימים)</h1>
 <div class="sub muted">דקות מסיום המשחק (משוער: פתיחה + 115 דק') עד שהתקציר עלה.
 יוטיוב — שעת ההעלאה בפועל; אתרים — מתי מצאנו את הקישור (דיוק של כחצי שעה).</div>
@@ -1385,10 +1405,36 @@ async function load() {
       <td><span class="st ${u.status}">${ST[u.status] || u.status}</span></td>
       <td>${when(u.created_at)}</td><td>${when(u.last_login)}</td>
       <td>${u.login_count || 0}</td><td>${u.app_open || 0}</td><td>${u.match_open || 0}</td>
-      <td>${u.highlight_play || 0}</td><td>${lg}</td><td>${when(u.last_active)}</td>
+      <td>${(u.highlight_play || 0) + (u.highlight_external || 0)}</td>
+      <td>${lg}</td><td>${when(u.last_active)}</td>
       <td>${u.is_admin ? '' : btns + reset}</td></tr>`;
   }).join('') || '<tr><td colspan="12" class="muted">אין משתמשים עדיין</td></tr>';
 }
+async function loadReport(days) {
+  const r = await fetch('/admin/api/report?days=' + days);
+  if (!r.ok) { document.getElementById('rep_lg').innerHTML =
+    '<tr><td colspan="5">אין הרשאה</td></tr>'; return; }
+  const d = await r.json();
+  const t = d.totals;
+  document.getElementById('rep_kpis').innerHTML =
+    [['תקצירים', t.total], ['מוטמע', t.embedded], ['חיצוני', t.external],
+     ['לא ידוע', t.unknown], ['משחקים שנפתחו', d.opens.match_open || 0],
+     ['פתיחות אפליקציה', d.opens.app_open || 0]]
+    .map(([k,v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+  // "לא ידוע" אינו תקלה: עד הפיצול שתי הדרכים ירו את אותו אירוע
+  document.getElementById('rep_note').innerHTML = d.split_since
+    ? ` · הפילוח קיים מ-${when(d.split_since)}; מה שלפניו — "לא ידוע"`
+    : ' · הפיצול עוד לא עלה לאוויר';
+  const rows = (obj, nameOf) => Object.entries(obj).map(([k, v]) =>
+    `<tr><td>${nameOf(k)}</td><td>${v.total}</td><td>${v.embedded}</td>
+     <td>${v.external}</td><td class="muted">${v.unknown}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="muted">אין נתונים בתקופה</td></tr>';
+  document.getElementById('rep_lg').innerHTML =
+    rows(d.by_league, k => LEAGUES[k] || esc(k));
+  document.getElementById('rep_us').innerHTML =
+    rows(d.by_user, k => `<span dir="ltr">${esc(k)}</span>`);
+}
+
 async function editName(email, current) {
   const name = prompt('שם המשתמש (ריק = מחיקה):', current || '');
   if (name === null) return;
@@ -1418,6 +1464,7 @@ async function loadTiming() {
     Object.entries(m.delays).map(([k, v]) => esc(k) + ': ' + v).join(' · ') + '</td></tr>').join('');
 }
 load();
+loadReport(7);
 loadTiming();
 </script></body></html>"""
 
@@ -4947,6 +4994,20 @@ def _prefetch_loop():
 
 
 @app.on_event("startup")
+def _mark_embed_split():
+    """נכתב פעם אחת, בעלייה הראשונה של הגרסה שמפצלת. הדוח משווה אליו
+    במקום להחזיק תאריך קשיח שאיש לא יזכור לעדכן."""
+    try:
+        conn = get_db()
+        conn.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('embed_split_since', ?)",
+                     (_now().isoformat(),))
+        conn.commit()
+        conn.close()
+    except Exception as ex:
+        print(f"[meta] embed_split_since: {ex}")
+
+
+@app.on_event("startup")
 def _start_prefetch():
     # רק כשיש מפתח יוטיוב (פרודקשן). PREFETCH=0 מכבה.
     if YOUTUBE_API_KEY and os.environ.get("PREFETCH", "1") == "1":
@@ -6234,6 +6295,54 @@ def admin_users_page(request: Request):
     if not _admin_exempt() and not (current_user(request) or {}).get("is_admin"):
         return RedirectResponse("/")
     return HTMLResponse(ADMIN_USERS_PAGE)
+
+
+@app.get("/admin/api/report")
+def admin_api_report(request: Request, days: int = 7):
+    """צפייה בתקצירים לפי ליגה ולפי משתמש, ומוטמע מול חיצוני.
+
+    הפילוח אפשרי רק מרגע שהגרסה המפצלת עלתה (meta.embed_split_since);
+    לפניו שתי הדרכים ירו highlight_play, וכל מה שקדם נספר כ"לא ידוע"
+    במקום להיתלות בניחוש."""
+    require_admin(request)
+    since = (_now() - timedelta(days=days)).isoformat()
+    conn = get_db()
+    row = conn.execute("SELECT value FROM meta WHERE key='embed_split_since'").fetchone()
+    split = row["value"] if row else None
+    # ההיקף קטן (מאות שורות), ולכן הצבירה בפייתון — קריאה אחת ברורה
+    # במקום שאילתה עם CASE מקונן
+    events = conn.execute(
+        "SELECT COALESCE(m.league_key,'') AS lg, e.type AS t, e.email AS em, e.ts AS ts "
+        "FROM events e LEFT JOIN matches m ON m.id = e.match_id "
+        f"WHERE e.ts >= ? AND e.type IN ({','.join('?' * len(PLAY_TYPES))})",
+        (since, *PLAY_TYPES)).fetchall()
+    opens = conn.execute(
+        "SELECT type, COUNT(*) AS c FROM events WHERE ts >= ? "
+        "AND type IN ('app_open','match_open') GROUP BY type", (since,)).fetchall()
+    conn.close()
+
+    def bucket():
+        return {"embedded": 0, "external": 0, "unknown": 0, "total": 0}
+
+    by_league, by_user, totals = {}, {}, bucket()
+    for e in events:
+        if e["t"] == "highlight_external":
+            kind = "external"
+        elif split and e["ts"] >= split:
+            kind = "embedded"
+        else:
+            kind = "unknown"          # לפני הפיצול — שתי הדרכים נראו זהות
+        for d, k in ((by_league, e["lg"] or "—"), (by_user, e["em"])):
+            d.setdefault(k, bucket())
+            d[k][kind] += 1
+            d[k]["total"] += 1
+        totals[kind] += 1
+        totals["total"] += 1
+
+    srt = lambda d: dict(sorted(d.items(), key=lambda x: -x[1]["total"]))
+    return {"days": days, "split_since": split, "totals": totals,
+            "by_league": srt(by_league), "by_user": srt(by_user),
+            "opens": {r["type"]: r["c"] for r in opens}}
 
 
 @app.get("/admin/api/users")

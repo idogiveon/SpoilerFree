@@ -1974,7 +1974,9 @@
   })();
 
   function openOnYoutube(videoId) {
-    track('highlight_play', { match_id: currentMatchId, detail: videoId });
+    // סוג נפרד מ-highlight_play: בלי זה אין שום דרך לדעת כמה תקצירים
+    // נצפו אצלנו וכמה נשלחו ליוטיוב (הבעלים, 20.10.26)
+    track('highlight_external', { match_id: currentMatchId, detail: videoId });
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     let noApp = false;
     try { noApp = localStorage.getItem('no_yt_app') === '1'; } catch (e) {}
