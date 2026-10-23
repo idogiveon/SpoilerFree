@@ -278,3 +278,25 @@ def test_the_window_chrome_is_hidden_behind_the_picture():
     """החלון שקוף בתצוגה מורחבת, אבל ✕, שם המשחק וכפתורי המועדפים
     המשיכו להצטייר והציצו משני צדי התמונה בסיבוב לרוחב."""
     assert ".modal-overlay.theatre-on .modal-header { display:none; }" in HTML
+
+
+def test_the_scrubber_reads_left_to_right_even_in_hebrew():
+    """הדף RTL, והסרגל ירש את זה: הפס התמלא מימין לשמאל והזמן הנוכחי
+    ישב בימין. בכל נגן וידאו, יוטיוב בעברית כולל, הציר הוא LTR
+    (הבעלים, 23.10.26)."""
+    bar = _css(".vid-bar")
+    assert "direction:ltr" in bar
+    # סדר ה-DOM הוא שקובע אחרי זה: נגן, זמן נוכחי, פס, אורך, מסך מלא
+    markup = HTML[HTML.index("bar.innerHTML"):]
+    markup = markup[:markup.index("`;")]
+    order = [markup.index(x) for x in
+             ('id="vid-play"', 'id="vid-now"', 'id="vid-seek"',
+              'id="vid-dur"', 'id="vid-full"')]
+    assert order == sorted(order)
+
+
+def test_skipping_stays_physical():
+    """הדילוג לא מתהפך עם כיוון הממשק: חצי שמאלי אחורה, כמו בכל נגן."""
+    dbl = HTML[HTML.index("tap.ondblclick"):]
+    dbl = dbl[:dbl.index("\n      };")]
+    assert "(e.clientX - box.left) < box.width / 2" in dbl
