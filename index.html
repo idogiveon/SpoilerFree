@@ -262,8 +262,12 @@
     .vid-tap { position:absolute; inset:0; z-index:4; cursor:pointer; }
     .video-container:not(.shielded) .vid-tap { display:none; }
     /* פקדים משלנו — מתחת לנגן, לא מעליו */
+    /* direction:ltr — זמן הוא ציר שנקרא משמאל לימין גם בעברית, וכך זה
+       בכל נגן וידאו, יוטיוב בעברית כולל. הדף RTL, ובלי העקיפה הפס
+       התמלא מימין לשמאל והזמן הנוכחי ישב בימין (הבעלים, 23.10.26).
+       הדילוג בדאבל קליק ממילא פיזי ולא מושפע: חצי שמאלי אחורה */
     .vid-bar { display:flex; align-items:center; gap:0.7rem; padding:0 0.75rem;
-      min-height:var(--vid-bar-h);
+      min-height:var(--vid-bar-h); direction:ltr;
       background:#000; border-top:1px solid var(--border); }
     /* 48×48: נמדד 17.5×17.6 — מתחת לכל מינימום מגע, ודווקא במסך
        שנמצא בשימוש יומיומי. ה-flex של הסרגל מרכז אותם בתוך היעד.
