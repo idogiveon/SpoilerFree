@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "spoilerfree",
+      "runtimeExecutable": "venv/bin/uvicorn",
+      "runtimeArgs": ["main:app", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "spoilerfree-authdev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["AUTH_DEV=1", "TURSO_DATABASE_URL=", "YOUTUBE_API_KEY=", "PREFETCH=0",
+                      "DB_PATH=authdev.db", "venv/bin/uvicorn", "main:app", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}
