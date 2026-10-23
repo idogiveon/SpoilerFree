@@ -2887,8 +2887,34 @@ def _il_title_norm(title: str) -> str:
     return t
 
 
+# תקרה חיצונית למי שנושא מספר מחזור. "מחזור 7" חוזר רק בעונה הבאה,
+# כלומר בערך 11 חודשים — 30 יום רחוק מכל גבול כזה, ופי שלושה מהאיחור
+# הגרוע ביותר שנצפה בפועל (11 יום, סכנין–ר"ג ופ"ת–י-ם)
+IL_MATCHDAY_MAX_DAYS = 30
+
+
+def _title_matchday(title: str):
+    """מספר המחזור מתוך כותרת של המנהלת: "מחזור 7 | תקציר: ..."."""
+    m = re.search(r"(?<!\w)מחזור\s+(\d{1,2})(?!\d)", title or "")
+    return int(m.group(1)) if m else None
+
+
+def matchday_pins_the_round(title: str, matchday, published: str,
+                            match_date: str) -> bool:
+    """כותרת שנושאת את מספר המחזור מזהה את המפגש באופן חד-ערכי.
+
+    חלון התאריכים קיים כדי שמפגש חוזר של אותן שתי קבוצות לא ייתפס —
+    וזו בדיוק האי-ודאות שמספר המחזור מסיר. בלי זה התקצירים המורחבים
+    של המנהלת, שמגיעים עד 11 יום אחרי המשחק, נפסלו בשקט (A3).
+    """
+    if not matchday or _title_matchday(title) != int(matchday):
+        return False
+    return _within_days(published, match_date, IL_MATCHDAY_MAX_DAYS)
+
+
 def is_il_both_teams(title: str, home_he: str, away_he: str,
-                     published: str = "", match_date: str = "") -> bool:
+                     published: str = "", match_date: str = "",
+                     pinned: bool = False) -> bool:
     """ערוצים לא רשמיים (העלאות פיראטיות): רק כותרת עם "תקציר" או תוצאה, ושתי
     הקבוצות בשם מלא (בכל סדר) — מכבי ת"א ≠ הפועל ת"א. עד 3 ימים אחרי המשחק, כדי
     שמפגש חוזר (גביע / מחזור הבא) לא ייתפס."""
@@ -2896,7 +2922,7 @@ def is_il_both_teams(title: str, home_he: str, away_he: str,
     # "תקציר", או תוצאה ("0-3") — חלק מהכותרות בלי המילה
     if "תקציר" not in t and not re.search(r"\d+\s*-\s*\d+", t):
         return False
-    if published and match_date:
+    if published and match_date and not pinned:
         try:
             # HIGHLIGHT_MAX_DAYS ולא 3: הערוץ של המנהלת העלה את התקציר
             # של מחזור 5 ארבעה ימים אחרי המשחק ("מחזור 5 | תקציר מורחב:
@@ -3536,7 +3562,8 @@ def title_matches(title: str, published: str = "", *, home: str, away: str,
                   title_include: list = None, home_alt: str = None,
                   away_alt: str = None, require_team: bool = False,
                   implicit_team: str = None, headline: bool = False,
-                  il_both: bool = False, date_in_title: bool = False) -> bool:
+                  il_both: bool = False, date_in_title: bool = False,
+                  matchday=None) -> bool:
     """האם הכותרת הזו היא התקציר של המשחק הזה, לפי כללי המקור.
 
     נמצאת ברמת המודול ולא כסגור בתוך search_youtube, כדי שאפשר יהיה
@@ -3546,8 +3573,11 @@ def title_matches(title: str, published: str = "", *, home: str, away: str,
     tl = title.lower()
     # אותן שתי קבוצות נפגשות שוב בהמשך העונה, והכותרת זהה. בלי גבול
     # עליון, חיפוש למשחק של מחזור 5 היה תופס את התקציר של מחזור 24 —
-    # תוצאה של משחק שעוד לא נצפה, כלומר ספוילר.
-    if published and not _within_days(published, match_date, HIGHLIGHT_MAX_DAYS):
+    # תוצאה של משחק שעוד לא נצפה, כלומר ספוילר. כותרת שנושאת את מספר
+    # המחזור פוטרת את עצמה מהחלון: היא כבר מזהה את המפגש חד-ערכית
+    pinned = matchday_pins_the_round(title, matchday, published, match_date)
+    if published and not pinned and not _within_days(
+            published, match_date, HIGHLIGHT_MAX_DAYS):
         return False
     # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
     if title_exclude and any(x.lower() in tl for x in title_exclude):
@@ -3561,7 +3591,7 @@ def title_matches(title: str, published: str = "", *, home: str, away: str,
         # Tikva 2-0 Match Highlights"). לא נופלים למסנן הכללי — הוא מסתפק
         # ב"Hapoel" ומתאים כל משחק של הפועל לכל משחק אחר
         return (is_il_both_teams(title, home_alt or home, away_alt or away,
-                                 published, match_date)
+                                 published, match_date, pinned)
                 or is_il_both_teams_en(title, home, away, published, match_date))
     if headline:   # ONE — כותרות חדשותיות בעברית, כל כתיב מוכר ("בארסה")
         hs = list(dict.fromkeys([home_alt or home] + _he_names(home)))
@@ -3588,6 +3618,7 @@ def search_youtube(home: str, away: str, match_date: str,
                    headline: bool = False,
                    il_both: bool = False,
                    date_in_title: bool = False,
+                   matchday=None,
                    free_only: bool = False) -> list:
     """Search YouTube for match highlights. Returns list of videos."""
     if not channel_id:
@@ -3599,7 +3630,7 @@ def search_youtube(home: str, away: str, match_date: str,
             title_exclude=title_exclude, title_include=title_include,
             home_alt=home_alt, away_alt=away_alt, require_team=require_team,
             implicit_team=implicit_team, headline=headline, il_both=il_both,
-            date_in_title=date_in_title)
+            date_in_title=date_in_title, matchday=matchday)
 
     def _video(video_id: str, title: str, published: str = "") -> dict:
         tl = title.lower()
@@ -4758,6 +4789,7 @@ def _source_highlights(row, source, free_only: bool = False,
         headline=source.get("headline_titles", False),
         il_both=source.get("il_both_teams", False),
         date_in_title=source.get("title_date", False),
+        matchday=row["matchday"],
         free_only=free_only,
     )
     if videos is None:
@@ -6377,7 +6409,8 @@ def revalidate_cache(apply: bool = False) -> dict:
                 implicit_team=source.get("club_team"),
                 headline=source.get("headline_titles", False),
                 il_both=source.get("il_both_teams", False),
-                date_in_title=source.get("title_date", False))
+                date_in_title=source.get("title_date", False),
+                matchday=m["matchday"])
             (keep if ok else drop).append(v)
             if ok:
                 out["kept"] += 1
