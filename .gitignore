@@ -8,4 +8,7 @@ spike_*.py
 Claude Session Log/
 database.db
 turso_replica.db*
-.claude/
+# .claude/ נמצא בגיט: סוכני הביקורת והמיומנות הם ידע על הפרויקט ולא
+# הגדרה אישית, ובלעדיהם כל re-clone מאבד אותם. רק ההגדרות המקומיות,
+# שיכולות להכיל הרשאות ונתיבים של מכונה מסוימת, נשארות בחוץ
+.claude/settings.local.json
