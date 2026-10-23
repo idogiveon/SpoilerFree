@@ -3531,6 +3531,53 @@ def _uploads_since(channel_id: str, match_date: str):
 HIGHLIGHT_MAX_DAYS = 6
 
 
+def title_matches(title: str, published: str = "", *, home: str, away: str,
+                  match_date: str, title_exclude: list = None,
+                  title_include: list = None, home_alt: str = None,
+                  away_alt: str = None, require_team: bool = False,
+                  implicit_team: str = None, headline: bool = False,
+                  il_both: bool = False, date_in_title: bool = False) -> bool:
+    """האם הכותרת הזו היא התקציר של המשחק הזה, לפי כללי המקור.
+
+    נמצאת ברמת המודול ולא כסגור בתוך search_youtube, כדי שאפשר יהיה
+    להריץ את אותו כלל בדיוק על כותרות ששמורות כבר בקאש — בלי אף קריאת
+    רשת ובלי יחידת מכסה. ראה revalidate_cache.
+    """
+    tl = title.lower()
+    # אותן שתי קבוצות נפגשות שוב בהמשך העונה, והכותרת זהה. בלי גבול
+    # עליון, חיפוש למשחק של מחזור 5 היה תופס את התקציר של מחזור 24 —
+    # תוצאה של משחק שעוד לא נצפה, כלומר ספוילר.
+    if published and not _within_days(published, match_date, HIGHLIGHT_MAX_DAYS):
+        return False
+    # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
+    if title_exclude and any(x.lower() in tl for x in title_exclude):
+        return False
+    if title_include and not any(x.lower() in tl for x in title_include):
+        return False
+    if date_in_title:  # ערוץ מועדון שכותב את תאריך המשחק (שחטאר: "(10.09.2026)")
+        return datetime.fromisoformat(match_date).strftime("%d.%m.%Y") in title
+    if il_both:    # ערוצים ישראליים — שתי הקבוצות חייבות להופיע בכותרת
+        # עברית, ומ-9.26 גם אנגלית ("Hapoel Be'er Sheva vs. Hapoel Petah
+        # Tikva 2-0 Match Highlights"). לא נופלים למסנן הכללי — הוא מסתפק
+        # ב"Hapoel" ומתאים כל משחק של הפועל לכל משחק אחר
+        return (is_il_both_teams(title, home_alt or home, away_alt or away,
+                                 published, match_date)
+                or is_il_both_teams_en(title, home, away, published, match_date))
+    if headline:   # ONE — כותרות חדשותיות בעברית, כל כתיב מוכר ("בארסה")
+        hs = list(dict.fromkeys([home_alt or home] + _he_names(home)))
+        aw = list(dict.fromkeys([away_alt or away] + _he_names(away)))
+        return any(is_headline_highlight(title, h, a, published, match_date)
+                   for h in hs for a in aw)
+    if is_match_highlight(title, home, away, home_alt, away_alt,
+                          require_team, implicit_team):
+        return True
+    # ערוץ של מועדון בלבד, וכשהכלל הרגיל לא מצא: מילת תקציר + עלה ביום
+    # המשחק או למחרת (פ.ס.וו לא כותבים את שם היריבה)
+    return bool(implicit_team) and _within_days(published, match_date, 1) and \
+        is_match_highlight(title, home, away, home_alt, away_alt,
+                           require_team, implicit_team, loose_club=True)
+
+
 def search_youtube(home: str, away: str, match_date: str,
                    channel_id: str, query: str = None,
                    title_exclude: list = None,
@@ -3547,39 +3594,12 @@ def search_youtube(home: str, away: str, match_date: str,
         return []
 
     def _keep(title: str, published: str = "") -> bool:
-        tl = title.lower()
-        # אותן שתי קבוצות נפגשות שוב בהמשך העונה, והכותרת זהה. בלי גבול
-        # עליון, חיפוש למשחק של מחזור 5 היה תופס את התקציר של מחזור 24 —
-        # תוצאה של משחק שעוד לא נצפה, כלומר ספוילר.
-        if published and not _within_days(published, match_date, HIGHLIGHT_MAX_DAYS):
-            return False
-        # סינון ברמת המקור (למשל: רק הגרסה בספרדית של Fanatiz)
-        if title_exclude and any(x.lower() in tl for x in title_exclude):
-            return False
-        if title_include and not any(x.lower() in tl for x in title_include):
-            return False
-        if date_in_title:  # ערוץ מועדון שכותב את תאריך המשחק (שחטאר: "(10.09.2026)")
-            return datetime.fromisoformat(match_date).strftime("%d.%m.%Y") in title
-        if il_both:    # ערוצים ישראליים — שתי הקבוצות חייבות להופיע בכותרת
-            # עברית, ומ-9.26 גם אנגלית ("Hapoel Be'er Sheva vs. Hapoel Petah
-            # Tikva 2-0 Match Highlights"). לא נופלים למסנן הכללי — הוא מסתפק
-            # ב"Hapoel" ומתאים כל משחק של הפועל לכל משחק אחר
-            return (is_il_both_teams(title, home_alt or home, away_alt or away,
-                                     published, match_date)
-                    or is_il_both_teams_en(title, home, away, published, match_date))
-        if headline:   # ONE — כותרות חדשותיות בעברית, כל כתיב מוכר ("בארסה")
-            hs = list(dict.fromkeys([home_alt or home] + _he_names(home)))
-            aw = list(dict.fromkeys([away_alt or away] + _he_names(away)))
-            return any(is_headline_highlight(title, h, a, published, match_date)
-                       for h in hs for a in aw)
-        if is_match_highlight(title, home, away, home_alt, away_alt,
-                              require_team, implicit_team):
-            return True
-        # ערוץ של מועדון בלבד, וכשהכלל הרגיל לא מצא: מילת תקציר + עלה ביום
-        # המשחק או למחרת (פ.ס.וו לא כותבים את שם היריבה)
-        return bool(implicit_team) and _within_days(published, match_date, 1) and \
-            is_match_highlight(title, home, away, home_alt, away_alt,
-                               require_team, implicit_team, loose_club=True)
+        return title_matches(
+            title, published, home=home, away=away, match_date=match_date,
+            title_exclude=title_exclude, title_include=title_include,
+            home_alt=home_alt, away_alt=away_alt, require_team=require_team,
+            implicit_team=implicit_team, headline=headline, il_both=il_both,
+            date_in_title=date_in_title)
 
     def _video(video_id: str, title: str, published: str = "") -> dict:
         tl = title.lower()
@@ -6295,6 +6315,99 @@ def admin_users_page(request: Request):
     if not _admin_exempt() and not (current_user(request) or {}).get("is_admin"):
         return RedirectResponse("/")
     return HTMLResponse(ADMIN_USERS_PAGE)
+
+
+def revalidate_cache(apply: bool = False) -> dict:
+    """מריץ את כללי הזיהוי הנוכחיים על כותרות ששמורות כבר בקאש.
+
+    A2 בבקלוג: שורות שנכתבו לפני תיקוני ההתאמה (נשים, נוער, U18)
+    מחזיקות עדיין את הסרטון השגוי, ו"חפש שוב" ידני פר משחק הוא הדרך
+    היחידה. כאן זה נעשה לכולם בבת אחת, בלי אף קריאת רשת ובלי יחידת
+    מכסה — אפשרי רק כי הכותרת נשמרת בקאש לצד המזהה.
+
+    apply=False (ברירת המחדל) מדווח ולא נוגע: מחיקה היא פעולה שאין
+    ממנה חזרה, והדוח הוא ההזדמנות להסתכל לפני.
+
+    שורה שכל הסרטונים בה נפסלו נמחקת ולא נשמרת כ-[], כדי שהמשחק ייחשב
+    "לא נבדק מעולם" וייכנס לתור החיפוש מיד במקום להמתין לכלל הניסיון
+    החוזר.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT match_id, source_id, videos_json FROM highlight_cache "
+        "WHERE videos_json NOT IN ('[]', '')").fetchall()
+    matches, out = {}, {"checked": 0, "kept": 0, "dropped": [], "untitled": 0,
+                        "orphans": 0, "applied": apply}
+    for r in rows:
+        try:
+            videos = json.loads(r["videos_json"])
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(videos, list):
+            continue          # קישור לאתר ({"url": ...}), לא רשימת סרטונים
+        mid = r["match_id"]
+        if mid not in matches:
+            matches[mid] = conn.execute("SELECT * FROM matches WHERE id=?", (mid,)).fetchone()
+        m = matches[mid]
+        if m is None:
+            out["orphans"] += 1
+            continue
+        source = next((x for x in get_sources_for_match(m, conn)
+                       if x["id"] == r["source_id"]), None)
+        if source is None:
+            out["orphans"] += 1    # מקור שהוסר מהקונפיג
+            continue
+
+        keep, drop = [], []
+        for v in videos:
+            title = v.get("title")
+            if not title:
+                out["untitled"] += 1   # נכתב לפני ששמרנו כותרות — אין על מה לשפוט
+                keep.append(v)
+                continue
+            out["checked"] += 1
+            ok = title_matches(
+                title, v.get("published", ""),
+                home=m["home_team"], away=m["away_team"], match_date=m["date_utc"],
+                title_exclude=source.get("title_exclude"),
+                title_include=source.get("title_include"),
+                home_alt=to_hebrew_team(m["home_team"]),
+                away_alt=to_hebrew_team(m["away_team"]),
+                require_team=source.get("require_team_match", False),
+                implicit_team=source.get("club_team"),
+                headline=source.get("headline_titles", False),
+                il_both=source.get("il_both_teams", False),
+                date_in_title=source.get("title_date", False))
+            (keep if ok else drop).append(v)
+            if ok:
+                out["kept"] += 1
+
+        if not drop:
+            continue
+        out["dropped"].append({
+            "match_id": mid, "source": source.get("name", r["source_id"]),
+            "match": f'{m["home_team"]} vs {m["away_team"]}', "date": m["date_utc"],
+            "titles": [v.get("title", "")[:120] for v in drop],
+            "row_deleted": not keep})
+        if apply:
+            if keep:
+                conn.execute("UPDATE highlight_cache SET videos_json=? "
+                             "WHERE match_id=? AND source_id=?",
+                             (json.dumps(keep, ensure_ascii=False), mid, r["source_id"]))
+            else:
+                conn.execute("DELETE FROM highlight_cache "
+                             "WHERE match_id=? AND source_id=?", (mid, r["source_id"]))
+    if apply:
+        conn.commit()
+    conn.close()
+    return out
+
+
+@app.get("/admin/api/recheck_cache")
+def admin_recheck_cache(request: Request, apply: int = 0):
+    """דוח בלבד כברירת מחדל. ?apply=1 מבצע."""
+    require_admin(request)
+    return revalidate_cache(apply=bool(apply))
 
 
 @app.get("/admin/api/report")
