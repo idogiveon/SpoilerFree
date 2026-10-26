@@ -3143,6 +3143,36 @@ def _within_days(published: str, match_date: str, days: int) -> bool:
     return 0 <= gap <= days
 
 
+# מילים שיכולות להופיע בסגמנט אחרון בלי שהוא יהיה שם של אדם
+_NOT_A_PERSON = {"premier", "league", "liga", "serie", "cup", "uefa", "efl",
+                 "champions", "europa", "conference", "bundesliga", "ligue",
+                 "eredivisie", "championship", "carabao", "fa", "mls",
+                 "matchweek", "matchday", "week", "round", "gameweek", "full",
+                 "match", "extended", "highlights", "highlight", "goals",
+                 "full match", "live", "away", "home", "classic", "replay"}
+
+
+def _ends_with_a_persons_name(title: str) -> bool:
+    """הסגמנט האחרון הוא שם של אדם — הדפוס של מסיבות עיתונאים.
+
+    ערוץ ליברפול מכתיר אותן "<נושאים> | <מפגש ותוצאה> | <שם המאמן>",
+    למשל "Isak's Form, Ronald Araujo, Anfield Win | Liverpool 2-0
+    Brighton | Andoni Iraola". אין בכותרת מילת תקציר ואף לא אחת ממילות
+    ההדרה, והתוצאה לבדה הספיקה כדי לקבל אותה (הבעלים, 26.10.26).
+
+    מכוון לדפוס ולא לספירת מילים: ספירה פסלה גם כותרות אמיתיות של
+    ליון ושל PSG, שהן עורכתיות אבל אין בהן סגמנט כזה.
+    """
+    parts = [p.strip() for p in title.split("|") if p.strip()]
+    if len(parts) < 2:
+        return False
+    words = parts[-1].split()
+    if not 2 <= len(words) <= 3:
+        return False
+    return all(w.replace("-", "").replace(".", "").replace("'", "").isalpha()
+               and w.lower() not in _NOT_A_PERSON for w in words)
+
+
 def is_match_highlight(title: str, home: str, away: str,
                        home_alt: str = None, away_alt: str = None,
                        require_team: bool = False,
@@ -3273,8 +3303,16 @@ def is_match_highlight(title: str, home: str, away: str,
                      # סלובקית (Slovan Bratislava: "ZOSTRIH | PSG – ŠK Slovan")
                      "zostrih"])
     # תוצאה בכותרת = תקציר, כששתי הקבוצות מזוהות ("Fredrikstad 1 - 1
-    # Sarpsborg 08" ב-TV2 הנורווגי) או בערוץ של מועדון ("PSG 6-1 BRATISLAVA")
-    if (has_both or implicit_team) and re.search(r"\d{1,2}\s*[-–:]\s*\d{1,2}", t):
+    # Sarpsborg 08" ב-TV2 הנורווגי) או בערוץ של מועדון ("PSG 6-1 BRATISLAVA").
+    #
+    # אבל רק כשהכותרת היא המפגש עצמו. ערוץ ליברפול מכתיר מסיבות
+    # עיתונאים בציטוט התוצאה — "Isak's Form, Ronald Araujo, Anfield Win
+    # | Liverpool 2-0 Brighton | Andoni Iraola" — ובה אין אף מילת תקציר
+    # ואף אחת ממילות ההדרה (הבעלים, 26.10.26). ההבדל אינו במילה בודדת
+    # אלא בדפוס: סגמנט אחרון שהוא שם של אדם
+    if ((has_both or implicit_team)
+            and re.search(r"\d{1,2}\s*[-–:]\s*\d{1,2}", t)
+            and not _ends_with_a_persons_name(title)):
         highlight = True
 
     # ערוץ מועדון שלא כותב את היריבה כלל ("HIGHLIGHTS | A proper PSV night"):
