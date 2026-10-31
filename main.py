@@ -1915,7 +1915,8 @@ _MATCH_COLS = ("home_team", "away_team", "home_team_id", "away_team_id",
 
 def _sync_league_rows(conn, league_key: str, incoming: dict,
                       purge: bool = False, hard: bool = False,
-                      guard_status: bool = False, mark_fresh: bool = True) -> dict:
+                      guard_status: bool = False, mark_fresh: bool = True,
+                      purge_rounds: set = None) -> dict:
     """כותב לטבלת matches רק את מה שהשתנה. incoming: {id: {col: val}}.
     ב-Turso כל כתיבה היא סבב רשת לענן — כתיבה מחדש של כל ~380 שורות
     הליגה בכל רענון לקחה ~30 שניות. במצב יציב זה עכשיו כמה כתיבות בודדות.
@@ -1946,8 +1947,13 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
         # משחקים הצטמצמה ל-87, ומחזור שנשלף חלקית איבד את מה שכבר ידענו
         # עליו (הבעלים, 31.10.26: ספרד, צרפת ואיטליה). מה שלא הסתכלנו
         # עליו לא נמחק
-        seen_rounds = {v.get("matchday") for v in incoming.values()
-                       if v.get("matchday") is not None}
+        # purge_rounds: המחזורים שהלקוח שלף **במלואם**. בלעדיו, מחזור
+        # שהמטען הכיל ממנו אירוע בודד (מ-eventspastleague/next) נחשב
+        # "נראה", וכל שאר המשחקים בו נמחקו — כך איבדה הבונדסליגה את
+        # מחזור 8 ב-31.10.26, ונשארו בו רק מי שכבר התחיל לשחק
+        seen_rounds = purge_rounds if purge_rounds is not None else {
+            v.get("matchday") for v in incoming.values()
+            if v.get("matchday") is not None}
         for mid, old in existing.items():
             if mid in incoming:
                 continue
@@ -2028,7 +2034,8 @@ def _sportsdb_rows(events: list) -> dict:
 
 def _store_sportsdb_events(conn, league_key: str, events: list,
                            purge: bool = False, hard: bool = False,
-                           mark_fresh: bool = True) -> int:
+                           mark_fresh: bool = True,
+                           purge_rounds: set = None) -> int:
     """Store a list of TheSportsDB events into our matches table."""
     # min_date: מסנן משחקים מלפני תחילת השלב (מוקדמות הצ'מפיונס מיולי
     # מגיעות מ-sportsdb עם intRound=1 ונכנסו למחזור 1 של שלב הליגה)
@@ -2037,7 +2044,8 @@ def _store_sportsdb_events(conn, league_key: str, events: list,
         events = [e for e in events if (e.get("dateEvent") or "") >= min_date]
     rows = _sportsdb_rows(events)
     _sync_league_rows(conn, league_key, rows, purge=purge, hard=hard,
-                      guard_status=True, mark_fresh=mark_fresh)
+                      guard_status=True, mark_fresh=mark_fresh,
+                      purge_rounds=purge_rounds)
     return len(rows)
 
 
@@ -4681,9 +4689,15 @@ def refresh_from_client(request: Request, league_key: str,
     hard = bool(payload.get("hard"))
     if hard:
         require_admin(request)
+    # rounds: המחזורים שהלקוח שלף במלואם (eventsround שהחזיר תוכן).
+    # רק בהם מותר למחוק. לקוח ישן לא שולח את זה, ואז נשמרת ההתנהגות
+    # הקודמת — מחזורים שהמטען מכיל
+    rounds = payload.get("rounds")
+    purge_rounds = ({int(r) for r in rounds if str(r).lstrip("-").isdigit()}
+                    if isinstance(rounds, list) else None)
     stored = _store_sportsdb_events(conn, league_key, events,
                                     purge=bool(payload.get("purge")),
-                                    hard=hard)
+                                    hard=hard, purge_rounds=purge_rounds)
     conn.commit()
     conn.close()
 

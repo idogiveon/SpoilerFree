@@ -1776,6 +1776,9 @@
     const BASE = 'https://www.thesportsdb.com/api/v1/json/123/';
     const events = [];
     const counts = { past: 0, next: 0, rounds: 0, failed: 0 };
+    // המחזורים שנשלפו במלואם. רק בהם מותר לשרת למחוק: אירוע בודד
+    // מ-past/next אינו הופך את המחזור שלו ל"נראה"
+    const okRounds = new Set();
 
     // TheSportsDB מגביל קצב במפתח החינמי, ומחזיר אז גוף שאינו JSON.
     // קודם הכשל נבלע בשקט (catch → []), והמשתמש ראה "רענון הצליח" עם
@@ -1847,8 +1850,9 @@
         rounds = [maxRound, maxRound + 1, maxRound - 1, maxRound + 2, maxRound + 3]
           .filter(r => r >= 1);
       }
-      await grabAll(rounds.map(r =>
+      const got = await grabAll(rounds.map(r =>
         [`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'rounds', true]));
+      rounds.forEach((r, i) => { if (got[i] && got[i].length) okRounds.add(r); });
     }
 
     // סינון משחקים ישנים מ-14 יום — מנקה שאריות מסבבים קודמים
@@ -1863,7 +1867,8 @@
         headers: { 'Content-Type': 'application/json' },
         // שליפה שחלק ממנה נכשל לא מוחקת כלום: המטען אינו תמונת מצב
         // מלאה, ו-purge היה קורא בו "אלה כל המשחקים שנותרו"
-        body: JSON.stringify({ events: fresh, purge: counts.failed === 0 }),
+        body: JSON.stringify({ events: fresh, purge: counts.failed === 0,
+                               rounds: [...okRounds] }),
       });
     }
     // דיאגנוסטיקה: כמה החזיר כל endpoint של TheSportsDB
