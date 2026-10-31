@@ -75,9 +75,24 @@ def test_the_client_does_not_purge_after_a_failed_fetch():
     html = open("index.html", encoding="utf-8").read()
     assert "purge: counts.failed === 0" in html
     # והכשל נספר במקום להיבלע
-    grab = html[html.index("async function grab(ep, label)"):]
+    grab = html[html.index("async function grab(ep, label"):]
     grab = grab[:grab.index("\n    }")]
     assert "counts.failed++" in grab
+
+
+def test_an_empty_round_counts_as_a_block():
+    """מחזור ריק באמצע עונה אינו מחזור ריק. ההבדל חשוב: תשובה ריקה
+    חוזרת כ-HTTP 200 ועוברת בשקט, בלי שום חריגה לתפוס."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "emptyIsFailure && !ev.length" in html
+    assert "'rounds', true]" in html          # המחזורים נשלחים עם הדגל
+    assert "const BACKOFF = [1000, 3000];" in html
+
+
+def test_the_current_round_is_fetched_first():
+    """אם התקציב ייגמר באמצע, שייגמר על מחזור רחוק."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "[maxRound, maxRound + 1, maxRound - 1, maxRound + 2, maxRound + 3]" in html
 
 
 def test_the_window_anchor_uses_both_endpoints():
