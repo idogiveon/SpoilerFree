@@ -3276,6 +3276,11 @@ def is_match_highlight(title: str, home: str, away: str,
 
     exclude = exclude or any(
         re.search(rf"(?<!\w){m}(?!\w)", t) for m in _WOMENS_MARKERS)
+    # "reaction" ברשימה למעלה היא תת-מחרוזת, ולכן לא תפסה את "ALONSO &
+    # LAVIA react post-Man Utd | Chelsea 2-0 Man Utd" — ראיון שעלה
+    # שעתיים וחצי אחרי המשחק והוצג כתקציר (הבעלים, 31.10.26). כל
+    # הנטיות, כמילה שלמה
+    exclude = exclude or bool(re.search(r"(?<!\w)react(s|ed|ing|ion|ions)?(?!\w)", t))
     # נוער: U14 עד U23, עם מקף או בלי. הרשימה הקבועה כללה u19/u20/u23
     # ו**לא** u18 — וצ'לסי–ברנטפורד החזיר "Chelsea U18 5-0 Bournemouth
     # U18" (מהמשתמש, 9.10.26). חשוב מעבר לחור הנקודתי: קבוצת הנוער
