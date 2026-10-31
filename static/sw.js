@@ -6,7 +6,7 @@
 // הקפצת המספר מוחקת את הדף השמור בכל המכשירים. עושים את זה כששינוי
 // בשרת תלוי בקוד לקוח חדש — אחרת הלקוח הישן ממשיך לרוץ פתיחה שלמה
 // (הנגן המוטמע, 22.9.26).
-const CACHE = 'sf-shell-v3';
+const CACHE = 'sf-shell-v4';
 const STATIC = ['/manifest.webmanifest', '/icons/icon-192.png',
                 '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 

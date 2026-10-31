@@ -100,3 +100,47 @@ def test_the_window_anchor_uses_both_endpoints():
     אירוע בודד מחטיא ברגע שהוא דחוי או שייך למחזור קודם."""
     html = open("index.html", encoding="utf-8").read()
     assert "for (const e of [...past, ...next])" in html
+
+
+# ── מחזור "נראה" בזכות אירוע בודד (הבעלים, 31.10.26) ───────────────
+def test_a_single_event_does_not_authorise_purging_its_matchday(db):
+    """הבונדסליגה איבדה את מחזור 8: eventspastleague ו-eventsnextleague
+    תרמו שני אירועים ממנו, המחזור נחשב "נראה", וכל השאר נמחק — נשארו בו
+    רק מי שכבר התחיל לשחק. רק מחזור שנשלף במלואו מתיר מחיקה."""
+    main._store_sportsdb_events(db, "bundesliga", [
+        _ev("a", 8, "2026-10-30"), _ev("b", 8, "2026-10-31"),
+        _ev("c", 8, "2026-11-01"), _ev("d", 8, "2026-11-01")], purge=True)
+    db.commit()
+    # רענון שבו eventsround של מחזור 8 נחסם, ורק next תרם אירוע ממנו
+    main._store_sportsdb_events(db, "bundesliga", [_ev("c", 8, "2026-11-01")],
+                                purge=True, purge_rounds={11})
+    db.commit()
+    assert set(_rows(db, "bundesliga")) == {"a", "b", "c", "d"}
+
+
+def test_a_fully_fetched_round_still_purges(db):
+    main._store_sportsdb_events(db, "bundesliga", [
+        _ev("keep", 8, "2026-11-01"), _ev("gone", 8, "2026-11-01")], purge=True)
+    db.commit()
+    main._store_sportsdb_events(db, "bundesliga", [_ev("keep", 8, "2026-11-01")],
+                                purge=True, purge_rounds={8})
+    db.commit()
+    assert set(_rows(db, "bundesliga")) == {"keep"}
+
+
+def test_an_old_client_keeps_the_previous_behaviour(db):
+    """לקוח ישן לא שולח rounds, ואז נשמרת ההתנהגות הקודמת."""
+    main._store_sportsdb_events(db, "bundesliga", [
+        _ev("keep", 8, "2026-11-01"), _ev("gone", 8, "2026-11-01")], purge=True)
+    db.commit()
+    main._store_sportsdb_events(db, "bundesliga", [_ev("keep", 8, "2026-11-01")],
+                                purge=True, purge_rounds=None)
+    db.commit()
+    assert set(_rows(db, "bundesliga")) == {"keep"}
+
+
+def test_the_client_sends_the_rounds_it_fetched():
+    html = open("index.html", encoding="utf-8").read()
+    assert "const okRounds = new Set();" in html
+    assert "rounds: [...okRounds]" in html
+    assert "if (got[i] && got[i].length) okRounds.add(r);" in html
