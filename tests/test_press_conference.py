@@ -86,3 +86,30 @@ def test_the_stale_row_is_cleared_by_the_revalidation(db):
     rep = main.revalidate_cache(apply=True)
     assert rep["dropped"] and rep["dropped"][0]["row_deleted"] is True
     assert db.execute("SELECT COUNT(*) FROM highlight_cache").fetchone()[0] == 0
+
+
+# ── ראיון שהוצג כתקציר שעתיים אחרי המשחק (הבעלים, 31.10.26) ────────
+REACT = ("ALONSO & LAVIA react post-Man Utd | Chelsea 2-0 Man Utd | "
+         "Premier League 2026/27")
+
+
+def test_react_is_matched_as_a_word_not_as_reaction():
+    """ברשימת ההדרה הייתה "reaction" כתת-מחרוזת, והכותרת אומרת
+    "react" — שעתיים וחצי אחרי צ'לסי–מנצ'סטר יונייטד."""
+    assert main.is_match_highlight(REACT, "Chelsea FC", "Manchester United FC",
+                                   implicit_team="Chelsea FC") is False
+    for word in ("reacts", "reacted", "reacting", "reaction"):
+        t = f"Chelsea 2-0 Man Utd | Alonso {word}"
+        assert main.is_match_highlight(t, "Chelsea FC", "Manchester United FC",
+                                       implicit_team="Chelsea FC") is False, word
+
+
+def test_a_real_highlight_three_hours_after_kickoff_still_passes():
+    """נמדד 18.10: ברייטון העלתה תקציר אמיתי שלוש שעות אחרי בעיטת
+    הפתיחה. כלל מבוסס-שעה היה מפיל אותו, ולכן אין כזה."""
+    for title in ("HIGHLIGHTS | Brighton v Crystal Palace | Premier League",
+                  "Match Highlights | Brighton 5-0 Crystal Palace | Premier League",
+                  "EXTENDED HIGHLIGHTS | Brighton v Crystal Palace | Premier League"):
+        assert main.is_match_highlight(
+            title, "Brighton & Hove Albion FC", "Crystal Palace FC",
+            implicit_team="Brighton & Hove Albion FC") is True, title
