@@ -1,0 +1,87 @@
+"""רענון חלקי לא מוחק מה שלא נשלף (הבעלים, 31.10.26).
+
+ליגה ספרדית, צרפתית ואיטלקית: בכולן המחזור הנוכחי הכיל 1-3 משחקים
+במקום 9-10, ובכולן סך המשחקים בליגה היה 60-90 במקום 380.
+
+הרענון מצד הלקוח מושך חלון של חמישה מחזורים בלבד (TheSportsDB חסום
+מ-Render), ו-purge מחק כל משחק עתידי שלא הופיע במטען — כלומר את כל
+העונה שמחוץ לחלון. וכשגם מחזור בתוך החלון נשלף חלקית, הוא איבד את מה
+שכבר היה ידוע עליו.
+"""
+from fastapi.testclient import TestClient
+
+import main
+
+
+def _ev(mid, round_no, date, home="A", away="B"):
+    return {"idEvent": mid, "intRound": str(round_no), "dateEvent": date,
+            "strHomeTeam": home, "strAwayTeam": away, "strTime": "20:00:00",
+            "strStatus": "", "idHomeTeam": "h" + mid, "idAwayTeam": "a" + mid}
+
+
+def _rows(db, league="laliga"):
+    return {r["id"]: r["matchday"] for r in db.execute(
+        "SELECT id, matchday FROM matches WHERE league_key=?", (league,))}
+
+
+def test_a_matchday_outside_the_window_survives(db):
+    """מחזור 20 לא נשלף כלל — ואין שום סיבה למחוק אותו."""
+    main._store_sportsdb_events(db, "laliga", [
+        _ev("far", 20, "2027-02-14"), _ev("near", 11, "2026-10-31")], purge=True)
+    db.commit()
+    main._store_sportsdb_events(db, "laliga", [_ev("near", 11, "2026-10-31")],
+                                purge=True)
+    db.commit()
+    assert _rows(db) == {"far": 20, "near": 11}
+
+
+def test_a_match_that_vanished_from_a_fetched_matchday_is_removed(db):
+    """בתוך מחזור שכן נשלף, purge עדיין עושה את עבודתו — משחק שבוטל
+    או שעבר מחזור נמחק."""
+    main._store_sportsdb_events(db, "laliga", [
+        _ev("keep", 11, "2026-10-31"), _ev("gone", 11, "2026-11-01")], purge=True)
+    db.commit()
+    main._store_sportsdb_events(db, "laliga", [_ev("keep", 11, "2026-10-31")],
+                                purge=True)
+    db.commit()
+    assert _rows(db) == {"keep": 11}
+
+
+def test_history_still_survives(db):
+    """ההגנה הקיימת על משחק שהסתיים לא נפגעה."""
+    main._store_sportsdb_events(db, "laliga", [_ev("old", 11, "2026-10-01")],
+                                purge=True)
+    db.execute("UPDATE matches SET status='FINISHED' WHERE id='old'")
+    db.commit()
+    main._store_sportsdb_events(db, "laliga", [_ev("new", 11, "2026-10-31")],
+                                purge=True)
+    db.commit()
+    assert set(_rows(db)) == {"old", "new"}
+
+
+def test_a_hard_reset_still_clears_everything(db):
+    """איפוס עונה הוא פעולת מנהל, והוא עדיין מוחק הכול."""
+    main._store_sportsdb_events(db, "laliga", [
+        _ev("far", 20, "2027-02-14"), _ev("near", 11, "2026-10-31")], purge=True)
+    db.commit()
+    main._store_sportsdb_events(db, "laliga", [_ev("near", 11, "2026-10-31")],
+                                purge=True, hard=True)
+    db.commit()
+    assert set(_rows(db)) == {"near"}
+
+
+def test_the_client_does_not_purge_after_a_failed_fetch():
+    """מטען חלקי אינו תמונת מצב, ו-purge היה קורא בו "אלה כל מה שנותר"."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "purge: counts.failed === 0" in html
+    # והכשל נספר במקום להיבלע
+    grab = html[html.index("async function grab(ep, label)"):]
+    grab = grab[:grab.index("\n    }")]
+    assert "counts.failed++" in grab
+
+
+def test_the_window_anchor_uses_both_endpoints():
+    """המפתח החינמי מחזיר אירוע אחד בכל אחד מהם (היו 15), ועוגן על
+    אירוע בודד מחטיא ברגע שהוא דחוי או שייך למחזור קודם."""
+    html = open("index.html", encoding="utf-8").read()
+    assert "for (const e of [...past, ...next])" in html

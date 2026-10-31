@@ -1941,6 +1941,13 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
 
     deletes = []
     if purge and incoming:
+        # רק מחזורים שהמטען באמת מכיל. הרענון מצד הלקוח מושך חלון של
+        # חמישה מחזורים, ו-purge מחק את כל מה שמחוצה לו — ליגה של 380
+        # משחקים הצטמצמה ל-87, ומחזור שנשלף חלקית איבד את מה שכבר ידענו
+        # עליו (הבעלים, 31.10.26: ספרד, צרפת ואיטליה). מה שלא הסתכלנו
+        # עליו לא נמחק
+        seen_rounds = {v.get("matchday") for v in incoming.values()
+                       if v.get("matchday") is not None}
         for mid, old in existing.items():
             if mid in incoming:
                 continue
@@ -1948,6 +1955,8 @@ def _sync_league_rows(conn, league_key: str, incoming: dict,
                 deletes.append((mid,))
                 continue
             if old["status"] in _OVER_STATUSES or str(mid).startswith("manual-"):
+                continue
+            if seen_rounds and old["matchday"] not in seen_rounds:
                 continue
             # משחק ששריקת הפתיחה שלו כבר נשמעה לא נמחק. דווקא אז המקור
             # לפעמים לא מחזיר אותו, והוא נעלם מתחת לידיים של מי שצופה בו:

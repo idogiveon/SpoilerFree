@@ -515,6 +515,7 @@
   "refresh_empty": "לא נמצאו משחקים חדשים בשבועיים האחרונים",
   "refresh_failed": "⚠ הרענון נכשל — מוצגים הנתונים הקיימים",
   "diag_past": "אחרונים", "diag_next": "הבאים", "diag_rounds": "מחזורים",
+  "diag_failed": "⚠ נחסמו",
   "vs": "נגד", "searching": "מחפש תקצירים", "updating_results": "מעדכן תוצאות",
   "web_note": "🔗 קישורי אתר — קופץ לתוצאה הראשונה; ייתכן ספוילר בכותרת עמוד היעד",
   "no_source": "🎬 מקור תקצירים לליגה זו עדיין לא הוגדר", "no_source_hint": "בקרוב", "no_source_match": "🎬 אין לנו מקור לתקציר של המשחק הזה", "no_source_match_hint": "לאף אחת משתי הקבוצות אין ערוץ שמעלה תקצירים",
@@ -572,6 +573,7 @@
   "refresh_empty": "No new matches in the last two weeks",
   "refresh_failed": "⚠ Refresh failed — showing current data",
   "diag_past": "recent", "diag_next": "upcoming", "diag_rounds": "rounds",
+  "diag_failed": "⚠ throttled",
   "vs": "vs", "searching": "Looking for highlights", "updating_results": "Updating results",
   "web_note": "🔗 Website links — open the first result; the page title may contain spoilers",
   "no_source": "🎬 No highlights source for this league yet", "no_source_hint": "Coming soon", "no_source_match": "🎬 No highlights source for this match", "no_source_match_hint": "Neither club has a channel that posts highlights",
@@ -629,6 +631,7 @@
   "refresh_empty": "No hay partidos nuevos en las últimas dos semanas",
   "refresh_failed": "⚠ Error al actualizar — mostrando los datos actuales",
   "diag_past": "recientes", "diag_next": "próximos", "diag_rounds": "jornadas",
+  "diag_failed": "⚠ bloqueadas",
   "vs": "vs", "searching": "Buscando resúmenes", "updating_results": "Actualizando resultados",
   "web_note": "🔗 Enlaces web — abren el primer resultado; el título de la página puede contener spoilers",
   "no_source": "🎬 Todavía no hay fuente de resúmenes para esta liga", "no_source_hint": "Próximamente", "no_source_match": "🎬 No tenemos fuente para este partido", "no_source_match_hint": "Ninguno de los dos clubes tiene un canal con resúmenes",
@@ -686,6 +689,7 @@
   "refresh_empty": "Aucun match nouveau ces deux dernières semaines",
   "refresh_failed": "⚠ Échec de l'actualisation — données actuelles affichées",
   "diag_past": "récents", "diag_next": "à venir", "diag_rounds": "journées",
+  "diag_failed": "⚠ bloquées",
   "vs": "contre", "searching": "Recherche des résumés", "updating_results": "Mise à jour des résultats",
   "web_note": "🔗 Liens web — ouvrent le premier résultat ; le titre de la page peut contenir des spoilers",
   "no_source": "🎬 Pas encore de source de résumés pour cette ligue", "no_source_hint": "Bientôt", "no_source_match": "🎬 Pas de source pour ce match", "no_source_match_hint": "Aucun des deux clubs n’a de chaîne qui publie des résumés",
@@ -1771,25 +1775,49 @@
     // מפתח "123" מחזיר יותר נתונים מ-"3" (15 מול 5 ב-eventsseason)
     const BASE = 'https://www.thesportsdb.com/api/v1/json/123/';
     const events = [];
-    const counts = { past: 0, next: 0, rounds: 0 };
+    const counts = { past: 0, next: 0, rounds: 0, failed: 0 };
+
+    // TheSportsDB מגביל קצב במפתח החינמי, ומחזיר אז גוף שאינו JSON.
+    // קודם הכשל נבלע בשקט (catch → []), והמשתמש ראה "רענון הצליח" עם
+    // מחזור חסר (הבעלים, 31.10.26: ליגה ספרדית, צרפתית ואיטלקית —
+    // בכולן המחזור הנוכחי הכיל 1-3 משחקים במקום 9-10)
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     async function grab(ep, label) {
-      try {
-        const r = await fetch(BASE + ep);
-        const j = await r.json();
-        const ev = (j && j.events) || [];
-        events.push(...ev);
-        counts[label] += ev.length;
-        return ev;
-      } catch (e) { return []; }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r = await fetch(BASE + ep);
+          const j = await r.json();
+          const ev = (j && j.events) || [];
+          events.push(...ev);
+          counts[label] += ev.length;
+          return ev;
+        } catch (e) {
+          if (attempt === 0) { await sleep(900); continue; }
+          counts.failed++;      // נספר ומוצג, לא נבלע
+          return [];
+        }
+      }
+      return [];
+    }
+
+    // בזה אחר זה עם רווח: הבקשות רצו ב-Promise.all, והמפרץ עצמו היה מה
+    // שהפעיל את ההגבלה — past ו-next עברו, וכל המחזורים נחסמו
+    async function grabAll(jobs) {
+      const out = [];
+      for (const [ep, label] of jobs) {
+        out.push(await grab(ep, label));
+        await sleep(250);
+      }
+      return out;
     }
 
     // הבקשות רצות במקביל (היה טור של ~7 בקשות רצופות)
-    await Promise.all(cfg.ids.map(async id => {
+    for (const id of cfg.ids) {
       // 1. אחרונים — גם נתונים וגם זיהוי המחזור הנוכחי; 2. הבאים
-      const [past] = await Promise.all([
-        grab(`eventspastleague.php?id=${id}`, 'past'),
-        grab(`eventsnextleague.php?id=${id}`, 'next'),
+      const [past, next] = await grabAll([
+        [`eventspastleague.php?id=${id}`, 'past'],
+        [`eventsnextleague.php?id=${id}`, 'next'],
       ]);
       // 3. חלון מחזורים: eventsround עוקף את תקרת eventsseason —
       //    מחזור שלם (~10 משחקים) נכנס מתחת לתקרה
@@ -1799,17 +1827,20 @@
         // בא שלב 16, ולא 33. מושכים את השלבים עצמם.
         rounds = cfg.rounds;
       } else {
+        // גם מ-next ולא רק מ-past: המפתח החינמי מחזיר אירוע **אחד**
+        // בכל אחד מהם (היו 15), ועוגן על אירוע בודד מחטיא ברגע
+        // שהוא דחוי או שייך למחזור קודם
         let maxRound = 0;
-        for (const e of past) {
+        for (const e of [...past, ...next]) {
           const r = parseInt(e.intRound || 0);
           if (r > maxRound) maxRound = r;
         }
         rounds = [];
         for (let r = Math.max(1, maxRound - 1); r <= maxRound + 3; r++) rounds.push(r);
       }
-      await Promise.all(rounds.map(r =>
-        grab(`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'rounds')));
-    }));
+      await grabAll(rounds.map(r =>
+        [`eventsround.php?id=${id}&r=${r}&s=${cfg.season}`, 'rounds']));
+    }
 
     // סינון משחקים ישנים מ-14 יום — מנקה שאריות מסבבים קודמים
     // (בארגנטינה מחזור N קיים גם ב-Apertura מינואר וגם ב-Clausura הנוכחי)
@@ -1821,11 +1852,16 @@
       await apiFetch(`${API}/refresh/${league}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events: fresh, purge: true }),
+        // שליפה שחלק ממנה נכשל לא מוחקת כלום: המטען אינו תמונת מצב
+        // מלאה, ו-purge היה קורא בו "אלה כל המשחקים שנותרו"
+        body: JSON.stringify({ events: fresh, purge: counts.failed === 0 }),
       });
     }
     // דיאגנוסטיקה: כמה החזיר כל endpoint של TheSportsDB
-    const diag = Object.entries(counts).map(([k, v]) => `${t('diag_' + k)}: ${v}`).join(' · ');
+    // כשל נחסם מוצג רק כשהיה — אחרת הוא רעש
+    const diag = Object.entries(counts)
+      .filter(([k, v]) => k !== 'failed' || v)
+      .map(([k, v]) => `${t('diag_' + k)}: ${v}`).join(' · ');
     return { fresh: fresh.length, diag };
   }
 
