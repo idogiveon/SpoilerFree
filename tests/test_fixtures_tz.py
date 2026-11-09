@@ -68,3 +68,34 @@ def test_ucl_winter_kickoff_in_israel_time(db):
     # 3.11, 21:00 CET = 20:00 UTC = 22:00 שעון ישראל
     assert (r["date_utc"], r["time_utc"]) == ("2026-11-03", "20:00:00")
     assert main.to_israel_time(r["date_utc"], r["time_utc"])["time"] == "22:00"
+
+
+def test_every_israeli_matchday_is_a_complete_round():
+    """14 קבוצות, שבעה משחקים, כל קבוצה פעם אחת. הלוח מוזן ביד
+    מצילומי מסך של האתר הרשמי, וזו הבדיקה שתופסת שורה שהושמטה או
+    הוקלדה פעמיים."""
+    import collections
+    rows = main.MANUAL_FIXTURES["israel"]
+    by_md = collections.defaultdict(list)
+    for r in rows:
+        by_md[r[0]].append(r)
+    assert by_md, "אין לוח ישראלי"
+    for md, games in sorted(by_md.items()):
+        assert len(games) == 7, f"מחזור {md}: {len(games)} משחקים"
+        teams = [t for g in games for t in (g[3], g[4])]
+        assert len(set(teams)) == 14, f"מחזור {md}: קבוצה מופיעה פעמיים"
+
+
+def test_the_israeli_fixtures_use_known_team_names():
+    """שם שגוי בהקלדה לא יתאים לשום משחק ב-sportsdb, והשורה תיווצר
+    כ-manual- כפולה במקום לעדכן את הקיימת."""
+    rows = main.MANUAL_FIXTURES["israel"]
+    names = {t for r in rows for t in (r[3], r[4])}
+    assert len(names) == 14, sorted(names)
+    for n in names:
+        assert main.to_hebrew_team(n) != n, f"{n} אינו מוכר למילון השמות"
+
+
+def test_the_matchdays_run_in_order_without_gaps():
+    mds = sorted({r[0] for r in main.MANUAL_FIXTURES["israel"]})
+    assert mds == list(range(mds[0], mds[-1] + 1)), mds
