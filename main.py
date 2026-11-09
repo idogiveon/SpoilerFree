@@ -2234,6 +2234,22 @@ MANUAL_FIXTURES = {
         (15, "2026-12-19", "19:30", "Maccabi Netanya", "Beitar Jerusalem", "מרים", "ספורט 4"),
         (15, "2026-12-20", "20:15", "Hapoel Be'er Sheva", "Hapoel Ramat Gan", "טוטו טרנר", "ספורט 4"),
         (15, "2026-12-21", "20:30", "Maccabi Haifa", "Maccabi Tel Aviv", "סמי עופר", "5SPORT"),
+        # מחזורים 16-17 מהבעלים (9.11.26). עמודת השידור לא מופיעה
+        # בלוח שפורסם, והשדה ממילא לא נקרא (apply_manual_fixtures מתעלם)
+        (16, "2026-12-29", "19:30", "Hapoel Ironi Kiryat Shmona", "Hapoel Jerusalem", "מרים", ""),
+        (16, "2026-12-29", "19:30", "Ironi Tiberias", "Maccabi Petah Tikva", "בראל", ""),
+        (16, "2026-12-29", "19:45", "Hapoel Petah Tikva", "Maccabi Haifa", "שלמה ביטוח", ""),
+        (16, "2026-12-29", "20:00", "Beitar Jerusalem", "Bnei Sakhnin", "טדי", ""),
+        (16, "2026-12-30", "19:45", "Hapoel Haifa", "Maccabi Netanya", "סמי עופר", ""),
+        (16, "2026-12-30", "20:00", "Hapoel Ramat Gan", "Hapoel Tel-Aviv", "רחובות", ""),
+        (16, "2026-12-30", "20:30", "Maccabi Tel Aviv", "Hapoel Be'er Sheva", "בלומפילד", ""),
+        (17, "2027-01-02", "15:00", "Maccabi Haifa", "Hapoel Ironi Kiryat Shmona", "סמי עופר", ""),
+        (17, "2027-01-02", "17:30", "Maccabi Netanya", "Hapoel Ramat Gan", "מרים", ""),
+        (17, "2027-01-02", "18:00", "Hapoel Jerusalem", "Ironi Tiberias", "טדי", ""),
+        (17, "2027-01-02", "18:00", "Bnei Sakhnin", "Hapoel Haifa", "דוחא", ""),
+        (17, "2027-01-02", "19:30", "Maccabi Petah Tikva", "Beitar Jerusalem", "שלמה ביטוח", ""),
+        (17, "2027-01-03", "20:15", "Hapoel Be'er Sheva", "Hapoel Petah Tikva", "טוטו טרנר", ""),
+        (17, "2027-01-04", "22:30", "Hapoel Tel-Aviv", "Maccabi Tel Aviv", "בלומפילד", ""),
     ],
     # צ'מפיונס ליג 2026-27, שלב הליגה — 8 מחזורים × 18 משחקים.
     # מקור: UEFA "League phase draw results — calendar by matchday" (PDF רשמי).
