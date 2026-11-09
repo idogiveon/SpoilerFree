@@ -1837,17 +1837,18 @@
         // בא שלב 16, ולא 33. מושכים את השלבים עצמם.
         rounds = cfg.rounds;
       } else {
-        // גם מ-next ולא רק מ-past: המפתח החינמי מחזיר אירוע **אחד**
-        // בכל אחד מהם (היו 15), ועוגן על אירוע בודד מחטיא ברגע
-        // שהוא דחוי או שייך למחזור קודם
-        let maxRound = 0;
-        for (const e of [...past, ...next]) {
-          const r = parseInt(e.intRound || 0);
-          if (r > maxRound) maxRound = r;
-        }
-        // סדר לפי חשיבות ולא לפי מספר: אם התקציב ייגמר באמצע, שייגמר
-        // על מחזור רחוק. קודם הנוכחי, אחר כך הבא, ורק אז הקודם והרחוקים
-        rounds = [maxRound, maxRound + 1, maxRound - 1, maxRound + 2, maxRound + 3]
+        // שני עוגנים נפרדים, ולא המקסימום שלהם. המקסימום דחף את החלון
+        // קדימה אל המחזור הבא: בסריה A ב-9.11 יצא [12,13,11,14,15],
+        // שתי הראשונות עברו והשאר נחסמו — ומחזור 11, זה של אתמול
+        // ושל התקצירים, נשאר חסר שלושה משחקים (הבעלים, 9.11.26)
+        const roundOf = list => list.reduce(
+          (mx, e) => Math.max(mx, parseInt(e.intRound || 0)), 0);
+        const played = roundOf(past), upcoming = roundOf(next);
+        const base = played || upcoming;
+        // סדר לפי מה שהצופה מסתכל עליו: המחזור שהסתיים (תוצאות
+        // ותקצירים), אחר כך הבא, ורק אז אחורה וקדימה
+        rounds = [...new Set([base, upcoming || base + 1, base - 1,
+                              (upcoming || base) + 1, (upcoming || base) + 2])]
           .filter(r => r >= 1);
       }
       const got = await grabAll(rounds.map(r =>

@@ -95,11 +95,16 @@ def test_the_current_round_is_fetched_first():
     assert "[maxRound, maxRound + 1, maxRound - 1, maxRound + 2, maxRound + 3]" in html
 
 
-def test_the_window_anchor_uses_both_endpoints():
-    """המפתח החינמי מחזיר אירוע אחד בכל אחד מהם (היו 15), ועוגן על
-    אירוע בודד מחטיא ברגע שהוא דחוי או שייך למחזור קודם."""
+def test_the_finished_round_is_fetched_before_the_upcoming_one():
+    """סריה A, 9.11: past=11 ו-next=12. לקיחת המקסימום דחפה את החלון
+    אל [12,13,11,14,15] — שתי הראשונות עברו, השאר נחסמו, ומחזור 11
+    (אתמול, עם התוצאות והתקצירים) נשאר חסר שלושה משחקים.
+
+    שני עוגנים נפרדים, והמחזור שהסתיים נשלף ראשון."""
     html = open("index.html", encoding="utf-8").read()
-    assert "for (const e of [...past, ...next])" in html
+    assert "const played = roundOf(past), upcoming = roundOf(next);" in html
+    assert "[base, upcoming || base + 1, base - 1," in html
+    assert "for (const e of [...past, ...next])" not in html, "המקסימום חזר"
 
 
 # ── מחזור "נראה" בזכות אירוע בודד (הבעלים, 31.10.26) ───────────────
