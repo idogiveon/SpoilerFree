@@ -13,6 +13,11 @@ from fastapi.testclient import TestClient
 import main
 
 
+SOON = (main._now() + __import__("datetime").timedelta(days=3)).strftime("%Y-%m-%d")
+LATER = (main._now() + __import__("datetime").timedelta(days=40)).strftime("%Y-%m-%d")
+PAST = (main._now() - __import__("datetime").timedelta(days=9)).strftime("%Y-%m-%d")
+
+
 def _ev(mid, round_no, date, home="A", away="B"):
     return {"idEvent": mid, "intRound": str(round_no), "dateEvent": date,
             "strHomeTeam": home, "strAwayTeam": away, "strTime": "20:00:00",
@@ -27,9 +32,9 @@ def _rows(db, league="laliga"):
 def test_a_matchday_outside_the_window_survives(db):
     """מחזור 20 לא נשלף כלל — ואין שום סיבה למחוק אותו."""
     main._store_sportsdb_events(db, "laliga", [
-        _ev("far", 20, "2027-02-14"), _ev("near", 11, "2026-10-31")], purge=True)
+        _ev("far", 20, LATER), _ev("near", 11, SOON)], purge=True)
     db.commit()
-    main._store_sportsdb_events(db, "laliga", [_ev("near", 11, "2026-10-31")],
+    main._store_sportsdb_events(db, "laliga", [_ev("near", 11, SOON)],
                                 purge=True)
     db.commit()
     assert _rows(db) == {"far": 20, "near": 11}
@@ -39,9 +44,9 @@ def test_a_match_that_vanished_from_a_fetched_matchday_is_removed(db):
     """בתוך מחזור שכן נשלף, purge עדיין עושה את עבודתו — משחק שבוטל
     או שעבר מחזור נמחק."""
     main._store_sportsdb_events(db, "laliga", [
-        _ev("keep", 11, "2026-10-31"), _ev("gone", 11, "2026-11-01")], purge=True)
+        _ev("keep", 11, SOON), _ev("gone", 11, SOON)], purge=True)
     db.commit()
-    main._store_sportsdb_events(db, "laliga", [_ev("keep", 11, "2026-10-31")],
+    main._store_sportsdb_events(db, "laliga", [_ev("keep", 11, SOON)],
                                 purge=True)
     db.commit()
     assert _rows(db) == {"keep": 11}
@@ -49,11 +54,11 @@ def test_a_match_that_vanished_from_a_fetched_matchday_is_removed(db):
 
 def test_history_still_survives(db):
     """ההגנה הקיימת על משחק שהסתיים לא נפגעה."""
-    main._store_sportsdb_events(db, "laliga", [_ev("old", 11, "2026-10-01")],
+    main._store_sportsdb_events(db, "laliga", [_ev("old", 11, PAST)],
                                 purge=True)
     db.execute("UPDATE matches SET status='FINISHED' WHERE id='old'")
     db.commit()
-    main._store_sportsdb_events(db, "laliga", [_ev("new", 11, "2026-10-31")],
+    main._store_sportsdb_events(db, "laliga", [_ev("new", 11, SOON)],
                                 purge=True)
     db.commit()
     assert set(_rows(db)) == {"old", "new"}
@@ -62,9 +67,9 @@ def test_history_still_survives(db):
 def test_a_hard_reset_still_clears_everything(db):
     """איפוס עונה הוא פעולת מנהל, והוא עדיין מוחק הכול."""
     main._store_sportsdb_events(db, "laliga", [
-        _ev("far", 20, "2027-02-14"), _ev("near", 11, "2026-10-31")], purge=True)
+        _ev("far", 20, LATER), _ev("near", 11, SOON)], purge=True)
     db.commit()
-    main._store_sportsdb_events(db, "laliga", [_ev("near", 11, "2026-10-31")],
+    main._store_sportsdb_events(db, "laliga", [_ev("near", 11, SOON)],
                                 purge=True, hard=True)
     db.commit()
     assert set(_rows(db)) == {"near"}
@@ -89,17 +94,22 @@ def test_an_empty_round_counts_as_a_block():
     assert "const BACKOFF = [1000, 3000];" in html
 
 
-def test_the_current_round_is_fetched_first():
+def test_the_window_is_ordered_by_what_the_viewer_looks_at():
     """אם התקציב ייגמר באמצע, שייגמר על מחזור רחוק."""
     html = open("index.html", encoding="utf-8").read()
-    assert "[maxRound, maxRound + 1, maxRound - 1, maxRound + 2, maxRound + 3]" in html
+    assert "[base, upcoming || base + 1, base - 1," in html
 
 
-def test_the_window_anchor_uses_both_endpoints():
-    """המפתח החינמי מחזיר אירוע אחד בכל אחד מהם (היו 15), ועוגן על
-    אירוע בודד מחטיא ברגע שהוא דחוי או שייך למחזור קודם."""
+def test_the_finished_round_is_fetched_before_the_upcoming_one():
+    """סריה A, 9.11: past=11 ו-next=12. לקיחת המקסימום דחפה את החלון
+    אל [12,13,11,14,15] — שתי הראשונות עברו, השאר נחסמו, ומחזור 11
+    (אתמול, עם התוצאות והתקצירים) נשאר חסר שלושה משחקים.
+
+    שני עוגנים נפרדים, והמחזור שהסתיים נשלף ראשון."""
     html = open("index.html", encoding="utf-8").read()
-    assert "for (const e of [...past, ...next])" in html
+    assert "const played = roundOf(past), upcoming = roundOf(next);" in html
+    assert "[base, upcoming || base + 1, base - 1," in html
+    assert "for (const e of [...past, ...next])" not in html, "המקסימום חזר"
 
 
 # ── מחזור "נראה" בזכות אירוע בודד (הבעלים, 31.10.26) ───────────────
@@ -108,11 +118,11 @@ def test_a_single_event_does_not_authorise_purging_its_matchday(db):
     תרמו שני אירועים ממנו, המחזור נחשב "נראה", וכל השאר נמחק — נשארו בו
     רק מי שכבר התחיל לשחק. רק מחזור שנשלף במלואו מתיר מחיקה."""
     main._store_sportsdb_events(db, "bundesliga", [
-        _ev("a", 8, "2026-10-30"), _ev("b", 8, "2026-10-31"),
-        _ev("c", 8, "2026-11-01"), _ev("d", 8, "2026-11-01")], purge=True)
+        _ev("a", 8, SOON), _ev("b", 8, SOON),
+        _ev("c", 8, SOON), _ev("d", 8, SOON)], purge=True)
     db.commit()
     # רענון שבו eventsround של מחזור 8 נחסם, ורק next תרם אירוע ממנו
-    main._store_sportsdb_events(db, "bundesliga", [_ev("c", 8, "2026-11-01")],
+    main._store_sportsdb_events(db, "bundesliga", [_ev("c", 8, SOON)],
                                 purge=True, purge_rounds={11})
     db.commit()
     assert set(_rows(db, "bundesliga")) == {"a", "b", "c", "d"}
@@ -120,9 +130,9 @@ def test_a_single_event_does_not_authorise_purging_its_matchday(db):
 
 def test_a_fully_fetched_round_still_purges(db):
     main._store_sportsdb_events(db, "bundesliga", [
-        _ev("keep", 8, "2026-11-01"), _ev("gone", 8, "2026-11-01")], purge=True)
+        _ev("keep", 8, SOON), _ev("gone", 8, SOON)], purge=True)
     db.commit()
-    main._store_sportsdb_events(db, "bundesliga", [_ev("keep", 8, "2026-11-01")],
+    main._store_sportsdb_events(db, "bundesliga", [_ev("keep", 8, SOON)],
                                 purge=True, purge_rounds={8})
     db.commit()
     assert set(_rows(db, "bundesliga")) == {"keep"}
@@ -131,9 +141,9 @@ def test_a_fully_fetched_round_still_purges(db):
 def test_an_old_client_keeps_the_previous_behaviour(db):
     """לקוח ישן לא שולח rounds, ואז נשמרת ההתנהגות הקודמת."""
     main._store_sportsdb_events(db, "bundesliga", [
-        _ev("keep", 8, "2026-11-01"), _ev("gone", 8, "2026-11-01")], purge=True)
+        _ev("keep", 8, SOON), _ev("gone", 8, SOON)], purge=True)
     db.commit()
-    main._store_sportsdb_events(db, "bundesliga", [_ev("keep", 8, "2026-11-01")],
+    main._store_sportsdb_events(db, "bundesliga", [_ev("keep", 8, SOON)],
                                 purge=True, purge_rounds=None)
     db.commit()
     assert set(_rows(db, "bundesliga")) == {"keep"}
